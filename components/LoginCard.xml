@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="LoginCard" extends="Group">
+  <children>
+    <Poster
+      id="cardBg"
+      translation="[0, 0]"
+      width="520"
+      height="260"
+      uri="pkg:/images/card.png"
+    />
+
+    <Poster
+      id="usernameBg"
+      translation="[40, 40]"
+      width="440"
+      height="56"
+      uri="pkg:/images/field_normal.png"
+    />
+    <Label
+      id="usernameText"
+      translation="[58, 56]"
+      width="404"
+      height="28"
+      font="font:MediumSystemFont"
+      color="0xD0D6E0"
+      text="Usuario"
+    />
+
+    <Poster
+      id="passwordBg"
+      translation="[40, 112]"
+      width="440"
+      height="56"
+      uri="pkg:/images/field_normal.png"
+    />
+    <Label
+      id="passwordText"
+      translation="[58, 128]"
+      width="404"
+      height="28"
+      font="font:MediumSystemFont"
+      color="0xD0D6E0"
+      text="Senha"
+    />
+
+    <Poster
+      id="loginBg"
+      translation="[40, 184]"
+      width="440"
+      height="56"
+      uri="pkg:/images/button_normal.png"
+    />
+    <Label
+      id="loginText"
+      translation="[40, 200]"
+      width="440"
+      height="28"
+      font="font:MediumSystemFont"
+      color="0x0B0F16"
+      horizAlign="center"
+      text="Entrar"
+    />
+  </children>
+</component>
+

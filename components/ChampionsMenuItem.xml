@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="ChampionsMenuItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onItemContentChanged" />
+    <field id="itemHasFocus" type="boolean" onChange="onItemHasFocusChanged" />
+  </interface>
+
+  <children>
+    <!-- Background is a 9-patch style rect so we can keep rounded corners when scaling -->
+    <NinePatchRect
+      id="bg"
+      width="440"
+      height="56"
+      translation="[0, 2]"
+      inset="[14, 14, 14, 14]"
+      uri="pkg:/images/field_normal.png"
+    />
+
+    <Label
+      id="label"
+      translation="[18, 16]"
+      width="404"
+      height="28"
+      font="font:MediumSystemFont"
+      color="0xD0D6E0"
+      text=""
+    />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/ChampionsMenuItem.brs" />
+</component>
+

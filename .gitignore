@@ -1,0 +1,5 @@
+.secrets/
+dist/
+images/logo_src.png
+source/app_token.txt
+source/api_base.txt

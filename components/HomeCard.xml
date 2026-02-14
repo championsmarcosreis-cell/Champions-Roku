@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="HomeCard" extends="Group">
+  <children>
+    <Poster
+      id="homeCardBg"
+      translation="[0, 0]"
+      width="520"
+      height="260"
+      uri="pkg:/images/card.png"
+    />
+
+    <Poster
+      id="homeLiveBg"
+      translation="[40, 40]"
+      width="440"
+      height="56"
+      uri="pkg:/images/button_normal.png"
+    />
+    <Label
+      id="homeLiveText"
+      translation="[40, 56]"
+      width="440"
+      height="28"
+      font="font:MediumSystemFont"
+      color="0x0B0F16"
+      horizAlign="center"
+      text="Live TV"
+    />
+
+    <Poster
+      id="homeTokensBg"
+      translation="[40, 112]"
+      width="440"
+      height="56"
+      uri="pkg:/images/button_normal.png"
+    />
+    <Label
+      id="homeTokensText"
+      translation="[40, 128]"
+      width="440"
+      height="28"
+      font="font:MediumSystemFont"
+      color="0x0B0F16"
+      horizAlign="center"
+      text="Tokens"
+    />
+
+    <Poster
+      id="homeLogoutBg"
+      translation="[40, 184]"
+      width="440"
+      height="56"
+      uri="pkg:/images/button_normal.png"
+    />
+    <Label
+      id="homeLogoutText"
+      translation="[40, 200]"
+      width="440"
+      height="28"
+      font="font:MediumSystemFont"
+      color="0x0B0F16"
+      horizAlign="center"
+      text="Sair"
+    />
+  </children>
+</component>
+
