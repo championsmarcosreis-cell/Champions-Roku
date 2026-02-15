@@ -1489,6 +1489,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
   end if
 
   if key = "play" then
+    ' During playback, do not hijack PLAY for dev shortcuts.
+    if m.player <> invalid and m.player.visible = true then return false
     ' Quick dev shortcut: Play Live if logged in.
     cfg = loadConfig()
     if cfg.appToken <> "" and cfg.jellyfinToken <> "" then
