@@ -700,16 +700,17 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
     end if
 
     ' Per Roku content metadata docs, negative PlayStart is relative to the live edge (OS 8.0+).
-    ' Start ~12s behind the edge for stability across different segment sizes (2s/4s).
+    ' Start further behind the edge to give the firmware more room to build a stable buffer
+    ' (some devices show subtle A/V sync jitter when starting too close to the edge).
     if c.hasField("PlayStart") then
-      c.PlayStart = -12
+      c.PlayStart = -24
     else if c.hasField("playStart") then
-      c.playStart = -12
+      c.playStart = -24
     else if c.hasField("playstart") then
-      c.playstart = -12
+      c.playstart = -24
     else
       c.addField("PlayStart", "float", false)
-      c.PlayStart = -12
+      c.PlayStart = -24
     end if
 
     ' Live doesn't need trick/transport UI; reduce overlay work.
