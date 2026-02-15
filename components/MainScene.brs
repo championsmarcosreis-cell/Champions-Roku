@@ -151,7 +151,8 @@ sub bindUiNodes()
 
   if m.player = invalid then m.player = m.top.findNode("player")
   if m.playerOverlay = invalid then m.playerOverlay = m.top.findNode("playerOverlay")
-  if m.playerOverlayList = invalid then m.playerOverlayList = m.top.findNode("playerOverlayList")
+  if m.playerOverlayCircle = invalid then m.playerOverlayCircle = m.top.findNode("playerOverlayCircle")
+  if m.playerOverlayIcon = invalid then m.playerOverlayIcon = m.top.findNode("playerOverlayIcon")
   if m.playerSettingsModal = invalid then m.playerSettingsModal = m.top.findNode("playerSettingsModal")
   if m.playerSettingsAudioList = invalid then m.playerSettingsAudioList = m.top.findNode("playerSettingsAudioList")
   if m.playerSettingsSubList = invalid then m.playerSettingsSubList = m.top.findNode("playerSettingsSubList")
@@ -189,11 +190,6 @@ sub bindUiNodes()
   ' Guarded for firmware compatibility.
   if m.player <> invalid and m.player.hasField("seamlessAudioTrackSelection") then
     m.player.seamlessAudioTrackSelection = true
-  end if
-
-  if m.playerOverlayList <> invalid and (m.overlayObsSetup <> true) then
-    m.playerOverlayList.observeField("itemSelected", "onOverlayItemSelected")
-    m.overlayObsSetup = true
   end if
 
   if m.playerSettingsAudioList <> invalid and (m.settingsObsSetup <> true) then
@@ -393,7 +389,11 @@ sub onPlayerOverlayRequested()
   if m.player = invalid then return
   if m.player.visible <> true then return
   if m.settingsOpen = true then return
-  showPlayerOverlay()
+  if m.overlayOpen = true then
+    showPlayerSettings()
+  else
+    showPlayerOverlay()
+  end if
 end sub
 
 sub onPlayerSettingsRequested()
@@ -620,26 +620,15 @@ sub onCurrentSubtitleTrackChanged()
 end sub
 
 function _overlayContent() as Object
-  root = CreateObject("roSGNode", "ContentNode")
-  c = CreateObject("roSGNode", "ContentNode")
-  c.title = "Configuracoes do Player"
-  c.addField("iconUri", "string", false)
-  c.iconUri = "pkg:/images/ico_settings.png"
-  c.addField("preferIconOnly", "boolean", false)
-  c.preferIconOnly = true
-  c.addField("selected", "boolean", false)
-  c.selected = false
-  root.appendChild(c)
-  return root
+  ' Legacy: overlay used to be a MarkupList. Kept for compatibility if reintroduced.
+  return CreateObject("roSGNode", "ContentNode")
 end function
 
 sub showPlayerOverlay()
-  if m.playerOverlay = invalid or m.playerOverlayList = invalid then return
+  if m.playerOverlay = invalid then return
   if m.player = invalid or m.player.visible <> true then return
   m.overlayOpen = true
   m.playerOverlay.visible = true
-  m.playerOverlayList.content = _overlayContent()
-  m.playerOverlayList.setFocus(true)
 end sub
 
 sub hidePlayerOverlay()
@@ -652,6 +641,8 @@ end sub
 sub showPlayerSettings()
   if m.playerSettingsModal = invalid then return
   if m.player = invalid or m.player.visible <> true then return
+  ' Avoid the overlay hint bleeding through behind the modal.
+  if m.overlayOpen = true then hidePlayerOverlay()
   m.settingsOpen = true
   m.settingsCol = "audio"
   m.playerSettingsModal.visible = true
@@ -663,11 +654,7 @@ sub hidePlayerSettings()
   if m.playerSettingsModal = invalid then return
   m.settingsOpen = false
   m.playerSettingsModal.visible = false
-  if m.overlayOpen = true then
-    if m.playerOverlayList <> invalid then m.playerOverlayList.setFocus(true)
-  else
-    if m.player <> invalid and m.player.visible = true then m.player.setFocus(true)
-  end if
+  if m.player <> invalid and m.player.visible = true then m.player.setFocus(true)
 end sub
 
 sub refreshPlayerSettingsLists()
@@ -768,6 +755,21 @@ sub refreshPlayerSettingsLists()
       subRoot.appendChild(c)
     end if
   end for
+
+  ' If R2 VOD doesn't expose subtitle tracks, offer a fallback to Jellyfin playback
+  ' so the user can still get captions/subtitles (if available upstream).
+  if isVod and m.playbackKind = "vod-r2" and subRoot.getChildCount() <= 1 then
+    load = CreateObject("roSGNode", "ContentNode")
+    load.addField("trackId", "string", false)
+    load.addField("lang", "string", false)
+    load.addField("selected", "boolean", false)
+    load.title = "Carregar legendas (Jellyfin)"
+    load.trackId = "__load_jellyfin__"
+    load.lang = ""
+    load.selected = false
+    subRoot.appendChild(load)
+  end if
+
   m.playerSettingsSubList.content = subRoot
 end sub
 
@@ -821,6 +823,11 @@ sub onSettingsSubSelected()
       saveVodPlayerPrefs(m.vodPrefs.audioLang, m.vodPrefs.subtitleLang, false)
     end if
     refreshPlayerSettingsLists()
+    return
+  end if
+
+  if trackId = "__load_jellyfin__" then
+    tryVodSubtitlesFromJellyfin()
     return
   end if
 
@@ -2442,7 +2449,7 @@ sub beginSign(path as String, extraQuery as Object, title as String, streamForma
   m.gatewayTask.control = "run"
 end sub
 
-sub requestJellyfinPlayback(itemId as String, title as String, isLive as Boolean, playbackKind as String)
+sub requestJellyfinPlayback2(itemId as String, title as String, isLive as Boolean, playbackKind as String, preferDirectStream as Boolean, allowTranscoding as Boolean)
   if m.gatewayTask = invalid then
     setStatus("gateway: missing task")
     return
@@ -2488,10 +2495,45 @@ sub requestJellyfinPlayback(itemId as String, title as String, isLive as Boolean
   m.gatewayTask.appToken = cfg.appToken
   m.gatewayTask.jellyfinToken = cfg.jellyfinToken
   m.gatewayTask.userId = cfg.userId
-  m.gatewayTask.preferDirectStream = (isLive = true)
-  m.gatewayTask.allowTranscoding = (isLive = true)
+  m.gatewayTask.preferDirectStream = (preferDirectStream = true)
+  m.gatewayTask.allowTranscoding = (allowTranscoding = true)
   m.gatewayTask.itemId = id
   m.gatewayTask.control = "run"
+end sub
+
+sub tryVodSubtitlesFromJellyfin()
+  if m.player = invalid then return
+  if m.playbackIsLive = true then return
+
+  id = m.playbackItemId
+  if id = invalid then id = ""
+  id = id.Trim()
+  if id = "" then return
+
+  t = m.playbackTitle
+  if t = invalid then t = ""
+  t = t.Trim()
+  if t = "" then t = "Video"
+
+  ' Enable subs preference so if Jellyfin exposes tracks, we auto-pick.
+  _ensureDefaultVodPrefs()
+  m.vodPrefs.subtitlesEnabled = true
+  saveVodPlayerPrefs(m.vodPrefs.audioLang, m.vodPrefs.subtitleLang, true)
+
+  hidePlayerSettings()
+
+  ' Stop without exiting UI (we are switching source).
+  m.ignoreNextStopped = true
+  m.player.control = "stop"
+  m.player.visible = false
+
+  setStatus("vod: carregando legendas do jellyfin...")
+  ' Force a transcoded session (more likely to expose subtitle tracks to Roku).
+  requestJellyfinPlayback2(id, t, false, "vod-jellyfin", true, true)
+end sub
+
+sub requestJellyfinPlayback(itemId as String, title as String, isLive as Boolean, playbackKind as String)
+  requestJellyfinPlayback2(itemId, title, isLive, playbackKind, (isLive = true), (isLive = true))
 end sub
 
 sub seekToLiveEdge(reason as String)

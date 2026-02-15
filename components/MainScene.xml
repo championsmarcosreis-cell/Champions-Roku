@@ -69,28 +69,30 @@
       id="playerOverlay"
       visible="false"
     >
-      <Poster
-        id="playerOverlayBg"
-        translation="[0, 620]"
-        width="1280"
-        height="100"
-        uri="pkg:/images/card.png"
-      />
       <Label
         id="playerOverlayHint"
-        translation="[40, 635]"
+        translation="[40, 650]"
         width="1200"
         height="30"
         font="font:SmallSystemFont"
         color="0xAAB4C2"
         text="OK: Configuracoes do Player    BACK: Voltar"
       />
-      <MarkupList
-        id="playerOverlayList"
-        translation="[420, 665]"
-        itemSize="[440, 60]"
-        numRows="1"
-        itemComponentName="PlayerSettingItem"
+
+      <!-- Floating settings button (no boxed list). -->
+      <Poster
+        id="playerOverlayCircle"
+        translation="[600, 625]"
+        width="80"
+        height="80"
+        uri="pkg:/images/overlay_circle.png"
+      />
+      <Poster
+        id="playerOverlayIcon"
+        translation="[616, 641]"
+        width="48"
+        height="48"
+        uri="pkg:/images/ico_settings.png"
       />
     </Group>
 
@@ -158,16 +160,6 @@
         font="font:SmallSystemFont"
         color="0xAAB4C2"
         text="LEFT/RIGHT: trocar coluna    OK: selecionar    BACK: fechar"
-      />
-
-      <Label
-        id="playerSettingsSoundNote"
-        translation="[180, 560]"
-        width="920"
-        height="28"
-        font="font:SmallSystemFont"
-        color="0xAAB4C2"
-        text="Som (Roku TV): ajustes reais sao na origem/TV; usamos perfil automatico quando suportado."
       />
     </Group>
 
