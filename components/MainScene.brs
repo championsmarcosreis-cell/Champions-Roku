@@ -174,6 +174,14 @@ sub bindUiNodes()
     else if m.player.hasField("subtitleTrack") then
       m.player.observeField("subtitleTrack", "onCurrentSubtitleTrackChanged")
     end if
+
+    ' If Video has focus, intercept keys via ChampionsVideo signals.
+    if m.player.hasField("overlayRequested") then
+      m.player.observeField("overlayRequested", "onPlayerOverlayRequested")
+    end if
+    if m.player.hasField("settingsRequested") then
+      m.player.observeField("settingsRequested", "onPlayerSettingsRequested")
+    end if
     m.playerObsSetup = true
   end if
 
@@ -379,6 +387,19 @@ end sub
 
 sub playLive()
   signAndPlay("/hls/master.m3u8", "Live")
+end sub
+
+sub onPlayerOverlayRequested()
+  if m.player = invalid then return
+  if m.player.visible <> true then return
+  if m.settingsOpen = true then return
+  showPlayerOverlay()
+end sub
+
+sub onPlayerSettingsRequested()
+  if m.player = invalid then return
+  if m.player.visible <> true then return
+  showPlayerSettings()
 end sub
 
 function _normLang(s as String) as String

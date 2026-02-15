@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="ChampionsVideo" extends="Video">
+  <interface>
+    <!-- Signals emitted by the focused Video node when certain keys are pressed.
+         MainScene observes these and opens our custom overlay/settings UI. -->
+    <field id="overlayRequested" type="boolean" alwaysNotify="true" />
+    <field id="settingsRequested" type="boolean" alwaysNotify="true" />
+  </interface>
+
+  <script type="text/brightscript" uri="pkg:/components/ChampionsVideo.brs" />
+</component>
+
