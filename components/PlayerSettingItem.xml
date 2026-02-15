@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="PlayerSettingItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onItemContentChanged" />
+    <field id="itemHasFocus" type="boolean" onChange="onItemHasFocusChanged" />
+  </interface>
+
+  <children>
+    <Poster
+      id="bg"
+      width="440"
+      height="56"
+      translation="[0, 2]"
+      uri="pkg:/images/field_normal.png"
+    />
+
+    <Label
+      id="label"
+      translation="[18, 16]"
+      width="360"
+      height="28"
+      font="font:MediumSystemFont"
+      color="0xD0D6E0"
+      text=""
+    />
+
+    <Label
+      id="mark"
+      translation="[392, 16]"
+      width="40"
+      height="28"
+      font="font:MediumSystemFont"
+      color="0xD8B765"
+      horizAlign="right"
+      text=""
+    />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/PlayerSettingItem.brs" />
+</component>
+

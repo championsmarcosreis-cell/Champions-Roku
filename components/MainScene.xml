@@ -64,6 +64,103 @@
       visible="false"
     />
 
+    <!-- Custom overlay shown during playback (OK). Avoids depending on * for settings. -->
+    <Group
+      id="playerOverlay"
+      visible="false"
+    >
+      <Poster
+        id="playerOverlayBg"
+        translation="[0, 620]"
+        width="1280"
+        height="100"
+        uri="pkg:/images/card.png"
+      />
+      <Label
+        id="playerOverlayHint"
+        translation="[40, 635]"
+        width="1200"
+        height="30"
+        font="font:SmallSystemFont"
+        color="0xAAB4C2"
+        text="OK: Configuracoes do Player    BACK: Voltar"
+      />
+      <MarkupList
+        id="playerOverlayList"
+        translation="[420, 665]"
+        itemSize="[440, 60]"
+        numRows="1"
+        itemComponentName="PlayerSettingItem"
+      />
+    </Group>
+
+    <!-- Modal player settings dialog (Audio/Legendas). -->
+    <Group
+      id="playerSettingsModal"
+      visible="false"
+    >
+      <Poster
+        id="playerSettingsBg"
+        translation="[140, 80]"
+        width="1000"
+        height="560"
+        uri="pkg:/images/card.png"
+      />
+      <Label
+        id="playerSettingsTitle"
+        translation="[180, 110]"
+        width="920"
+        height="34"
+        font="font:MediumSystemFont"
+        color="0xD8B765"
+        text="Configuracoes do Player"
+      />
+
+      <Label
+        id="playerSettingsAudioTitle"
+        translation="[180, 160]"
+        width="440"
+        height="28"
+        font="font:SmallSystemFont"
+        color="0xAAB4C2"
+        text="Audio"
+      />
+      <MarkupList
+        id="playerSettingsAudioList"
+        translation="[180, 195]"
+        itemSize="[440, 60]"
+        numRows="6"
+        itemComponentName="PlayerSettingItem"
+      />
+
+      <Label
+        id="playerSettingsSubTitle"
+        translation="[660, 160]"
+        width="440"
+        height="28"
+        font="font:SmallSystemFont"
+        color="0xAAB4C2"
+        text="Legendas"
+      />
+      <MarkupList
+        id="playerSettingsSubList"
+        translation="[660, 195]"
+        itemSize="[440, 60]"
+        numRows="6"
+        itemComponentName="PlayerSettingItem"
+      />
+
+      <Label
+        id="playerSettingsFooter"
+        translation="[180, 590]"
+        width="920"
+        height="28"
+        font="font:SmallSystemFont"
+        color="0xAAB4C2"
+        text="LEFT/RIGHT: trocar coluna    OK: selecionar    BACK: fechar"
+      />
+    </Group>
+
     <!-- Keep status + hint above the Video plane for debugging -->
     <Label
       id="statusLabel"

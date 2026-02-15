@@ -42,6 +42,14 @@ sub init()
   m.playbackSignedExp = 0
   m.liveResignPending = false
   m.ignoreNextStopped = false
+  m.trackPrefsAppliedAudio = false
+  m.trackPrefsAppliedSub = false
+  m.vodPrefs = loadVodPlayerPrefs()
+  m.settingsOpen = false
+  m.overlayOpen = false
+  m.settingsCol = "audio" ' audio | sub
+  m.availableAudioTracksCache = []
+  m.availableSubtitleTracksCache = []
 
   cfg0 = loadConfig()
   m.apiBase = cfg0.apiBase
@@ -142,11 +150,42 @@ sub bindUiNodes()
   m.homeLogoutBg = m.top.findNode("homeLogoutBg")
 
   if m.player = invalid then m.player = m.top.findNode("player")
+  if m.playerOverlay = invalid then m.playerOverlay = m.top.findNode("playerOverlay")
+  if m.playerOverlayList = invalid then m.playerOverlayList = m.top.findNode("playerOverlayList")
+  if m.playerSettingsModal = invalid then m.playerSettingsModal = m.top.findNode("playerSettingsModal")
+  if m.playerSettingsAudioList = invalid then m.playerSettingsAudioList = m.top.findNode("playerSettingsAudioList")
+  if m.playerSettingsSubList = invalid then m.playerSettingsSubList = m.top.findNode("playerSettingsSubList")
   if m.player <> invalid and (m.playerObsSetup <> true) then
     m.player.observeField("state", "onPlayerStateChanged")
     m.player.observeField("errorMsg", "onPlayerError")
     m.player.observeField("duration", "onPlayerDurationChanged")
+    if m.player.hasField("availableAudioTracks") then
+      m.player.observeField("availableAudioTracks", "onAvailableAudioTracksChanged")
+    end if
+    if m.player.hasField("availableSubtitleTracks") then
+      m.player.observeField("availableSubtitleTracks", "onAvailableSubtitleTracksChanged")
+    end if
+    if m.player.hasField("audioTrack") then
+      m.player.observeField("audioTrack", "onAudioTrackChanged")
+    end if
+    ' Some firmwares expose currentSubtitleTrack rather than subtitleTrack changes.
+    if m.player.hasField("currentSubtitleTrack") then
+      m.player.observeField("currentSubtitleTrack", "onCurrentSubtitleTrackChanged")
+    else if m.player.hasField("subtitleTrack") then
+      m.player.observeField("subtitleTrack", "onCurrentSubtitleTrackChanged")
+    end if
     m.playerObsSetup = true
+  end if
+
+  if m.playerOverlayList <> invalid and (m.overlayObsSetup <> true) then
+    m.playerOverlayList.observeField("itemSelected", "onOverlayItemSelected")
+    m.overlayObsSetup = true
+  end if
+
+  if m.playerSettingsAudioList <> invalid and (m.settingsObsSetup <> true) then
+    m.playerSettingsAudioList.observeField("itemSelected", "onSettingsAudioSelected")
+    if m.playerSettingsSubList <> invalid then m.playerSettingsSubList.observeField("itemSelected", "onSettingsSubSelected")
+    m.settingsObsSetup = true
   end if
 
   if m.channelsList <> invalid and (m.channelsObsSetup <> true) then
@@ -205,8 +244,10 @@ sub onBindTimerFire()
     ' Dev-only autoplay hooks (use .secrets/dev_autoplay.txt):
     ' - "vod": auto-play first VOD item from the first shelf
     ' - "live": auto-enter Live list and auto-play the first channel
-    ' - "hls": auto-play /hls/index.m3u8 (encoder pipeline)
-    if m.devAutoplay = "hls" and m.devAutoplayDone <> true and m.devAutoplayTimer <> invalid then
+    ' - "hls": auto-play /hls/master.m3u8 (encoder pipeline via gateway master)
+    ' - "encoder": auto-play encoder HLS directly (bypass gateway signing)
+    ' - "master": auto-play /hls/master.m3u8 (mixed variants)
+    if (m.devAutoplay = "hls" or m.devAutoplay = "encoder" or m.devAutoplay = "master") and m.devAutoplayDone <> true and m.devAutoplayTimer <> invalid then
       m.devAutoplayTimer.control = "start"
     end if
     return
@@ -225,14 +266,32 @@ end sub
 
 sub onDevAutoplayFire()
   if m.devAutoplayDone = true then return
-  if m.devAutoplay <> "hls" then return
+  if m.devAutoplay <> "hls" and m.devAutoplay <> "encoder" and m.devAutoplay <> "master" then return
 
+  if m.devAutoplay = "encoder" then
+    m.devAutoplayDone = true
+    print "DEV autoplay ENCODER HLS"
+    ' Direct encoder HLS test (LAN). This intentionally bypasses /sign so we can
+    ' isolate Roku playback issues from gateway/VPS/CDN pipelines.
+    startVideo("http://192.168.0.168/0.m3u8", "Live (Encoder)", "hls", true, "live-encoder", "")
+    return
+  end if
+
+  if m.devAutoplay = "master" then
+    cfg = loadConfig()
+    if cfg.appToken = "" or cfg.jellyfinToken = "" then return
+    m.devAutoplayDone = true
+    print "DEV autoplay HLS MASTER"
+    signAndPlay("/hls/master.m3u8", "Live")
+    return
+  end if
+ 
   cfg = loadConfig()
   if cfg.appToken = "" or cfg.jellyfinToken = "" then return
-
+ 
   m.devAutoplayDone = true
   print "DEV autoplay HLS"
-  signAndPlay("/hls/index.m3u8", "Live")
+  signAndPlay("/hls/master.m3u8", "Live")
 end sub
 
 sub layoutCards()
@@ -313,11 +372,421 @@ sub doLogin()
 end sub
 
 sub playLive()
-  signAndPlay("/hls/index.m3u8", "Live")
+  signAndPlay("/hls/master.m3u8", "Live")
+end sub
+
+function _normLang(s as String) as String
+  v = s
+  if v = invalid then v = ""
+  v = LCase(v.Trim())
+  if v = "" then return ""
+  ' Normalize common variants to increase match rate across manifests.
+  if v = "pt" or v = "pt-br" or v = "pt_br" then return "por"
+  if v = "en" or v = "en-us" or v = "en_us" then return "eng"
+  return v
+end function
+
+function _pickTrackByLang(tracks as Object, prefLang as String) as Object
+  if type(tracks) <> "roArray" then return invalid
+  want = _normLang(prefLang)
+  if want = "" then return invalid
+
+  ' First pass: exact match on Language.
+  for each t in tracks
+    if type(t) = "roAssociativeArray" then
+      lang = ""
+      if t.Language <> invalid then lang = _normLang(t.Language)
+      if lang = want then return t
+    end if
+  end for
+
+  ' Second pass: prefix match (e.g. "por" vs "por-BR").
+  for each t in tracks
+    if type(t) = "roAssociativeArray" then
+      lang = ""
+      if t.Language <> invalid then lang = _normLang(t.Language)
+      if lang <> "" and Left(lang, Len(want)) = want then return t
+    end if
+  end for
+  return invalid
+end function
+
+sub _ensureDefaultVodPrefs()
+  if type(m.vodPrefs) <> "roAssociativeArray" then m.vodPrefs = loadVodPlayerPrefs()
+  if m.vodPrefs.audioLang = invalid then m.vodPrefs.audioLang = ""
+  if m.vodPrefs.subtitleLang = invalid then m.vodPrefs.subtitleLang = ""
+  if m.vodPrefs.subtitlesEnabled = invalid then m.vodPrefs.subtitlesEnabled = false
+
+  ' Defaults (ExoPlayer-like).
+  if m.vodPrefs.audioLang.Trim() = "" then m.vodPrefs.audioLang = "por"
+  if m.vodPrefs.subtitleLang.Trim() = "" then m.vodPrefs.subtitleLang = "por"
+end sub
+
+sub applyPreferredTracks()
+  if m.player = invalid then return
+  if m.player.visible <> true then return
+  ' VOD only (do not change Live behavior).
+  if m.playbackIsLive = true then return
+  _ensureDefaultVodPrefs()
+
+  if m.trackPrefsAppliedAudio <> true then
+    if m.player.hasField("availableAudioTracks") and m.player.hasField("audioTrack") then
+      tracks = m.player.availableAudioTracks
+      picked = _pickTrackByLang(tracks, m.vodPrefs.audioLang)
+      if picked <> invalid and picked.Track <> invalid then
+        tId = picked.Track
+        if tId <> invalid then tId = tId.ToStr()
+        if tId <> "" then
+          print "player pref audioLang=" + m.vodPrefs.audioLang + " -> track=" + tId
+          m.player.audioTrack = tId
+          m.trackPrefsAppliedAudio = true
+        end if
+      end if
+    end if
+  end if
+
+  if m.trackPrefsAppliedSub <> true then
+    if m.vodPrefs.subtitlesEnabled <> true then
+      _disableSubtitles()
+      m.trackPrefsAppliedSub = true
+      return
+    end if
+
+    if m.player.hasField("availableSubtitleTracks") then
+      tracks = m.player.availableSubtitleTracks
+      picked = _pickTrackByLang(tracks, m.vodPrefs.subtitleLang)
+      if picked <> invalid and picked.Track <> invalid then
+        tId = picked.Track
+        if tId <> invalid then tId = tId.ToStr()
+        if tId <> "" then
+          print "player pref subtitleLang=" + m.vodPrefs.subtitleLang + " -> track=" + tId
+          _setSubtitleTrack(tId)
+          m.trackPrefsAppliedSub = true
+        end if
+      end if
+    end if
+  end if
+end sub
+
+sub _setSubtitleTrack(trackId as String)
+  if m.player = invalid then return
+  id = trackId
+  if id = invalid then id = ""
+  id = id.Trim()
+  if id = "" then return
+  if m.player.hasField("subtitleTrack") then
+    m.player.subtitleTrack = id
+  else if m.player.hasField("currentSubtitleTrack") then
+    m.player.currentSubtitleTrack = id
+  end if
+end sub
+
+sub _disableSubtitles()
+  if m.player = invalid then return
+  if m.player.hasField("subtitleTrack") then m.player.subtitleTrack = "off"
+  if m.player.hasField("currentSubtitleTrack") then m.player.currentSubtitleTrack = "off"
+end sub
+
+sub onAvailableAudioTracksChanged()
+  if m.player <> invalid and m.player.hasField("availableAudioTracks") then
+    t = m.player.availableAudioTracks
+    if type(t) = "roArray" then m.availableAudioTracksCache = t
+  end if
+  ' Tracks usually become available shortly after load.
+  applyPreferredTracks()
+end sub
+
+sub onAvailableSubtitleTracksChanged()
+  if m.player <> invalid and m.player.hasField("availableSubtitleTracks") then
+    t = m.player.availableSubtitleTracks
+    if type(t) = "roArray" then m.availableSubtitleTracksCache = t
+  end if
+  applyPreferredTracks()
+end sub
+
+sub onAudioTrackChanged()
+  if m.player = invalid then return
+  if m.player.visible <> true then return
+  if m.player.hasField("availableAudioTracks") <> true then return
+  if m.playbackIsLive = true then return
+
+  cur = m.player.audioTrack
+  if cur = invalid then cur = ""
+  cur = cur.ToStr().Trim()
+  if cur = "" then return
+
+  tracks = m.player.availableAudioTracks
+  if type(tracks) <> "roArray" then return
+  for each t in tracks
+    if type(t) = "roAssociativeArray" and t.Track <> invalid and t.Track.ToStr() = cur then
+      if t.Language <> invalid then
+        lang = _normLang(t.Language.ToStr())
+        if lang <> "" then
+          _ensureDefaultVodPrefs()
+          if _normLang(m.vodPrefs.audioLang) <> lang then
+            print "player audioTrack changed -> save prefAudioLang=" + lang
+            m.vodPrefs.audioLang = lang
+            saveVodPlayerPrefs(m.vodPrefs.audioLang, m.vodPrefs.subtitleLang, (m.vodPrefs.subtitlesEnabled = true))
+          end if
+        end if
+      end if
+      exit for
+    end if
+  end for
+end sub
+
+sub onCurrentSubtitleTrackChanged()
+  if m.player = invalid then return
+  if m.player.visible <> true then return
+  if m.player.hasField("availableSubtitleTracks") <> true then return
+  if m.playbackIsLive = true then return
+
+  cur = ""
+  if m.player.hasField("currentSubtitleTrack") then
+    cur = m.player.currentSubtitleTrack
+  else if m.player.hasField("subtitleTrack") then
+    cur = m.player.subtitleTrack
+  end if
+  if cur = invalid then cur = ""
+  cur = cur.ToStr().Trim()
+  if cur = "" then return
+
+  tracks = m.player.availableSubtitleTracks
+  if type(tracks) <> "roArray" then return
+  for each t in tracks
+    if type(t) = "roAssociativeArray" and t.Track <> invalid and t.Track.ToStr() = cur then
+      if t.Language <> invalid then
+        lang = _normLang(t.Language.ToStr())
+        if lang <> "" then
+          _ensureDefaultVodPrefs()
+          if _normLang(m.vodPrefs.subtitleLang) <> lang then
+            print "player subtitleTrack changed -> save prefSubtitleLang=" + lang
+            m.vodPrefs.subtitleLang = lang
+            saveVodPlayerPrefs(m.vodPrefs.audioLang, m.vodPrefs.subtitleLang, true)
+          end if
+        end if
+      end if
+      exit for
+    end if
+  end for
+end sub
+
+function _overlayContent() as Object
+  root = CreateObject("roSGNode", "ContentNode")
+  c = CreateObject("roSGNode", "ContentNode")
+  c.title = "Configuracoes do Player"
+  c.addField("selected", "boolean", false)
+  c.selected = false
+  root.appendChild(c)
+  return root
+end function
+
+sub showPlayerOverlay()
+  if m.playerOverlay = invalid or m.playerOverlayList = invalid then return
+  if m.player = invalid or m.player.visible <> true then return
+  m.overlayOpen = true
+  m.playerOverlay.visible = true
+  m.playerOverlayList.content = _overlayContent()
+  m.playerOverlayList.setFocus(true)
+end sub
+
+sub hidePlayerOverlay()
+  if m.playerOverlay = invalid then return
+  m.overlayOpen = false
+  m.playerOverlay.visible = false
+  if m.player <> invalid and m.player.visible = true then m.player.setFocus(true)
+end sub
+
+sub showPlayerSettings()
+  if m.playerSettingsModal = invalid then return
+  if m.player = invalid or m.player.visible <> true then return
+  m.settingsOpen = true
+  m.settingsCol = "audio"
+  m.playerSettingsModal.visible = true
+  refreshPlayerSettingsLists()
+  if m.playerSettingsAudioList <> invalid then m.playerSettingsAudioList.setFocus(true)
+end sub
+
+sub hidePlayerSettings()
+  if m.playerSettingsModal = invalid then return
+  m.settingsOpen = false
+  m.playerSettingsModal.visible = false
+  if m.overlayOpen = true then
+    if m.playerOverlayList <> invalid then m.playerOverlayList.setFocus(true)
+  else
+    if m.player <> invalid and m.player.visible = true then m.player.setFocus(true)
+  end if
+end sub
+
+sub refreshPlayerSettingsLists()
+  if m.playerSettingsAudioList = invalid or m.playerSettingsSubList = invalid then return
+
+  isVod = (m.playbackIsLive <> true)
+  if isVod then _ensureDefaultVodPrefs()
+
+  ' Audio
+  audioRoot = CreateObject("roSGNode", "ContentNode")
+  tracksA = []
+  if m.player <> invalid and m.player.hasField("availableAudioTracks") then
+    t = m.player.availableAudioTracks
+    if type(t) = "roArray" then tracksA = t
+  end if
+  if type(tracksA) <> "roArray" then tracksA = []
+  for each tr in tracksA
+    if type(tr) = "roAssociativeArray" then
+      title = ""
+      lang = ""
+      if tr.Language <> invalid then lang = tr.Language.ToStr()
+      if tr.Description <> invalid and tr.Description.ToStr().Trim() <> "" then
+        title = tr.Description.ToStr()
+      else if lang <> "" then
+        title = lang
+      else
+        title = "Audio"
+      end if
+      c = CreateObject("roSGNode", "ContentNode")
+      c.addField("trackId", "string", false)
+      c.addField("lang", "string", false)
+      c.addField("selected", "boolean", false)
+      c.title = title
+      if tr.Track <> invalid then c.trackId = tr.Track.ToStr() else c.trackId = ""
+      c.lang = _normLang(lang)
+      c.selected = false
+      if m.player <> invalid and m.player.hasField("audioTrack") then
+        cur = m.player.audioTrack
+        if cur <> invalid and cur.ToStr() = c.trackId then c.selected = true
+      end if
+      audioRoot.appendChild(c)
+    end if
+  end for
+  m.playerSettingsAudioList.content = audioRoot
+
+  ' Subtitles (first item: OFF)
+  subRoot = CreateObject("roSGNode", "ContentNode")
+  off = CreateObject("roSGNode", "ContentNode")
+  off.addField("trackId", "string", false)
+  off.addField("lang", "string", false)
+  off.addField("selected", "boolean", false)
+  off.title = "Desligado"
+  off.trackId = "off"
+  off.lang = ""
+  off.selected = true
+  if isVod and m.vodPrefs.subtitlesEnabled = true then off.selected = false
+  subRoot.appendChild(off)
+
+  tracksS = []
+  if m.player <> invalid and m.player.hasField("availableSubtitleTracks") then
+    t = m.player.availableSubtitleTracks
+    if type(t) = "roArray" then tracksS = t
+  end if
+  if type(tracksS) <> "roArray" then tracksS = []
+  cur = ""
+  if m.player <> invalid and m.player.hasField("currentSubtitleTrack") then
+    cur = m.player.currentSubtitleTrack
+  else if m.player <> invalid and m.player.hasField("subtitleTrack") then
+    cur = m.player.subtitleTrack
+  end if
+  if cur = invalid then cur = ""
+  cur = cur.ToStr()
+
+  for each tr in tracksS
+    if type(tr) = "roAssociativeArray" then
+      title = ""
+      lang = ""
+      if tr.Language <> invalid then lang = tr.Language.ToStr()
+      if tr.Description <> invalid and tr.Description.ToStr().Trim() <> "" then
+        title = tr.Description.ToStr()
+      else if lang <> "" then
+        title = lang
+      else
+        title = "Legenda"
+      end if
+      c = CreateObject("roSGNode", "ContentNode")
+      c.addField("trackId", "string", false)
+      c.addField("lang", "string", false)
+      c.addField("selected", "boolean", false)
+      c.title = title
+      if tr.Track <> invalid then c.trackId = tr.Track.ToStr() else c.trackId = ""
+      c.lang = _normLang(lang)
+      c.selected = false
+      if cur <> "" and cur = c.trackId and (not isVod or (isVod and m.vodPrefs.subtitlesEnabled = true)) then
+        c.selected = true
+        off.selected = false
+      end if
+      subRoot.appendChild(c)
+    end if
+  end for
+  m.playerSettingsSubList.content = subRoot
+end sub
+
+sub onOverlayItemSelected()
+  showPlayerSettings()
+end sub
+
+sub onSettingsAudioSelected()
+  if m.playerSettingsAudioList = invalid then return
+  idx = m.playerSettingsAudioList.itemSelected
+  root = m.playerSettingsAudioList.content
+  if root = invalid then return
+  it = root.getChild(idx)
+  if it = invalid then return
+  trackId = it.trackId
+  if trackId = invalid then trackId = ""
+  trackId = trackId.ToStr().Trim()
+  if trackId = "" then return
+
+  if m.player <> invalid and m.player.hasField("audioTrack") then m.player.audioTrack = trackId
+
+  if m.playbackIsLive <> true then
+    _ensureDefaultVodPrefs()
+    lang = it.lang
+    if lang = invalid then lang = ""
+    lang = _normLang(lang.ToStr())
+    if lang <> "" then m.vodPrefs.audioLang = lang
+    saveVodPlayerPrefs(m.vodPrefs.audioLang, m.vodPrefs.subtitleLang, (m.vodPrefs.subtitlesEnabled = true))
+  end if
+
+  refreshPlayerSettingsLists()
+end sub
+
+sub onSettingsSubSelected()
+  if m.playerSettingsSubList = invalid then return
+  idx = m.playerSettingsSubList.itemSelected
+  root = m.playerSettingsSubList.content
+  if root = invalid then return
+  it = root.getChild(idx)
+  if it = invalid then return
+  trackId = it.trackId
+  if trackId = invalid then trackId = ""
+  trackId = trackId.ToStr().Trim()
+  if trackId = "" then return
+
+  if trackId = "off" then
+    _disableSubtitles()
+    if m.playbackIsLive <> true then
+      _ensureDefaultVodPrefs()
+      m.vodPrefs.subtitlesEnabled = false
+      saveVodPlayerPrefs(m.vodPrefs.audioLang, m.vodPrefs.subtitleLang, false)
+    end if
+    refreshPlayerSettingsLists()
+    return
+  end if
+
+  _setSubtitleTrack(trackId)
+  if m.playbackIsLive <> true then
+    _ensureDefaultVodPrefs()
+    m.vodPrefs.subtitlesEnabled = true
+    lang = it.lang
+    if lang = invalid then lang = ""
+    lang = _normLang(lang.ToStr())
+    if lang <> "" then m.vodPrefs.subtitleLang = lang
+    saveVodPlayerPrefs(m.vodPrefs.audioLang, m.vodPrefs.subtitleLang, true)
+  end if
+  refreshPlayerSettingsLists()
 end sub
 
 sub signAndPlay(rawPath as String, title as String)
-  target = parseTarget(rawPath, "/hls/index.m3u8")
+  target = parseTarget(rawPath, "/hls/master.m3u8")
   beginSign(target.path, target.query, title, "hls", true, "live", "")
 end sub
 
@@ -533,8 +1002,8 @@ sub onGatewayTaskStateChanged()
               signAndPlay(p, first.title)
             else
               m.devAutoplayDone = true
-              print "DEV autoplay LIVE: missing channel path; fallback to /hls/index.m3u8"
-              signAndPlay("/hls/index.m3u8", first.title)
+              print "DEV autoplay LIVE: missing channel path; fallback to /hls/master.m3u8"
+              signAndPlay("/hls/master.m3u8", first.title)
             end if
           end if
         end if
@@ -661,6 +1130,18 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
     return
   end if
 
+  ' Reset per-playback track preference application.
+  m.trackPrefsAppliedAudio = false
+  m.trackPrefsAppliedSub = false
+  m.availableAudioTracksCache = []
+  m.availableSubtitleTracksCache = []
+
+  ' Clear any prior selection so we don't carry track IDs across unrelated assets.
+  ' We'll re-apply preferences once track lists become available.
+  if m.player.hasField("audioTrack") then m.player.audioTrack = ""
+  if m.player.hasField("subtitleTrack") then m.player.subtitleTrack = ""
+  if m.player.hasField("currentSubtitleTrack") then m.player.currentSubtitleTrack = ""
+
   ' Clear transient status before entering the video plane.
   setStatus("ready")
 
@@ -735,6 +1216,8 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
   m.player.control = "play"
   ' Give focus to the Video node so Roku's built-in transport UI works.
   m.player.setFocus(true)
+  hidePlayerOverlay()
+  if m.settingsOpen = true then hidePlayerSettings()
 
   if isLive = true then
     if m.sigCheckTimer <> invalid then m.sigCheckTimer.control = "start"
@@ -809,6 +1292,10 @@ sub stopPlaybackAndReturn(reason as String)
   m.playbackSignedExp = 0
   m.liveResignPending = false
   m.ignoreNextStopped = false
+  m.settingsOpen = false
+  m.overlayOpen = false
+  if m.playerOverlay <> invalid then m.playerOverlay.visible = false
+  if m.playerSettingsModal <> invalid then m.playerSettingsModal.visible = false
 
   if m.mode = "live" and m.channelsList <> invalid then
     m.channelsList.setFocus(true)
@@ -857,6 +1344,37 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
   if k = invalid then k = ""
   kl = LCase(k.Trim())
 
+  ' Modal player settings has priority during playback.
+  if m.settingsOpen = true then
+    if kl = "back" then
+      hidePlayerSettings()
+      return true
+    end if
+    if kl = "left" then
+      m.settingsCol = "audio"
+      if m.playerSettingsAudioList <> invalid then m.playerSettingsAudioList.setFocus(true)
+      return true
+    end if
+    if kl = "right" then
+      m.settingsCol = "sub"
+      if m.playerSettingsSubList <> invalid then m.playerSettingsSubList.setFocus(true)
+      return true
+    end if
+    return false
+  end if
+
+  if m.overlayOpen = true then
+    if kl = "back" then
+      hidePlayerOverlay()
+      return true
+    end if
+    if kl = "ok" then
+      showPlayerSettings()
+      return true
+    end if
+    return false
+  end if
+
   ' Always allow BACK to exit playback, regardless of the current mode.
   if m.player <> invalid and m.player.visible = true and kl = "back" then
     setStatus("stopped")
@@ -904,7 +1422,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
   end if
 
   if key = "OK" then
-    if m.player <> invalid and m.player.visible = true then return false
+    if m.player <> invalid and m.player.visible = true then
+      showPlayerOverlay()
+      return true
+    end if
     if m.mode = "live" or m.mode = "browse" then return false
     if m.mode = "login" then
       if m.focusIndex = 0 then
@@ -944,10 +1465,27 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
   end if
 
   if key = "options" then
-    ' While video is playing, let Roku's built-in * menu handle captions/audio tracks.
-    if m.player <> invalid and m.player.visible = true then return false
+    ' While video is playing, open our settings dialog (do not depend on Roku * menu).
+    if m.player <> invalid and m.player.visible = true then
+      showPlayerSettings()
+      return true
+    end if
     showSettings()
     return true
+  end if
+
+  if kl = "info" then
+    if m.player <> invalid and m.player.visible = true then
+      showPlayerSettings()
+      return true
+    end if
+  end if
+
+  if kl = "ok" then
+    if m.player <> invalid and m.player.visible = true then
+      showPlayerOverlay()
+      return true
+    end if
   end if
 
   if key = "play" then
@@ -1095,6 +1633,8 @@ sub onPlayerStateChanged()
   print "player state=" + st + " kind=" + m.playbackKind + " pos=" + p.ToStr() + " dur=" + d.ToStr()
   if st = "playing" then
     if m.playTimeoutTimer <> invalid then m.playTimeoutTimer.control = "stop"
+    ' Best-effort: apply preferred tracks once playback is stable.
+    applyPreferredTracks()
   else if st = "stopped" then
     if m.ignoreNextStopped = true then
       m.ignoreNextStopped = false
@@ -1573,8 +2113,8 @@ sub onChannelSelected()
     return
   end if
 
-  ' Some Jellyfin LiveTV channel payloads omit Path; our Live pipeline is /hls/index.m3u8.
-  signAndPlay("/hls/index.m3u8", item.title)
+  ' Some Jellyfin LiveTV channel payloads omit Path; our Live pipeline is /hls/master.m3u8.
+  signAndPlay("/hls/master.m3u8", item.title)
 end sub
 
 sub showTokens()
@@ -1708,7 +2248,7 @@ function parseTarget(raw as String, defaultPath as String) as Object
   if v = "" then v = defaultPath
   if v = invalid then v = ""
   v = v.Trim()
-  if v = "" then v = "/hls/index.m3u8"
+  if v = "" then v = "/hls/master.m3u8"
   if Left(v, 1) <> "/" then v = "/" + v
 
   qpos = Instr(1, v, "?") ' 1-based; returns 0 when not found
