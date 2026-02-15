@@ -1126,6 +1126,12 @@ sub onGatewayTaskStateChanged()
       m.pendingPlaybackInfoIsLive = false
       m.pendingPlaybackInfoKind = ""
 
+      ' Hint the gateway to do Roku-specific playlist rewriting (subtitle injection + signing)
+      ' for Jellyfin HLS sessions.
+      if kind = "vod-jellyfin" and type(query) = "roAssociativeArray" then
+        query["roku"] = "1"
+      end if
+
       beginSign(path, query, title, fmt, isLive, kind, itemId)
     else
       err = m.gatewayTask.error
@@ -2573,7 +2579,13 @@ sub tryVodSubtitlesFromJellyfin()
 end sub
 
 sub requestJellyfinPlayback(itemId as String, title as String, isLive as Boolean, playbackKind as String)
-  requestJellyfinPlayback2(itemId, title, isLive, playbackKind, (isLive = true), (isLive = true))
+  ' For Roku VOD we prefer an HLS session (transcoding enabled) so the Video node
+  ' can surface multiple audio/subtitle tracks when available.
+  if isLive = true then
+    requestJellyfinPlayback2(itemId, title, isLive, playbackKind, true, true)
+  else
+    requestJellyfinPlayback2(itemId, title, false, playbackKind, true, true)
+  end if
 end sub
 
 sub seekToLiveEdge(reason as String)
