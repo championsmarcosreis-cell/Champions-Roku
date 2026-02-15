@@ -22,10 +22,15 @@ end sub
 function loadConfig() as Object
   sec = _cfgSection()
 
-  ' We always default to the public gateway (no LAN-only base).
-  ' Optional override can be bundled at build-time via bundledApiBase().
-  apiBase = bundledApiBase()
-  if apiBase = "" then apiBase = "https://api.champions.place"
+  ' API base can be:
+  ' 1) saved in registry (local override on the device)
+  ' 2) bundled at build-time (LAN/dev builds)
+  ' 3) production default
+  apiBase = _readOrEmpty(sec, "apiBase")
+  if apiBase = "" then
+    apiBase = bundledApiBase()
+    if apiBase = "" then apiBase = "https://api.champions.place"
+  end if
 
   appToken = _readOrEmpty(sec, "appToken")
   if appToken = "" then appToken = bundledAppToken()

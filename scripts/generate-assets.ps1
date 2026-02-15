@@ -37,11 +37,13 @@ function Fill-Background($g, [int]$w, [int]$h) {
   # Subtle vignette
   $path = New-Object System.Drawing.Drawing2D.GraphicsPath
   try {
-    $path.AddEllipse(-$w*0.10, -$h*0.25, $w*1.20, $h*1.60) | Out-Null
+    # Keep corners cleaner (avoid dark top edges on TVs)
+    $path.AddEllipse(-$w*0.25, -$h*0.35, $w*1.50, $h*1.90) | Out-Null
     $pBrush = New-Object System.Drawing.Drawing2D.PathGradientBrush $path
     try {
-      $pBrush.CenterColor = [System.Drawing.Color]::FromArgb(30, 255, 200, 90)
-      $pBrush.SurroundColors = @([System.Drawing.Color]::FromArgb(210, 0, 0, 0))
+      # Center glow only; fade to transparent so we don't get dark corners.
+      $pBrush.CenterColor = [System.Drawing.Color]::FromArgb(20, 255, 200, 90)
+      $pBrush.SurroundColors = @([System.Drawing.Color]::FromArgb(0, 0, 0, 0))
       $g.FillRectangle($pBrush, $rect)
     } finally { $pBrush.Dispose() }
   } finally { $path.Dispose() }
@@ -77,11 +79,15 @@ function Draw-Title($g, [int]$w, [int]$y, [int]$fontSize, [string]$text) {
     $fmt.LineAlignment = [System.Drawing.StringAlignment]::Near
     $rect = New-Object System.Drawing.RectangleF 0, $y, $w, ($fontSize*2)
 
-    $shadow = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(160, 0, 0, 0))
+    # IMPORTANT: Use the same centered layout rectangle for shadow + foreground;
+    # drawing the shadow with x/y would ignore alignment and misplace it.
+    $shadowRect = New-Object System.Drawing.RectangleF 1, ($y+1), $w, ($fontSize*2)
+
+    $shadow = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(120, 0, 0, 0))
     $gold = [System.Drawing.ColorTranslator]::FromHtml('#D8B765')
     $brush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(240, $gold.R, $gold.G, $gold.B))
     try {
-      $g.DrawString($text, $font, $shadow, ($rect.X+1), ($rect.Y+1), $fmt)
+      $g.DrawString($text, $font, $shadow, $shadowRect, $fmt)
       $g.DrawString($text, $font, $brush, $rect, $fmt)
     } finally {
       $shadow.Dispose()
@@ -104,6 +110,93 @@ function New-RoundedRectPath([int]$x, [int]$y, [int]$w, [int]$h, [int]$r) {
   return $path
 }
 
+function Draw-LionOnlyCentered($g, $logoImg, [int]$w, [int]$h, [double]$scale, [int]$yOffset) {
+  $maxW = [int]($w * $scale)
+  $maxH = [int]($h * $scale)
+  $ratio = [Math]::Min($maxW / $logoImg.Width, $maxH / $logoImg.Height)
+  $dw = [int]([Math]::Round($logoImg.Width * $ratio))
+  $dh = [int]([Math]::Round($logoImg.Height * $ratio))
+  $dx = [int](($w - $dw) / 2)
+  $dy = [int](($h - $dh) / 2) + $yOffset
+
+  # Build a temporary, transparent logo bitmap at the exact render size,
+  # then remove the outer "C" arc by applying a radial cutoff based on the
+  # gap between the arc and the lion.
+  $tmp = New-Bitmap $dw $dh
+  try {
+    With-Graphics $tmp {
+      param($tg)
+      $tg.Clear([System.Drawing.Color]::Transparent)
+
+      $attr = New-Object System.Drawing.Imaging.ImageAttributes
+      try {
+        $low = [System.Drawing.Color]::FromArgb(0, 0, 0)
+        $high = [System.Drawing.Color]::FromArgb(30, 30, 30)
+        $attr.SetColorKey($low, $high)
+        $dest0 = New-Object System.Drawing.Rectangle 0, 0, $dw, $dh
+        $tg.DrawImage($logoImg, $dest0, 0, 0, $logoImg.Width, $logoImg.Height, ([System.Drawing.GraphicsUnit]::Pixel), $attr)
+      } finally {
+        $attr.Dispose()
+      }
+    }
+
+    # Fast pixel access
+    $rect = New-Object System.Drawing.Rectangle 0, 0, $dw, $dh
+    $data = $tmp.LockBits($rect, [System.Drawing.Imaging.ImageLockMode]::ReadWrite, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb))
+    try {
+      $stride = $data.Stride
+      $buf = New-Object byte[] ($stride * $dh)
+      [System.Runtime.InteropServices.Marshal]::Copy($data.Scan0, $buf, 0, $buf.Length)
+
+      # Remove the outer "C" arc with a radial cutoff around the center.
+      # The arc lives in the outer ring of the logo, while the lion stays inside.
+      $cx = ($dw - 1) / 2.0
+      $cy = ($dh - 1) / 2.0
+      $maxR = 0
+
+      for ($y = 0; $y -lt $dh; $y++) {
+        $row = $y * $stride
+        $dy2 = ($y - $cy) * ($y - $cy)
+        for ($x = 0; $x -lt $dw; $x++) {
+          $i = $row + ($x * 4)
+          $a = $buf[$i + 3]
+          if ($a -eq 0) { continue }
+          $dx2 = ($x - $cx) * ($x - $cx)
+          $r = [int][Math]::Round([Math]::Sqrt($dx2 + $dy2))
+          if ($r -gt $maxR) { $maxR = $r }
+        }
+      }
+
+      # Empirically, the lion fits within ~83% of the outer radius for this asset.
+      # Use Floor (not Ceiling) to ensure the inner edge of the arc is removed too.
+      $cutR = [int][Math]::Floor($maxR * 0.83)
+      $cutR2 = $cutR * $cutR
+
+      for ($y = 0; $y -lt $dh; $y++) {
+        $row = $y * $stride
+        $dy2 = ($y - $cy) * ($y - $cy)
+        for ($x = 0; $x -lt $dw; $x++) {
+          $i = $row + ($x * 4)
+          $a = $buf[$i + 3]
+          if ($a -eq 0) { continue }
+          $dx2 = ($x - $cx) * ($x - $cx)
+          if (($dx2 + $dy2) -ge $cutR2) {
+            $buf[$i + 3] = 0
+          }
+        }
+      }
+
+      [System.Runtime.InteropServices.Marshal]::Copy($buf, 0, $data.Scan0, $buf.Length)
+    } finally {
+      $tmp.UnlockBits($data)
+    }
+
+    $g.DrawImage($tmp, $dx, $dy)
+  } finally {
+    $tmp.Dispose()
+  }
+}
+
 $logoImg = [System.Drawing.Image]::FromFile($logoSrc)
 try {
   # App-internal logo (used by Poster in the home scene)
@@ -121,8 +214,8 @@ try {
   With-Graphics $iconHd {
     param($g)
     Fill-Background $g 290 218
-    Draw-LogoCentered $g $logoImg 290 218 0.68 -8
-    Draw-Title $g 290 168 18 'CHAMPIONS'
+    Draw-LionOnlyCentered $g $logoImg 290 218 0.92 -37
+    Draw-Title $g 290 176 18 'CHAMPIONS'
   }
   $iconHd.Save((Join-Path $imagesDir 'icon_focus_hd.png'), [System.Drawing.Imaging.ImageFormat]::Png)
   $iconHd.Dispose()
@@ -131,8 +224,8 @@ try {
   With-Graphics $iconSd {
     param($g)
     Fill-Background $g 214 144
-    Draw-LogoCentered $g $logoImg 214 144 0.70 -4
-    Draw-Title $g 214 108 14 'CHAMPIONS'
+    Draw-LionOnlyCentered $g $logoImg 214 144 0.92 -32
+    Draw-Title $g 214 112 14 'CHAMPIONS'
   }
   $iconSd.Save((Join-Path $imagesDir 'icon_focus_sd.png'), [System.Drawing.Imaging.ImageFormat]::Png)
   $iconSd.Dispose()
@@ -206,6 +299,10 @@ try {
   Make-RoundedRectPng (Join-Path $imagesDir 'field_focus.png') 440 56 14 '#0E1623' 245 '#CFA84A' 255 3 0
   Make-RoundedRectPng (Join-Path $imagesDir 'button_normal.png') 440 56 14 '#CFA84A' 255 '#B78E2F' 255 2 0
   Make-RoundedRectPng (Join-Path $imagesDir 'button_focus.png') 440 56 14 '#E3C06A' 255 '#F5D889' 255 2 0
+
+  # Login button needs a more obvious focus state (TV viewing distance).
+  Make-RoundedRectPng (Join-Path $imagesDir 'login_button_normal.png') 440 56 14 '#0E1623' 245 '#CFA84A' 255 3 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'login_button_focus.png') 440 56 14 '#E3C06A' 255 '#FFFFFF' 255 4 0
 
   Write-Host "OK: generated Roku assets in $imagesDir"
 } finally {

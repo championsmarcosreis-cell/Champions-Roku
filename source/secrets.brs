@@ -12,3 +12,9 @@ function bundledApiBase() as String
   return ""
 end function
 
+' Optional dev helper: when non-empty, MainScene may auto-start playback to help
+' with debugging on devices where we can't send ECP keypress events.
+' Allowed values: "", "vod", "live"
+function bundledDevAutoplay() as String
+  return ""
+end function

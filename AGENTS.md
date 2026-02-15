@@ -57,9 +57,24 @@ cd C:\Champions-Roku
 Artefatos:
 
 - ZIP: `dist/champions-roku.zip`
-- Screenshot: `dist/dev.jpg`
+- Screenshot: `dist/dev.png` (tambem salva `dist/dev.jpg`)
+
+## Notas de debug
+
+- Screenshot via `plugin_inspect` pode nao capturar o plano de video (Video node). Em playback, eh normal o print sair "preto" mesmo com o video tocando na TV.
+- Este device esta em `ECP Limited mode` (`/query/device-info` -> `ecp-setting-mode=limited`). Isso bloqueia `POST /keypress/*` (HTTP 403), entao automacao de teclas via ECP nao funciona; use o controle fisico (ou altere Network access nas configs do Roku, se desejado).
+
+## Live HLS (LAN)
+
+O Live TV depende de um origin HLS na LAN (gateway) em `http://<gateway>:8089/hls/index.m3u8`.
+
+Se o Live estiver travando/atrasado por falta de segments, instale/inicie o origin via SSH (cria 2 services systemd: ffmpeg + http.server):
+
+```powershell
+cd C:\Champions-Roku
+.\scripts\setup-live-hls.ps1
+```
 
 ## Observacao
 
 Os scripts `install.ps1` e `screenshot.ps1` usam Digest auth e podem falhar as vezes se o Roku reiniciar a UI; tente novamente (o `install.ps1` ja tem retries).
-
