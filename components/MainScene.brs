@@ -26,6 +26,7 @@ sub init()
   m.playbackItemId = ""
   m.playbackTitle = ""
   m.vodFallbackAttempted = false
+  m.vodJellyfinTranscodeAttempted = false
   m.liveEdgeSnapped = false
   m.lastPlayerState = ""
   m.devAutoplay = ""
@@ -864,6 +865,7 @@ sub playVodById(itemId as String, title as String)
   if t = "" then t = "Video"
 
   m.vodFallbackAttempted = false
+  m.vodJellyfinTranscodeAttempted = false
   m.pendingPlaybackItemId = id
   m.pendingPlaybackTitle = t
 
@@ -1093,6 +1095,11 @@ sub onGatewayTaskStateChanged()
   if job = "playback" then
     itemId = m.pendingPlaybackItemId
     title = m.pendingPlaybackTitle
+    isLive = (m.pendingPlaybackInfoIsLive = true)
+    kind = m.pendingPlaybackInfoKind
+    if kind = invalid then kind = ""
+    kind = kind.Trim()
+    if kind = "" then kind = "vod-jellyfin"
 
     if m.gatewayTask.ok = true then
       raw = m.gatewayTask.resultJson
@@ -1110,11 +1117,6 @@ sub onGatewayTaskStateChanged()
       path = path.Trim()
 
       fmt = inferStreamFormat(path, container)
-      isLive = (m.pendingPlaybackInfoIsLive = true)
-      kind = m.pendingPlaybackInfoKind
-      if kind = invalid then kind = ""
-      kind = kind.Trim()
-      if kind = "" then kind = "vod-jellyfin"
 
       liveStr = "false"
       if isLive = true then liveStr = "true"
@@ -1131,6 +1133,17 @@ sub onGatewayTaskStateChanged()
       m.pendingPlaybackInfoIsLive = false
       m.pendingPlaybackInfoKind = ""
       print "playbackinfo failed: " + err
+      ' If VOD direct playback is not possible (codec/profile), retry once with transcoding enabled.
+      if isLive <> true and kind = "vod-jellyfin" and m.vodJellyfinTranscodeAttempted <> true then
+        err2 = LCase(err.Trim())
+        if err2 = "transcode_forbidden" or err2 = "direct_disabled" or err2 = "no_media_sources" then
+          m.vodJellyfinTranscodeAttempted = true
+          setStatus("vod: tentando transcode...")
+          requestJellyfinPlayback2(itemId, title, false, "vod-jellyfin", true, true)
+          return
+        end if
+      end if
+
       setStatus("playback failed: " + err)
     end if
 
@@ -1372,6 +1385,7 @@ sub stopPlaybackAndReturn(reason as String)
   m.playbackItemId = ""
   m.playbackTitle = ""
   m.vodFallbackAttempted = false
+  m.vodJellyfinTranscodeAttempted = false
   m.liveEdgeSnapped = false
   m.lastPlayerState = ""
   m.playbackSignedExp = 0
@@ -1756,6 +1770,22 @@ sub onPlayerError()
       if m.player <> invalid then m.player.visible = false
       setStatus("vod r2 falhou; tentando jellyfin...")
       requestJellyfinPlayback(id, t, false, "vod-jellyfin")
+      return
+    end if
+  end if
+
+  ' If Jellyfin VOD fails (likely codec/profile mismatch), retry once with transcoding enabled.
+  if m.playbackKind = "vod-jellyfin" and m.vodJellyfinTranscodeAttempted <> true then
+    id2 = m.playbackItemId
+    t2 = m.playbackTitle
+    if id2 <> invalid and id2.Trim() <> "" then
+      m.vodJellyfinTranscodeAttempted = true
+      ' Stop without leaving UI: we're switching source.
+      m.ignoreNextStopped = true
+      if m.player <> invalid then m.player.control = "stop"
+      if m.player <> invalid then m.player.visible = false
+      setStatus("vod jellyfin falhou; tentando transcode...")
+      requestJellyfinPlayback2(id2, t2, false, "vod-jellyfin", true, true)
       return
     end if
   end if
