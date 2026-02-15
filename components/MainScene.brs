@@ -870,7 +870,17 @@ sub playVodById(itemId as String, title as String)
   r2 = r2VodPathForItemId(id)
   if r2 <> "" then
     target = parseTarget(r2, r2)
-    beginSign(target.path, target.query, t, "hls", false, "vod-r2", id)
+    ' Roku needs subtitles embedded in HLS (Video node can't send auth headers).
+    ' Pass api_key so the gateway can fetch Jellyfin subtitle metadata and expose
+    ' EXT-X-MEDIA (SUBTITLES) for this R2 VOD master.
+    cfg = loadConfig()
+    q = target.query
+    if type(q) <> "roAssociativeArray" then q = {}
+    q["roku"] = "1"
+    if cfg.jellyfinToken <> invalid and cfg.jellyfinToken.Trim() <> "" then
+      q["api_key"] = cfg.jellyfinToken.Trim()
+    end if
+    beginSign(target.path, q, t, "hls", false, "vod-r2", id)
     return
   end if
 
