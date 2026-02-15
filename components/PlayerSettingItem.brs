@@ -78,7 +78,7 @@ sub applyIconMode()
 
   if m.icon <> invalid then
     if hideText then
-      m.icon.translation = [ (440 - 28) / 2, 14 ] ' centered
+      m.icon.translation = [ Int((440 - 28) / 2), 14 ] ' centered
     else
       m.icon.translation = [18, 14]
     end if
