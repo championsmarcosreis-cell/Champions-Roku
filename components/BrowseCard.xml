@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="BrowseCard" extends="Group">
+  <children>
+    <!-- Wide 2-column layout for "Home" browsing -->
+    <Poster
+      id="cardBg"
+      translation="[0, 0]"
+      width="1100"
+      height="520"
+      uri="pkg:/images/card.png"
+    />
+
+    <Label
+      id="viewsTitle"
+      translation="[40, 24]"
+      width="440"
+      height="34"
+      font="font:MediumSystemFont"
+      color="0xD8B765"
+      text="Bibliotecas"
+    />
+
+    <Label
+      id="itemsTitle"
+      translation="[620, 24]"
+      width="440"
+      height="34"
+      font="font:MediumSystemFont"
+      color="0xD8B765"
+      text="Recentes"
+    />
+
+    <MarkupList
+      id="viewsList"
+      translation="[40, 70]"
+      itemSize="[440, 60]"
+      numRows="7"
+      itemComponentName="ChampionsMenuItem"
+    />
+
+    <MarkupList
+      id="itemsList"
+      translation="[620, 70]"
+      itemSize="[440, 60]"
+      numRows="7"
+      itemComponentName="ChampionsMenuItem"
+    />
+
+    <Label
+      id="browseEmptyLabel"
+      translation="[620, 250]"
+      width="440"
+      height="34"
+      font="font:SmallSystemFont"
+      horizAlign="center"
+      color="0xAAB4C2"
+      visible="false"
+      text="Sem itens"
+    />
+  </children>
+</component>

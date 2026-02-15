@@ -9,6 +9,11 @@
     <field id="password" type="string" />
     <field id="jellyfinToken" type="string" />
     <field id="path" type="string" />
+    <field id="parentId" type="string" />
+    <field id="limit" type="integer" />
+    <field id="itemId" type="string" />
+    <field id="preferDirectStream" type="boolean" />
+    <field id="allowTranscoding" type="boolean" />
 
     <!-- output -->
     <field id="ok" type="boolean" />
@@ -17,10 +22,10 @@
     <field id="userId" type="string" />
     <field id="signedUrl" type="string" />
     <field id="exp" type="integer" />
+    <field id="resultJson" type="string" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/source/http.brs" />
   <script type="text/brightscript" uri="pkg:/source/gateway.brs" />
   <script type="text/brightscript" uri="pkg:/components/GatewayTask.brs" />
 </component>
-

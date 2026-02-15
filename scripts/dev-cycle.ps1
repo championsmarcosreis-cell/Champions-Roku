@@ -21,4 +21,5 @@ Start-Sleep -Seconds 2
 Write-Host '4/4 Screenshot'
 & (Join-Path $PSScriptRoot 'screenshot.ps1') -RokuIp $RokuIp -Username $Username
 
-Write-Host ("OK: latest screenshot at {0}" -f (Join-Path $root 'dist\\dev.jpg'))
+Write-Host ("OK: latest screenshot at {0}" -f (Join-Path $root 'dist\\dev.png'))
+Write-Host ("(also saved JPEG at {0})" -f (Join-Path $root 'dist\\dev.jpg'))

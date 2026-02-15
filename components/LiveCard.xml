@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="LiveCard" extends="Group">
+  <children>
+    <!-- Larger card for channel browsing -->
+    <Poster
+      id="cardBg"
+      translation="[0, 0]"
+      width="520"
+      height="420"
+      uri="pkg:/images/card.png"
+    />
+
+    <Label
+      id="liveTitle"
+      translation="[40, 22]"
+      width="440"
+      height="34"
+      font="font:MediumSystemFont"
+      color="0xD8B765"
+      text="Canais"
+    />
+
+    <MarkupList
+      id="channelsList"
+      translation="[40, 70]"
+      itemSize="[440, 60]"
+      numRows="5"
+      itemComponentName="ChampionsMenuItem"
+    />
+
+    <Label
+      id="emptyLabel"
+      translation="[40, 200]"
+      width="440"
+      height="34"
+      font="font:SmallSystemFont"
+      horizAlign="center"
+      color="0xAAB4C2"
+      visible="false"
+      text="Sem canais"
+    />
+  </children>
+</component>

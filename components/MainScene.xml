@@ -18,9 +18,9 @@
 
     <Poster
       id="logoPoster"
-      translation="[570, 110]"
-      width="140"
-      height="140"
+      translation="[560, 90]"
+      width="160"
+      height="160"
       uri="pkg:/images/logo.png"
     />
     <Label
@@ -33,16 +33,6 @@
       color="0xD8B765"
       text="CHAMPIONS"
     />
-    <Label
-      id="statusLabel"
-      translation="[0, 335]"
-      width="1280"
-      height="40"
-      font="font:MediumSystemFont"
-      horizAlign="center"
-      visible="false"
-      text=""
-    />
 
     <LoginCard
       id="loginCard"
@@ -54,6 +44,38 @@
       translation="[380, 390]"
     />
 
+    <BrowseCard
+      id="browseCard"
+      translation="[90, 130]"
+      visible="false"
+    />
+
+    <LiveCard
+      id="liveCard"
+      translation="[380, 150]"
+      visible="false"
+    />
+
+    <Video
+      id="player"
+      translation="[0, 0]"
+      width="1280"
+      height="720"
+      visible="false"
+    />
+
+    <!-- Keep status + hint above the Video plane for debugging -->
+    <Label
+      id="statusLabel"
+      translation="[0, 335]"
+      width="1280"
+      height="40"
+      font="font:MediumSystemFont"
+      horizAlign="center"
+      visible="false"
+      text=""
+    />
+
     <Label
       id="hintLabel"
       translation="[0, 650]"
@@ -63,14 +85,6 @@
       horizAlign="center"
       color="0xAAB4C2"
       text="Pressione * para configurar APP_TOKEN"
-    />
-
-    <Video
-      id="player"
-      translation="[0, 0]"
-      width="1280"
-      height="720"
-      visible="false"
     />
   </children>
 </component>
