@@ -14,10 +14,20 @@
       uri="pkg:/images/field_normal.png"
     />
 
+    <!-- Optional left icon (used by the playback overlay settings entry). -->
+    <Poster
+      id="icon"
+      translation="[18, 14]"
+      width="28"
+      height="28"
+      uri=""
+      visible="false"
+    />
+
     <Label
       id="label"
       translation="[18, 16]"
-      width="360"
+      width="330"
       height="28"
       font="font:MediumSystemFont"
       color="0xD0D6E0"
@@ -38,4 +48,3 @@
 
   <script type="text/brightscript" uri="pkg:/components/PlayerSettingItem.brs" />
 </component>
-

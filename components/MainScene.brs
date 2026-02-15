@@ -177,6 +177,12 @@ sub bindUiNodes()
     m.playerObsSetup = true
   end if
 
+  ' Best-effort: allow switching audio tracks without pausing (HLS).
+  ' Guarded for firmware compatibility.
+  if m.player <> invalid and m.player.hasField("seamlessAudioTrackSelection") then
+    m.player.seamlessAudioTrackSelection = true
+  end if
+
   if m.playerOverlayList <> invalid and (m.overlayObsSetup <> true) then
     m.playerOverlayList.observeField("itemSelected", "onOverlayItemSelected")
     m.overlayObsSetup = true
@@ -376,26 +382,43 @@ sub playLive()
 end sub
 
 function _normLang(s as String) as String
-  v = s
-  if v = invalid then v = ""
+  ' Back-compat shim (older code calls _normLang).
+  return normalizeLang(s)
+end function
+
+function normalizeLang(tag as Dynamic) as String
+  v = ""
+  if tag <> invalid then v = tag.ToStr()
   v = LCase(v.Trim())
   if v = "" then return ""
-  ' Normalize common variants to increase match rate across manifests.
-  if v = "pt" or v = "pt-br" or v = "pt_br" then return "por"
-  if v = "en" or v = "en-us" or v = "en_us" then return "eng"
+
+  v = v.Replace("_", "-")
+
+  ' Strip region/variants (pt-br -> pt, por-br -> por).
+  dash = Instr(1, v, "-")
+  if dash > 0 then v = Left(v, dash - 1)
+  semi = Instr(1, v, ";")
+  if semi > 0 then v = Left(v, semi - 1)
+  v = v.Trim()
+  if v = "" then return ""
+
+  ' Map common ISO 639-2/3 to short tags used by prefs.
+  if v = "por" or v = "pt" then return "pt"
+  if v = "eng" or v = "en" then return "en"
+  if v = "spa" or v = "es" then return "es"
   return v
 end function
 
 function _pickTrackByLang(tracks as Object, prefLang as String) as Object
   if type(tracks) <> "roArray" then return invalid
-  want = _normLang(prefLang)
+  want = normalizeLang(prefLang)
   if want = "" then return invalid
 
   ' First pass: exact match on Language.
   for each t in tracks
     if type(t) = "roAssociativeArray" then
       lang = ""
-      if t.Language <> invalid then lang = _normLang(t.Language)
+      if t.Language <> invalid then lang = normalizeLang(t.Language)
       if lang = want then return t
     end if
   end for
@@ -404,7 +427,7 @@ function _pickTrackByLang(tracks as Object, prefLang as String) as Object
   for each t in tracks
     if type(t) = "roAssociativeArray" then
       lang = ""
-      if t.Language <> invalid then lang = _normLang(t.Language)
+      if t.Language <> invalid then lang = normalizeLang(t.Language)
       if lang <> "" and Left(lang, Len(want)) = want then return t
     end if
   end for
@@ -417,9 +440,13 @@ sub _ensureDefaultVodPrefs()
   if m.vodPrefs.subtitleLang = invalid then m.vodPrefs.subtitleLang = ""
   if m.vodPrefs.subtitlesEnabled = invalid then m.vodPrefs.subtitlesEnabled = false
 
+  ' Normalize any stored prefs (legacy "por"/"eng"/regions).
+  m.vodPrefs.audioLang = normalizeLang(m.vodPrefs.audioLang)
+  m.vodPrefs.subtitleLang = normalizeLang(m.vodPrefs.subtitleLang)
+
   ' Defaults (ExoPlayer-like).
-  if m.vodPrefs.audioLang.Trim() = "" then m.vodPrefs.audioLang = "por"
-  if m.vodPrefs.subtitleLang.Trim() = "" then m.vodPrefs.subtitleLang = "por"
+  if m.vodPrefs.audioLang.Trim() = "" then m.vodPrefs.audioLang = "pt"
+  if m.vodPrefs.subtitleLang.Trim() = "" then m.vodPrefs.subtitleLang = "pt"
 end sub
 
 sub applyPreferredTracks()
@@ -520,10 +547,10 @@ sub onAudioTrackChanged()
   for each t in tracks
     if type(t) = "roAssociativeArray" and t.Track <> invalid and t.Track.ToStr() = cur then
       if t.Language <> invalid then
-        lang = _normLang(t.Language.ToStr())
+        lang = normalizeLang(t.Language.ToStr())
         if lang <> "" then
           _ensureDefaultVodPrefs()
-          if _normLang(m.vodPrefs.audioLang) <> lang then
+          if normalizeLang(m.vodPrefs.audioLang) <> lang then
             print "player audioTrack changed -> save prefAudioLang=" + lang
             m.vodPrefs.audioLang = lang
             saveVodPlayerPrefs(m.vodPrefs.audioLang, m.vodPrefs.subtitleLang, (m.vodPrefs.subtitlesEnabled = true))
@@ -556,10 +583,10 @@ sub onCurrentSubtitleTrackChanged()
   for each t in tracks
     if type(t) = "roAssociativeArray" and t.Track <> invalid and t.Track.ToStr() = cur then
       if t.Language <> invalid then
-        lang = _normLang(t.Language.ToStr())
+        lang = normalizeLang(t.Language.ToStr())
         if lang <> "" then
           _ensureDefaultVodPrefs()
-          if _normLang(m.vodPrefs.subtitleLang) <> lang then
+          if normalizeLang(m.vodPrefs.subtitleLang) <> lang then
             print "player subtitleTrack changed -> save prefSubtitleLang=" + lang
             m.vodPrefs.subtitleLang = lang
             saveVodPlayerPrefs(m.vodPrefs.audioLang, m.vodPrefs.subtitleLang, true)
@@ -575,6 +602,10 @@ function _overlayContent() as Object
   root = CreateObject("roSGNode", "ContentNode")
   c = CreateObject("roSGNode", "ContentNode")
   c.title = "Configuracoes do Player"
+  c.addField("iconUri", "string", false)
+  c.iconUri = "pkg:/images/ico_settings.png"
+  c.addField("preferIconOnly", "boolean", false)
+  c.preferIconOnly = true
   c.addField("selected", "boolean", false)
   c.selected = false
   root.appendChild(c)
@@ -650,7 +681,7 @@ sub refreshPlayerSettingsLists()
       c.addField("selected", "boolean", false)
       c.title = title
       if tr.Track <> invalid then c.trackId = tr.Track.ToStr() else c.trackId = ""
-      c.lang = _normLang(lang)
+      c.lang = normalizeLang(lang)
       c.selected = false
       if m.player <> invalid and m.player.hasField("audioTrack") then
         cur = m.player.audioTrack
@@ -707,7 +738,7 @@ sub refreshPlayerSettingsLists()
       c.addField("selected", "boolean", false)
       c.title = title
       if tr.Track <> invalid then c.trackId = tr.Track.ToStr() else c.trackId = ""
-      c.lang = _normLang(lang)
+      c.lang = normalizeLang(lang)
       c.selected = false
       if cur <> "" and cur = c.trackId and (not isVod or (isVod and m.vodPrefs.subtitlesEnabled = true)) then
         c.selected = true
@@ -741,7 +772,7 @@ sub onSettingsAudioSelected()
     _ensureDefaultVodPrefs()
     lang = it.lang
     if lang = invalid then lang = ""
-    lang = _normLang(lang.ToStr())
+    lang = normalizeLang(lang.ToStr())
     if lang <> "" then m.vodPrefs.audioLang = lang
     saveVodPlayerPrefs(m.vodPrefs.audioLang, m.vodPrefs.subtitleLang, (m.vodPrefs.subtitlesEnabled = true))
   end if
@@ -778,7 +809,7 @@ sub onSettingsSubSelected()
     m.vodPrefs.subtitlesEnabled = true
     lang = it.lang
     if lang = invalid then lang = ""
-    lang = _normLang(lang.ToStr())
+    lang = normalizeLang(lang.ToStr())
     if lang <> "" then m.vodPrefs.subtitleLang = lang
     saveVodPlayerPrefs(m.vodPrefs.audioLang, m.vodPrefs.subtitleLang, true)
   end if
@@ -1168,6 +1199,22 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
     c.streamFormat = streamFormat.Trim()
   end if
   c.title = title
+
+  ' Best-effort sound hinting for Roku TVs. Should not break sticks.
+  ' These classifiers help Roku TVs pick appropriate audio processing presets.
+  classifier = "comedy"
+  if isLive = true then classifier = "sports"
+  if classifier <> "" then
+    if c.hasField("contentClassifier") then
+      c.contentClassifier = classifier
+    else if c.hasField("ContentClassifier") then
+      c.ContentClassifier = classifier
+    else
+      c.addField("contentClassifier", "string", false)
+      c.contentClassifier = classifier
+    end if
+  end if
+
   ' Mark live playback and start near the live edge without doing any seeks.
   ' Avoiding seek-based "snap to live" is critical for A/V sync stability on some firmwares.
   if isLive = true then
