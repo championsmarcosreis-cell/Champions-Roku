@@ -52,6 +52,7 @@ sub init()
   m.availableAudioTracksCache = []
   m.availableSubtitleTracksCache = []
   m.lastSubtitleTrackId = ""
+  m.debugPrintedSubtitleTracks = false
 
   cfg0 = loadConfig()
   m.apiBase = cfg0.apiBase
@@ -119,6 +120,22 @@ sub init()
     m.top.appendChild(m.sigCheckTimer)
   end if
 
+  ' Simple VOD scrubbing driven by LEFT/RIGHT events from ChampionsVideo.
+  m.clock = CreateObject("roTimespan")
+  if m.clock <> invalid then m.clock.Mark()
+
+  m.scrubActive = false
+  m.scrubDir = 0
+  m.scrubTargetSec = 0
+  m.scrubStartMs = 0
+  m.scrubTimer = CreateObject("roSGNode", "Timer")
+  if m.scrubTimer <> invalid then
+    m.scrubTimer.duration = 0.15
+    m.scrubTimer.repeat = true
+    m.scrubTimer.observeField("fire", "onScrubTimerFire")
+    m.top.appendChild(m.scrubTimer)
+  end if
+
   m.top.setFocus(true)
 end sub
 
@@ -177,6 +194,9 @@ sub bindUiNodes()
     end if
     if m.player.hasField("currentSubtitleTrack") then
       m.player.observeField("currentSubtitleTrack", "onCurrentSubtitleTrackChanged")
+    end if
+    if m.player.hasField("scrubEvent") then
+      m.player.observeField("scrubEvent", "onPlayerScrubEvent")
     end if
 
     ' If Video has focus, intercept keys via ChampionsVideo signals.
@@ -410,9 +430,150 @@ function _getCurrentSubtitleTrackId() as String
   return v
 end function
 
+function _nowMs() as Integer
+  if m.clock <> invalid then return Int(m.clock.TotalMilliseconds())
+  dt = CreateObject("roDateTime")
+  if dt = invalid then return 0
+  return Int(dt.AsSeconds() * 1000)
+end function
+
+function _fmtTime(sec as Integer) as String
+  s = sec
+  if s < 0 then s = 0
+  h = Int(s / 3600)
+  remainSec = s - (h * 3600)
+  mins = Int(remainSec / 60)
+  ss = remainSec - (mins * 60)
+  mm = Right("0" + mins.ToStr(), 2)
+  sss = Right("0" + ss.ToStr(), 2)
+  if h > 0 then
+    return h.ToStr() + ":" + mm + ":" + sss
+  end if
+  return mins.ToStr() + ":" + sss
+end function
+
+sub _finishScrub(reason as String)
+  if m.scrubActive <> true then return
+  print "scrub finish reason=" + reason
+  m.scrubActive = false
+  m.scrubDir = 0
+  if m.scrubTimer <> invalid then m.scrubTimer.control = "stop"
+
+  ' Resume playback at the last target.
+  if m.player <> invalid and m.player.visible = true then
+    if m.player.hasField("seek") then m.player.seek = m.scrubTargetSec
+    if m.player.hasField("control") then m.player.control = "play"
+  end if
+  setStatus("playing")
+end sub
+
+sub _scrubStep(nowMs as Integer)
+  if m.scrubActive <> true then return
+  if m.player = invalid or m.player.visible <> true then return
+  if m.playbackIsLive = true then return
+
+  durVal = m.player.duration
+  d = 0
+  if durVal <> invalid then d = Int(durVal)
+  if d <= 0 then return
+
+  holdMs = nowMs - m.scrubStartMs
+  if holdMs < 0 then holdMs = 0
+
+  skipStep = 2
+  if holdMs >= 2000 then skipStep = 5
+  if holdMs >= 5000 then skipStep = 10
+  if holdMs >= 10000 then skipStep = 20
+
+  target = m.scrubTargetSec + (m.scrubDir * skipStep)
+  if target < 0 then target = 0
+  if target > (d - 1) then target = d - 1
+  m.scrubTargetSec = target
+
+  if m.player.hasField("seek") then m.player.seek = target
+
+  dirSym = ">>"
+  if m.scrubDir < 0 then dirSym = "<<"
+  setStatus(dirSym + " " + _fmtTime(target) + " / " + _fmtTime(d))
+end sub
+
+sub onScrubTimerFire()
+  if m.scrubActive <> true then
+    if m.scrubTimer <> invalid then m.scrubTimer.control = "stop"
+    return
+  end if
+  if m.player = invalid or m.player.visible <> true then
+    _finishScrub("player_inactive")
+    return
+  end if
+  if m.playbackIsLive = true then
+    _finishScrub("live")
+    return
+  end if
+
+  nowMs = _nowMs()
+  _scrubStep(nowMs)
+end sub
+
+sub onPlayerScrubEvent()
+  if m.player = invalid then return
+  if m.player.visible <> true then return
+  if m.playbackIsLive = true then return
+  if m.settingsOpen = true then return
+
+  raw = m.player.scrubEvent
+  if raw = invalid then return
+  s = raw.ToStr()
+  if s = invalid then return
+  s = s.Trim()
+  if s = "" then return
+
+  parts = s.Split(":")
+  if type(parts) <> "roArray" or parts.Count() < 2 then return
+  k = LCase(parts[0].Trim())
+  a = LCase(parts[1].Trim())
+  if k <> "left" and k <> "right" then return
+  if a <> "down" and a <> "up" then return
+
+  durVal = m.player.duration
+  d = 0
+  if durVal <> invalid then d = Int(durVal)
+  if d <= 0 then return
+
+  nowMs = _nowMs()
+
+  if a = "down" then
+    if m.scrubActive <> true then
+      m.scrubActive = true
+      m.scrubStartMs = nowMs
+
+      curPos = m.player.position
+      p = 0
+      if curPos <> invalid then p = Int(curPos)
+      m.scrubTargetSec = p
+
+      ' Pause while scrubbing so repeated seeks show frames without audio noise.
+      if m.player.hasField("control") then m.player.control = "pause"
+      if m.scrubTimer <> invalid then m.scrubTimer.control = "start"
+    end if
+
+    if k = "right" then m.scrubDir = 1 else m.scrubDir = -1
+
+    ' First tick immediately for responsiveness.
+    if nowMs = m.scrubStartMs then _scrubStep(nowMs)
+    return
+  end if
+
+  if a = "up" then
+    _finishScrub("key_up")
+    return
+  end if
+end sub
+
 sub onPlayerOverlayRequested()
   if m.player = invalid then return
   if m.player.visible <> true then return
+  if m.scrubActive = true then _finishScrub("overlay_ok")
   if m.settingsOpen = true then return
   if m.overlayOpen = true then
     showPlayerSettings()
@@ -424,6 +585,7 @@ end sub
 sub onPlayerSettingsRequested()
   if m.player = invalid then return
   if m.player.visible <> true then return
+  if m.scrubActive = true then _finishScrub("overlay_settings")
   showPlayerSettings()
 end sub
 
@@ -521,6 +683,12 @@ function _trackIdMatches(a as String, b as String) as Boolean
   if bb = invalid then bb = ""
   aa = aa.ToStr().Trim()
   bb = bb.ToStr().Trim()
+  q = Instr(1, aa, "?")
+  if q > 0 then aa = Left(aa, q - 1)
+  q2 = Instr(1, bb, "?")
+  if q2 > 0 then bb = Left(bb, q2 - 1)
+  aa = aa.Trim()
+  bb = bb.Trim()
   if aa = "" or bb = "" then return false
   if aa = bb then return true
   if Right(aa, Len(bb) + 1) = ("/" + bb) then return true
@@ -656,7 +824,29 @@ end sub
 sub onAvailableSubtitleTracksChanged()
   if m.player <> invalid and m.player.hasField("availableSubtitleTracks") then
     t = m.player.availableSubtitleTracks
-    if type(t) = "roArray" then m.availableSubtitleTracksCache = t
+    if type(t) = "roArray" then
+      m.availableSubtitleTracksCache = t
+
+      ' Debug: print the raw track objects so we can see which ID field the
+      ' firmware expects when setting subtitleTrack/textTrack.
+      if m.debugPrintedSubtitleTracks <> true then
+        m.debugPrintedSubtitleTracks = true
+        print "availableSubtitleTracks count=" + t.Count().ToStr()
+        i = 0
+        for each tr in t
+          i = i + 1
+          if type(tr) = "roAssociativeArray" then
+            tid = _trackIdFromTrackObj(tr)
+            lang = _trackLangFromTrackObj(tr)
+            desc = _aaGetCi(tr, "Description")
+            if desc = invalid then desc = ""
+            print "  [" + i.ToStr() + "] id=" + tid + " lang=" + lang + " desc=" + desc.ToStr()
+          else
+            print "  [" + i.ToStr() + "] type=" + type(tr)
+          end if
+        end for
+      end if
+    end if
   end if
   applyPreferredTracks()
 end sub
@@ -820,16 +1010,23 @@ sub refreshPlayerSettingsLists()
   if cur = "" then cur = "off"
   off.selected = (cur = "off")
 
+  sIdx = 0
   for each tr in tracksS
     if type(tr) = "roAssociativeArray" then
       lang = _trackLangFromTrackObj(tr)
       title = _trackTitleFromTrackObj(tr, lang, "Legenda")
       c = CreateObject("roSGNode", "ContentNode")
       c.addField("trackId", "string", false)
+      c.addField("trackIndex", "integer", false)
       c.addField("lang", "string", false)
       c.addField("selected", "boolean", false)
       c.title = title
-      c.trackId = _trackIdFromTrackObj(tr)
+      tid = _trackIdFromTrackObj(tr)
+      if tid = invalid then tid = ""
+      tid = tid.ToStr().Trim()
+      if tid = "" then tid = sIdx.ToStr()
+      c.trackId = tid
+      c.trackIndex = sIdx
       c.lang = normalizeLang(lang)
       c.selected = false
       if cur <> "" and _trackIdMatches(cur, c.trackId) then
@@ -838,6 +1035,7 @@ sub refreshPlayerSettingsLists()
       end if
       subRoot.appendChild(c)
     end if
+    sIdx = sIdx + 1
   end for
 
   ' If R2 VOD doesn't expose subtitle tracks, offer a "reload subtitles" action.
@@ -945,7 +1143,9 @@ sub onSettingsSubSelected()
     return
   end if
 
+  print "settings subtitle select idx=" + idx.ToStr() + " trackId=" + trackId
   _setSubtitleTrack(trackId)
+  print "settings subtitle applied cur=" + _getCurrentSubtitleTrackId()
   if m.playbackIsLive <> true then
     _ensureDefaultVodPrefs()
     m.vodPrefs.subtitlesEnabled = true
@@ -1340,10 +1540,17 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
   m.availableAudioTracksCache = []
   m.availableSubtitleTracksCache = []
   m.lastSubtitleTrackId = ""
+  m.debugPrintedSubtitleTracks = false
+
+  ' Cancel any in-flight scrubbing.
+  m.scrubActive = false
+  m.scrubDir = 0
+  if m.scrubTimer <> invalid then m.scrubTimer.control = "stop"
 
   ' Clear any prior selection so we don't carry track IDs across unrelated assets.
   ' We'll re-apply preferences once track lists become available.
   if m.player.hasField("audioTrack") then m.player.audioTrack = ""
+  if m.player.hasField("textTrack") then m.player.textTrack = ""
   if m.player.hasField("subtitleTrack") then
     m.player.subtitleTrack = ""
   else if m.player.hasField("currentSubtitleTrack") then

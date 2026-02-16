@@ -5,8 +5,10 @@
          MainScene observes these and opens our custom overlay/settings UI. -->
     <field id="overlayRequested" type="boolean" alwaysNotify="true" />
     <field id="settingsRequested" type="boolean" alwaysNotify="true" />
+
+    <!-- Scrub signals for VOD seek without relying on OK to confirm trickplay. -->
+    <field id="scrubEvent" type="string" alwaysNotify="true" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/ChampionsVideo.brs" />
 </component>
-
