@@ -801,6 +801,35 @@ sub refreshPlayerSettingsLists()
     subRoot.appendChild(load)
   end if
 
+  ' Some devices don't update subtitleTrack/currentSubtitleTrack reliably, which
+  ' can make the UI appear "unselected". Always keep exactly one item selected.
+  anySelected = false
+  for i = 0 to subRoot.getChildCount() - 1
+    n = subRoot.getChild(i)
+    if n <> invalid and n.selected = true then
+      anySelected = true
+      exit for
+    end if
+  end for
+
+  if anySelected <> true then
+    lastId = ""
+    if m.lastSubtitleTrackId <> invalid then lastId = m.lastSubtitleTrackId.ToStr().Trim()
+    if lastId <> "" and lastId <> "off" then
+      for i = 1 to subRoot.getChildCount() - 1
+        n = subRoot.getChild(i)
+        if n <> invalid and n.trackId <> invalid and n.trackId.ToStr() = lastId then
+          n.selected = true
+          off.selected = false
+          anySelected = true
+          exit for
+        end if
+      end for
+    end if
+  end if
+
+  if anySelected <> true then off.selected = true
+
   m.playerSettingsSubList.content = subRoot
 end sub
 
