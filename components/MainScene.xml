@@ -82,16 +82,16 @@
       <!-- Floating settings button (no boxed list). -->
       <Poster
         id="playerOverlayCircle"
-        translation="[600, 625]"
-        width="80"
-        height="80"
+        translation="[1144, 592]"
+        width="96"
+        height="96"
         uri="pkg:/images/overlay_circle.png"
       />
       <Poster
         id="playerOverlayIcon"
-        translation="[616, 641]"
-        width="48"
-        height="48"
+        translation="[1160, 608]"
+        width="64"
+        height="64"
         uri="pkg:/images/ico_settings.png"
       />
     </Group>

@@ -757,14 +757,15 @@ sub refreshPlayerSettingsLists()
     end if
   end for
 
-  ' If R2 VOD doesn't expose subtitle tracks, offer a fallback to Jellyfin playback
-  ' so the user can still get captions/subtitles (if available upstream).
+  ' If R2 VOD doesn't expose subtitle tracks, offer a "reload subtitles" action.
+  ' The gateway will try to inject Jellyfin subtitles into the R2 master when
+  ' roku=1&api_key=... is present.
   if isVod and m.playbackKind = "vod-r2" and subRoot.getChildCount() <= 1 then
     load = CreateObject("roSGNode", "ContentNode")
     load.addField("trackId", "string", false)
     load.addField("lang", "string", false)
     load.addField("selected", "boolean", false)
-    load.title = "Carregar legendas (Jellyfin)"
+    load.title = "Atualizar legendas (Jellyfin)"
     load.trackId = "__load_jellyfin__"
     load.lang = ""
     load.selected = false
@@ -2563,21 +2564,31 @@ sub tryVodSubtitlesFromJellyfin()
   t = t.Trim()
   if t = "" then t = "Video"
 
-  ' Enable subs preference so if Jellyfin exposes tracks, we auto-pick.
+  ' Enable subs preference so when subtitle tracks are available, we auto-pick.
   _ensureDefaultVodPrefs()
   m.vodPrefs.subtitlesEnabled = true
   saveVodPlayerPrefs(m.vodPrefs.audioLang, m.vodPrefs.subtitleLang, true)
 
   hidePlayerSettings()
 
+  ' Reload the current R2 master. This gives the gateway a fresh chance to
+  ' inject EXT-X-MEDIA subtitles into the playlist.
+  setStatus("vod: atualizando legendas...")
+
+  cfg = loadConfig()
+  q = m.playbackSignExtraQuery
+  if type(q) <> "roAssociativeArray" then q = {}
+  q["roku"] = "1"
+  if cfg.jellyfinToken <> invalid and cfg.jellyfinToken.Trim() <> "" then
+    q["api_key"] = cfg.jellyfinToken.Trim()
+  end if
+
   ' Stop without exiting UI (we are switching source).
   m.ignoreNextStopped = true
   m.player.control = "stop"
   m.player.visible = false
 
-  setStatus("vod: carregando legendas do jellyfin...")
-  ' Force a transcoded session (more likely to expose subtitle tracks to Roku).
-  requestJellyfinPlayback2(id, t, false, "vod-jellyfin", true, true)
+  beginSign(m.playbackSignPath, q, t, "hls", false, "vod-r2", id)
 end sub
 
 sub requestJellyfinPlayback(itemId as String, title as String, isLive as Boolean, playbackKind as String)
