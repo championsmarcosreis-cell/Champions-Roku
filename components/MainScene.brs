@@ -2615,12 +2615,9 @@ function r2VodPathForItemId(itemId as String) as String
   norm = normalizeJellyfinId(itemId)
   if norm = "" then return ""
 
-  key = norm
-  ' Keep parity with the desktop app's override for a known legacy upload.
-  if norm = "a8bcc2c9c478683afaa0d0be1632b5b4" then key = "fallout-s02e01"
-  ' R2 legacy key for this title (not equal to Jellyfin item id).
-  if norm = "cfcfbac7e4bb583ef2a2ef3998717c7d" then key = "bf39b07414e24f2219e48e3a7f65c38d"
-  return "/r2/vod/" + key + "/master.m3u8"
+  ' Keep the client simple: always request by Jellyfin itemId.
+  ' The gateway can resolve legacy/human-friendly R2 keys server-side.
+  return "/r2/vod/" + norm + "/master.m3u8"
 end function
 
 function parseQueryString(qs as String) as Object
