@@ -51,6 +51,7 @@ sub init()
   m.settingsCol = "audio" ' audio | sub
   m.availableAudioTracksCache = []
   m.availableSubtitleTracksCache = []
+  m.lastSubtitleTrackId = ""
 
   cfg0 = loadConfig()
   m.apiBase = cfg0.apiBase
@@ -170,11 +171,12 @@ sub bindUiNodes()
     if m.player.hasField("audioTrack") then
       m.player.observeField("audioTrack", "onAudioTrackChanged")
     end if
-    ' Some firmwares expose currentSubtitleTrack rather than subtitleTrack changes.
+    ' Subtitle track selection differs across firmwares. Observe both when present.
+    if m.player.hasField("subtitleTrack") then
+      m.player.observeField("subtitleTrack", "onCurrentSubtitleTrackChanged")
+    end if
     if m.player.hasField("currentSubtitleTrack") then
       m.player.observeField("currentSubtitleTrack", "onCurrentSubtitleTrackChanged")
-    else if m.player.hasField("subtitleTrack") then
-      m.player.observeField("subtitleTrack", "onCurrentSubtitleTrackChanged")
     end if
 
     ' If Video has focus, intercept keys via ChampionsVideo signals.
@@ -386,6 +388,23 @@ sub playLive()
   signAndPlay("/hls/master.m3u8", "Live")
 end sub
 
+function _getCurrentSubtitleTrackId() as String
+  if m.player = invalid then return ""
+
+  ' Prefer the writable field (subtitleTrack). Some devices also expose
+  ' currentSubtitleTrack, but it may lag or be read-only.
+  v = ""
+  if m.player.hasField("subtitleTrack") then v = m.player.subtitleTrack
+  if v = invalid then v = ""
+  v = v.ToStr().Trim()
+  if v <> "" then return v
+
+  if m.player.hasField("currentSubtitleTrack") then v = m.player.currentSubtitleTrack
+  if v = invalid then v = ""
+  v = v.ToStr().Trim()
+  return v
+end function
+
 sub onPlayerOverlayRequested()
   if m.player = invalid then return
   if m.player.visible <> true then return
@@ -428,6 +447,18 @@ function normalizeLang(tag as Dynamic) as String
   if v = "por" or v = "pt" then return "pt"
   if v = "eng" or v = "en" then return "en"
   if v = "spa" or v = "es" then return "es"
+  return v
+end function
+
+function displayLang(tag as Dynamic) as String
+  n = normalizeLang(tag)
+  if n = "pt" then return "POR"
+  if n = "en" then return "ENG"
+  if n = "es" then return "ESP"
+  v = ""
+  if tag <> invalid then v = tag.ToStr()
+  v = UCase(v.Trim())
+  if v = "" then v = "UND"
   return v
 end function
 
@@ -523,17 +554,24 @@ sub _setSubtitleTrack(trackId as String)
   if id = invalid then id = ""
   id = id.Trim()
   if id = "" then return
+  if m.player.hasField("captionMode") then m.player.captionMode = "On"
   if m.player.hasField("subtitleTrack") then
     m.player.subtitleTrack = id
   else if m.player.hasField("currentSubtitleTrack") then
     m.player.currentSubtitleTrack = id
   end if
+  m.lastSubtitleTrackId = id
 end sub
 
 sub _disableSubtitles()
   if m.player = invalid then return
-  if m.player.hasField("subtitleTrack") then m.player.subtitleTrack = "off"
-  if m.player.hasField("currentSubtitleTrack") then m.player.currentSubtitleTrack = "off"
+  if m.player.hasField("captionMode") then m.player.captionMode = "Off"
+  if m.player.hasField("subtitleTrack") then
+    m.player.subtitleTrack = "off"
+  else if m.player.hasField("currentSubtitleTrack") then
+    m.player.currentSubtitleTrack = "off"
+  end if
+  m.lastSubtitleTrackId = "off"
 end sub
 
 sub onAvailableAudioTracksChanged()
@@ -590,15 +628,9 @@ sub onCurrentSubtitleTrackChanged()
   if m.player.hasField("availableSubtitleTracks") <> true then return
   if m.playbackIsLive = true then return
 
-  cur = ""
-  if m.player.hasField("currentSubtitleTrack") then
-    cur = m.player.currentSubtitleTrack
-  else if m.player.hasField("subtitleTrack") then
-    cur = m.player.subtitleTrack
-  end if
-  if cur = invalid then cur = ""
-  cur = cur.ToStr().Trim()
+  cur = _getCurrentSubtitleTrackId()
   if cur = "" then return
+  m.lastSubtitleTrackId = cur
 
   tracks = m.player.availableSubtitleTracks
   if type(tracks) <> "roArray" then return
@@ -680,7 +712,7 @@ sub refreshPlayerSettingsLists()
       if tr.Description <> invalid and tr.Description.ToStr().Trim() <> "" then
         title = tr.Description.ToStr()
       else if lang <> "" then
-        title = lang
+        title = displayLang(lang)
       else
         title = "Audio"
       end if
@@ -711,7 +743,6 @@ sub refreshPlayerSettingsLists()
   off.trackId = "off"
   off.lang = ""
   off.selected = true
-  if isVod and m.vodPrefs.subtitlesEnabled = true then off.selected = false
   subRoot.appendChild(off)
 
   tracksS = []
@@ -720,14 +751,12 @@ sub refreshPlayerSettingsLists()
     if type(t) = "roArray" then tracksS = t
   end if
   if type(tracksS) <> "roArray" then tracksS = []
-  cur = ""
-  if m.player <> invalid and m.player.hasField("currentSubtitleTrack") then
-    cur = m.player.currentSubtitleTrack
-  else if m.player <> invalid and m.player.hasField("subtitleTrack") then
-    cur = m.player.subtitleTrack
-  end if
+  cur = _getCurrentSubtitleTrackId()
+  if (cur = "" or cur = "off") and m.lastSubtitleTrackId <> invalid then cur = m.lastSubtitleTrackId
   if cur = invalid then cur = ""
-  cur = cur.ToStr()
+  cur = cur.ToStr().Trim()
+  if cur = "" then cur = "off"
+  off.selected = (cur = "off")
 
   for each tr in tracksS
     if type(tr) = "roAssociativeArray" then
@@ -737,7 +766,7 @@ sub refreshPlayerSettingsLists()
       if tr.Description <> invalid and tr.Description.ToStr().Trim() <> "" then
         title = tr.Description.ToStr()
       else if lang <> "" then
-        title = lang
+        title = displayLang(lang)
       else
         title = "Legenda"
       end if
@@ -749,7 +778,7 @@ sub refreshPlayerSettingsLists()
       if tr.Track <> invalid then c.trackId = tr.Track.ToStr() else c.trackId = ""
       c.lang = normalizeLang(lang)
       c.selected = false
-      if cur <> "" and cur = c.trackId and (not isVod or (isVod and m.vodPrefs.subtitlesEnabled = true)) then
+      if cur <> "" and cur = c.trackId then
         c.selected = true
         off.selected = false
       end if
@@ -1227,12 +1256,16 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
   m.trackPrefsAppliedSub = false
   m.availableAudioTracksCache = []
   m.availableSubtitleTracksCache = []
+  m.lastSubtitleTrackId = ""
 
   ' Clear any prior selection so we don't carry track IDs across unrelated assets.
   ' We'll re-apply preferences once track lists become available.
   if m.player.hasField("audioTrack") then m.player.audioTrack = ""
-  if m.player.hasField("subtitleTrack") then m.player.subtitleTrack = ""
-  if m.player.hasField("currentSubtitleTrack") then m.player.currentSubtitleTrack = ""
+  if m.player.hasField("subtitleTrack") then
+    m.player.subtitleTrack = ""
+  else if m.player.hasField("currentSubtitleTrack") then
+    m.player.currentSubtitleTrack = ""
+  end if
 
   ' Clear transient status before entering the video plane.
   setStatus("ready")
