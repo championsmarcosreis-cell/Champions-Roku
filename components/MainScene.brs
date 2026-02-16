@@ -394,6 +394,11 @@ function _getCurrentSubtitleTrackId() as String
   ' Prefer the writable field (subtitleTrack). Some devices also expose
   ' currentSubtitleTrack, but it may lag or be read-only.
   v = ""
+  if m.player.hasField("textTrack") then v = m.player.textTrack
+  if v = invalid then v = ""
+  v = v.ToStr().Trim()
+  if v <> "" then return v
+
   if m.player.hasField("subtitleTrack") then v = m.player.subtitleTrack
   if v = invalid then v = ""
   v = v.ToStr().Trim()
@@ -460,6 +465,67 @@ function displayLang(tag as Dynamic) as String
   v = UCase(v.Trim())
   if v = "" then v = "UND"
   return v
+end function
+
+function _aaGetCi(a as Object, key as String) as Dynamic
+  if type(a) <> "roAssociativeArray" then return invalid
+  if key = invalid then return invalid
+  k = key.ToStr()
+  if k = "" then return invalid
+
+  if a[k] <> invalid then return a[k]
+  kl = LCase(k)
+  if a[kl] <> invalid then return a[kl]
+  ku = UCase(k)
+  if a[ku] <> invalid then return a[ku]
+
+  ' Last resort: scan keys case-insensitively.
+  for each kk in a
+    if LCase(kk) = kl then return a[kk]
+  end for
+  return invalid
+end function
+
+function _trackIdFromTrackObj(tr as Object) as String
+  if type(tr) <> "roAssociativeArray" then return ""
+  v = _aaGetCi(tr, "Track")
+  if v = invalid then v = _aaGetCi(tr, "Id")
+  if v = invalid then v = _aaGetCi(tr, "StreamIndex")
+  if v = invalid then v = _aaGetCi(tr, "Index")
+  if v = invalid then return ""
+  return v.ToStr().Trim()
+end function
+
+function _trackLangFromTrackObj(tr as Object) as String
+  if type(tr) <> "roAssociativeArray" then return ""
+  lang = _aaGetCi(tr, "Language")
+  if lang = invalid then lang = _aaGetCi(tr, "Lang")
+  if lang = invalid then return ""
+  return lang.ToStr()
+end function
+
+function _trackTitleFromTrackObj(tr as Object, fallbackLang as String, fallbackLabel as String) as String
+  if type(tr) <> "roAssociativeArray" then return fallbackLabel
+  desc = _aaGetCi(tr, "Description")
+  if desc <> invalid and desc.ToStr().Trim() <> "" then return desc.ToStr().Trim()
+  name = _aaGetCi(tr, "Name")
+  if name <> invalid and name.ToStr().Trim() <> "" then return name.ToStr().Trim()
+  if fallbackLang.Trim() <> "" then return displayLang(fallbackLang)
+  return fallbackLabel
+end function
+
+function _trackIdMatches(a as String, b as String) as Boolean
+  aa = a
+  bb = b
+  if aa = invalid then aa = ""
+  if bb = invalid then bb = ""
+  aa = aa.ToStr().Trim()
+  bb = bb.ToStr().Trim()
+  if aa = "" or bb = "" then return false
+  if aa = bb then return true
+  if Right(aa, Len(bb) + 1) = ("/" + bb) then return true
+  if Right(bb, Len(aa) + 1) = ("/" + aa) then return true
+  return false
 end function
 
 function _pickTrackByLang(tracks as Object, prefLang as String) as Object
@@ -555,7 +621,9 @@ sub _setSubtitleTrack(trackId as String)
   id = id.Trim()
   if id = "" then return
   if m.player.hasField("captionMode") then m.player.captionMode = "On"
-  if m.player.hasField("subtitleTrack") then
+  if m.player.hasField("textTrack") then
+    m.player.textTrack = id
+  else if m.player.hasField("subtitleTrack") then
     m.player.subtitleTrack = id
   else if m.player.hasField("currentSubtitleTrack") then
     m.player.currentSubtitleTrack = id
@@ -566,7 +634,9 @@ end sub
 sub _disableSubtitles()
   if m.player = invalid then return
   if m.player.hasField("captionMode") then m.player.captionMode = "Off"
-  if m.player.hasField("subtitleTrack") then
+  if m.player.hasField("textTrack") then
+    m.player.textTrack = "off"
+  else if m.player.hasField("subtitleTrack") then
     m.player.subtitleTrack = "off"
   else if m.player.hasField("currentSubtitleTrack") then
     m.player.currentSubtitleTrack = "off"
@@ -706,27 +776,19 @@ sub refreshPlayerSettingsLists()
   if type(tracksA) <> "roArray" then tracksA = []
   for each tr in tracksA
     if type(tr) = "roAssociativeArray" then
-      title = ""
-      lang = ""
-      if tr.Language <> invalid then lang = tr.Language.ToStr()
-      if tr.Description <> invalid and tr.Description.ToStr().Trim() <> "" then
-        title = tr.Description.ToStr()
-      else if lang <> "" then
-        title = displayLang(lang)
-      else
-        title = "Audio"
-      end if
+      lang = _trackLangFromTrackObj(tr)
+      title = _trackTitleFromTrackObj(tr, lang, "Audio")
       c = CreateObject("roSGNode", "ContentNode")
       c.addField("trackId", "string", false)
       c.addField("lang", "string", false)
       c.addField("selected", "boolean", false)
       c.title = title
-      if tr.Track <> invalid then c.trackId = tr.Track.ToStr() else c.trackId = ""
+      c.trackId = _trackIdFromTrackObj(tr)
       c.lang = normalizeLang(lang)
       c.selected = false
       if m.player <> invalid and m.player.hasField("audioTrack") then
         cur = m.player.audioTrack
-        if cur <> invalid and cur.ToStr() = c.trackId then c.selected = true
+        if cur <> invalid and _trackIdMatches(cur.ToStr(), c.trackId) then c.selected = true
       end if
       audioRoot.appendChild(c)
     end if
@@ -760,25 +822,17 @@ sub refreshPlayerSettingsLists()
 
   for each tr in tracksS
     if type(tr) = "roAssociativeArray" then
-      title = ""
-      lang = ""
-      if tr.Language <> invalid then lang = tr.Language.ToStr()
-      if tr.Description <> invalid and tr.Description.ToStr().Trim() <> "" then
-        title = tr.Description.ToStr()
-      else if lang <> "" then
-        title = displayLang(lang)
-      else
-        title = "Legenda"
-      end if
+      lang = _trackLangFromTrackObj(tr)
+      title = _trackTitleFromTrackObj(tr, lang, "Legenda")
       c = CreateObject("roSGNode", "ContentNode")
       c.addField("trackId", "string", false)
       c.addField("lang", "string", false)
       c.addField("selected", "boolean", false)
       c.title = title
-      if tr.Track <> invalid then c.trackId = tr.Track.ToStr() else c.trackId = ""
+      c.trackId = _trackIdFromTrackObj(tr)
       c.lang = normalizeLang(lang)
       c.selected = false
-      if cur <> "" and cur = c.trackId then
+      if cur <> "" and _trackIdMatches(cur, c.trackId) then
         c.selected = true
         off.selected = false
       end if

@@ -5,49 +5,49 @@
 sub init()
   if m.top.overlayRequested = invalid then m.top.overlayRequested = false
   if m.top.settingsRequested = invalid then m.top.settingsRequested = false
+  m.scrubbing = false
 end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
-  if press <> true then return false
   k = key
   if k = invalid then k = ""
   kl = LCase(k.Trim())
 
-  ' VOD seek: avoid Roku's built-in trickplay (which uses OK to confirm) since
-  ' OK is reserved for our overlay/settings. We do a simple skip and keep
-  ' playback running.
+  ' LEFT/RIGHT: allow Roku native trickplay for VOD, but auto-confirm on release
+  ' (so users don't need OK, which we reserve for our overlay/settings).
   if kl = "left" or kl = "right" then
-    if m.top <> invalid and m.top.hasField("duration") and m.top.hasField("position") and m.top.hasField("seek") then
-      curDur = m.top.duration
-      if curDur = invalid then curDur = 0
-      curDur = Int(curDur)
+    dur = 0
+    if m.top <> invalid and m.top.hasField("duration") then
+      d = m.top.duration
+      if d <> invalid then dur = Int(d)
+    end if
 
-      ' Only on VOD (Live often reports duration=0).
-      if curDur > 0 then
-        curPos = m.top.position
-        if curPos = invalid then curPos = 0
-        curPos = Int(curPos)
-
-        skipBySec = 10
-        seekTo = curPos
-        if kl = "right" then
-          seekTo = curPos + skipBySec
-        else
-          seekTo = curPos - skipBySec
+    ' VOD only (Live often reports duration=0).
+    if dur > 0 then
+      if press = true then
+        m.scrubbing = true
+        return false ' let Roku handle trickplay UI
+      else
+        ' Release: resume playback from the selected trickplay position.
+        if m.scrubbing = true then
+          if m.top <> invalid and m.top.hasField("control") then m.top.control = "play"
+          m.scrubbing = false
         end if
-
-        if seekTo < 0 then seekTo = 0
-        if seekTo > (curDur - 1) then seekTo = curDur - 1
-
-        m.top.seek = seekTo
-        if m.top.hasField("control") then m.top.control = "play"
-        return true
+        return false
       end if
     end if
     return false
   end if
 
+  if press <> true then return false
+
   if kl = "ok" then
+    ' If trickplay is active, let Roku consume OK to confirm seek.
+    if m.scrubbing = true then
+      m.scrubbing = false
+      return false
+    end if
+
     ' Toggle to guarantee a notify even if alwaysNotify isn't honored.
     m.top.overlayRequested = (m.top.overlayRequested <> true)
     return true
