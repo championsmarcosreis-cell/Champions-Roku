@@ -16,11 +16,14 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
 
   ' LEFT/RIGHT: emit scrub events so MainScene can implement a continuous seek
   ' that resumes playback automatically (no OK confirm).
-  if kl = "left" or kl = "right" then
+  mapped = kl
+  if kl = "rev" then mapped = "left"
+  if kl = "fwd" then mapped = "right"
+  if mapped = "left" or mapped = "right" then
     m.scrubSeq = m.scrubSeq + 1
     action = "up"
     if press = true then action = "down"
-    m.top.scrubEvent = kl + ":" + action + ":" + m.scrubSeq.ToStr()
+    m.top.scrubEvent = mapped + ":" + action + ":" + m.scrubSeq.ToStr()
     return true
   end if
 

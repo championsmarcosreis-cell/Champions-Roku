@@ -489,8 +489,8 @@ sub _scrubStep(nowMs as Integer)
   if target < 0 then target = 0
   if target > (d - 1) then target = d - 1
   m.scrubTargetSec = target
-
-  if m.player.hasField("seek") then m.player.seek = target
+  ' Avoid repeated seeks while holding: many Roku devices will go black/buffer
+  ' and/or ignore rapid seek updates on HLS VOD. We only apply seek on key-up.
 
   dirSym = ">>"
   if m.scrubDir < 0 then dirSym = "<<"
@@ -552,8 +552,6 @@ sub onPlayerScrubEvent()
       if curPos <> invalid then p = Int(curPos)
       m.scrubTargetSec = p
 
-      ' Pause while scrubbing so repeated seeks show frames without audio noise.
-      if m.player.hasField("control") then m.player.control = "pause"
       if m.scrubTimer <> invalid then m.scrubTimer.control = "start"
     end if
 
