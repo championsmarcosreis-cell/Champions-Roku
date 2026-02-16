@@ -1160,16 +1160,19 @@ sub onGatewayTaskStateChanged()
   if job = "sign" then
     if m.gatewayTask.ok = true then
       cfg = loadConfig()
-      url = cfg.apiBase + m.gatewayTask.signedUrl
+      kind = m.pendingPlaybackKind
+      if kind = invalid then kind = ""
+      kind = kind.Trim()
+      if kind = "" then kind = "unknown"
+
+      base = cfg.apiBase
+      if kind = "vod-r2" then base = _vodR2PlaybackBase(base)
+      url = base + m.gatewayTask.signedUrl
       url = appendQuery(url, m.pendingPlayExtraQuery)
       t = m.pendingPlayTitle
       if t = invalid then t = ""
       t = t.Trim()
       if t = "" then t = "Live"
-      kind = m.pendingPlaybackKind
-      if kind = invalid then kind = ""
-      kind = kind.Trim()
-      if kind = "" then kind = "unknown"
 
       itemId = m.pendingPlaybackItemId
       if itemId = invalid then itemId = ""
@@ -2430,6 +2433,24 @@ function inferStreamFormat(pathOrUrl as String, container as String) as String
   if cl = "mp4" or cl = "m4v" or cl = "mov" then return "mp4"
 
   return "mp4"
+end function
+
+function _vodR2PlaybackBase(apiBase as String) as String
+  b = apiBase
+  if b = invalid then b = ""
+  b = b.Trim()
+  if b = "" then return b
+
+  ' Cloudflare Worker route intercepts api.champions.place/r2/vod/*.
+  ' For Roku we need the gateway playlist rewrite + Jellyfin subtitle injection,
+  ' so we bypass the Worker via api-vm.champions.place (Cloudflare Tunnel -> gateway).
+  if Instr(1, b, "api.champions.place") > 0 then
+    if Left(b, 8) = "https://" then return "https://api-vm.champions.place"
+    if Left(b, 7) = "http://" then return "http://api-vm.champions.place"
+    return "https://api-vm.champions.place"
+  end if
+
+  return b
 end function
 
 sub beginSign(path as String, extraQuery as Object, title as String, streamFormat as String, isLive as Boolean, playbackKind as String, itemId as String)
