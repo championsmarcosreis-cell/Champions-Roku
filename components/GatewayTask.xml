@@ -15,6 +15,7 @@
     <field id="preferDirectStream" type="boolean" />
     <field id="allowTranscoding" type="boolean" />
     <field id="probeUrl" type="string" />
+    <field id="progressBody" type="string" />
 
     <!-- output -->
     <field id="ok" type="boolean" />

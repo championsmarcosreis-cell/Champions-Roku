@@ -40,7 +40,7 @@ sub init()
   m.lastPlayerState = ""
   m.devAutoplay = ""
   m.devAutoplayDone = false
-  m.browseFocus = "views" ' views | items
+  m.browseFocus = "views" ' views | items | hero_logout | hero_continue
   m.activeViewId = ""
   m.activeViewCollection = ""
   m.pendingShelfViewId = ""
@@ -91,6 +91,24 @@ sub init()
   m.lastSubtitleTrackId = ""
   m.lastSubtitleTrackKey = ""
   m.debugPrintedSubtitleTracks = false
+  m.progressReportEverySec = 15
+  m.progressLastSentPosMs = -1
+  m.progressLastSentAtMs = 0
+  m.progressPendingFlush = false
+  m.progressPendingPlayed = false
+  m.progressPendingReason = ""
+  m.pendingProgressPosMs = -1
+  m.pendingProgressDurMs = -1
+  m.pendingProgressPercent = -1
+  m.pendingProgressPlayed = false
+  m.pendingProgressReason = ""
+  m.nextStartResumeMs = 0
+  m.playbackResumeTargetSec = -1
+  m.playbackResumePending = false
+  m.heroContinueAutoplayPending = false
+  m.resumeDialogItemId = ""
+  m.resumeDialogTitle = ""
+  m.resumeDialogPositionMs = 0
 
   cfg0 = loadConfig()
   m.apiBase = cfg0.apiBase
@@ -99,6 +117,13 @@ sub init()
   m.devAutoplay = bundledDevAutoplay()
   if m.devAutoplay = invalid then m.devAutoplay = ""
   m.devAutoplay = LCase(m.devAutoplay.Trim())
+  ' Guardrail: only honor dev autoplay when explicitly prefixed.
+  ' This avoids accidental auto-play in normal QA builds.
+  if Left(m.devAutoplay, 4) = "dev:" then
+    m.devAutoplay = Mid(m.devAutoplay, 5).Trim()
+  else
+    m.devAutoplay = ""
+  end if
 
   appTokenLen = 0
   if cfg0.appToken <> invalid then appTokenLen = Len(cfg0.appToken)
@@ -107,7 +132,7 @@ sub init()
   print "MainScene init apiBase=" + m.apiBase + " appTokenLen=" + appTokenLen.ToStr() + " jellyfinTokenLen=" + jellyfinLen.ToStr() + " devAutoplay=" + m.devAutoplay + " uiLang=" + m.uiLang + " metaLang=" + m.metaLang + " build=2026-02-19a"
 
   if cfg0.jellyfinToken <> invalid and cfg0.jellyfinToken <> "" then
-    m.startupMode = "home"
+    m.startupMode = "browse"
   else
     m.startupMode = "login"
   end if
@@ -156,6 +181,14 @@ sub init()
     m.sigCheckTimer.repeat = true
     m.sigCheckTimer.observeField("fire", "onSigCheckTimerFire")
     m.top.appendChild(m.sigCheckTimer)
+  end if
+
+  m.progressTimer = CreateObject("roSGNode", "Timer")
+  if m.progressTimer <> invalid then
+    m.progressTimer.duration = m.progressReportEverySec
+    m.progressTimer.repeat = true
+    m.progressTimer.observeField("fire", "onProgressTimerFire")
+    m.top.appendChild(m.progressTimer)
   end if
 
   ' Simple VOD scrubbing driven by LEFT/RIGHT events from ChampionsVideo.
@@ -208,6 +241,12 @@ sub bindUiNodes()
   m.browseEmptyLabel = m.top.findNode("browseEmptyLabel")
   m.viewsTitle = m.top.findNode("viewsTitle")
   m.itemsTitle = m.top.findNode("itemsTitle")
+  m.heroPromptText = m.top.findNode("heroPromptText")
+  m.heroPromptBtnBg = m.top.findNode("heroPromptBtnBg")
+  m.heroPromptBtnText = m.top.findNode("heroPromptBtnText")
+  m.heroAvatarBg = m.top.findNode("heroAvatarBg")
+  m.heroAvatarPhoto = m.top.findNode("heroAvatarPhoto")
+  m.heroAvatarText = m.top.findNode("heroAvatarText")
   m.liveCard = m.top.findNode("liveCard")
   m.channelsList = m.top.findNode("channelsList")
   m.liveEmptyLabel = m.top.findNode("emptyLabel")
@@ -449,13 +488,13 @@ sub doLogin()
     return
   end if
   if m.pendingJob <> "" then
-    setStatus(tr("please_wait"))
+    setStatus(_t("please_wait"))
     return
   end if
 
   cfg = loadConfig()
   if cfg.appToken = invalid or cfg.appToken = "" then
-    setStatus(tr("missing_app_token"))
+    setStatus(_t("missing_app_token"))
     return
   end if
   if m.form.username = "" then
@@ -539,6 +578,163 @@ function _nowMs() as Integer
   dt = CreateObject("roDateTime")
   if dt = invalid then return 0
   return Int(dt.AsSeconds() * 1000)
+end function
+
+function _shouldTrackProgress() as Boolean
+  if m.playbackIsLive = true then return false
+  id = m.playbackItemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  return (id <> "")
+end function
+
+function _currentProgressSnapshot() as Object
+  if m.player = invalid then return { ok: false }
+  if m.player.visible <> true then return { ok: false }
+  if _shouldTrackProgress() <> true then return { ok: false }
+
+  itemId = m.playbackItemId
+  if itemId = invalid then itemId = ""
+  itemId = itemId.ToStr().Trim()
+  if itemId = "" then return { ok: false }
+
+  curPos = m.player.position
+  curDur = m.player.duration
+  posSec = 0
+  durSec = 0
+  if curPos <> invalid then posSec = Int(curPos)
+  if curDur <> invalid then durSec = Int(curDur)
+  if posSec < 0 then posSec = 0
+  if durSec < 0 then durSec = 0
+
+  posMs = posSec * 1000
+  durMs = 0
+  if durSec > 0 then durMs = durSec * 1000
+
+  pct = -1
+  if durSec > 0 then
+    pctF = (posSec * 100.0) / durSec
+    if pctF < 0 then pctF = 0
+    if pctF > 100 then pctF = 100
+    pct = Int(pctF)
+  end if
+
+  played = false
+  if pct >= 98 then played = true
+
+  return {
+    ok: true
+    itemId: itemId
+    positionMs: posMs
+    durationMs: durMs
+    percent: pct
+    played: played
+  }
+end function
+
+sub _queueProgressReport(reason as String, forcePlayed as Boolean)
+  if _shouldTrackProgress() <> true then return
+  m.progressPendingFlush = true
+  if forcePlayed = true then m.progressPendingPlayed = true
+  r = reason
+  if r = invalid then r = ""
+  r = r.ToStr().Trim()
+  if r <> "" then m.progressPendingReason = r
+end sub
+
+function _sendProgressReport(reason as String, forcePlayed as Boolean, forceSend as Boolean) as Boolean
+  if _shouldTrackProgress() <> true then return false
+  if m.gatewayTask = invalid then return false
+
+  taskState = m.gatewayTask.state
+  if taskState = invalid then taskState = ""
+  taskState = LCase(taskState.ToStr().Trim())
+  if taskState = "run" then
+    _queueProgressReport(reason, forcePlayed)
+    return false
+  end if
+
+  if m.pendingJob <> "" then
+    _queueProgressReport(reason, forcePlayed)
+    return false
+  end if
+
+  snap = _currentProgressSnapshot()
+  if type(snap) <> "roAssociativeArray" or snap.ok <> true then return false
+
+  itemId = ""
+  if snap.itemId <> invalid then itemId = snap.itemId.ToStr().Trim()
+  if itemId = "" then return false
+
+  posMs = 0
+  if snap.positionMs <> invalid then posMs = Int(snap.positionMs)
+  if posMs < 0 then posMs = 0
+  durMs = 0
+  if snap.durationMs <> invalid then durMs = Int(snap.durationMs)
+  if durMs < 0 then durMs = 0
+  pct = -1
+  if snap.percent <> invalid then pct = Int(snap.percent)
+  if pct < -1 then pct = -1
+  if pct > 100 then pct = 100
+  played = (snap.played = true)
+  if forcePlayed = true or m.progressPendingPlayed = true then played = true
+
+  ' Keep resume progress stable: avoid writing tiny startup positions.
+  if played <> true and posMs < 15000 then
+    return false
+  end if
+
+  if forceSend <> true then
+    deltaMs = posMs - m.progressLastSentPosMs
+    if deltaMs < 0 then deltaMs = -deltaMs
+    ageMs = _nowMs() - Int(m.progressLastSentAtMs)
+    if m.progressLastSentPosMs >= 0 and deltaMs < 10000 and ageMs >= 0 and ageMs < 30000 and played <> true and m.progressPendingFlush <> true then
+      return false
+    end if
+  end if
+
+  payload = {
+    item_id: itemId
+    position_ms: posMs
+  }
+  if durMs > 0 then payload.duration_ms = durMs
+  if pct >= 0 then payload.percent = pct
+  if played = true then payload.played = true
+
+  cfg = loadConfig()
+  if cfg.apiBase = "" or cfg.appToken = "" then
+    return false
+  end if
+
+  payloadJson = FormatJson(payload)
+  if payloadJson = invalid or payloadJson.Trim() = "" then return false
+
+  m.pendingProgressPosMs = posMs
+  m.pendingProgressDurMs = durMs
+  m.pendingProgressPercent = pct
+  m.pendingProgressPlayed = played
+  r = reason
+  if r = invalid then r = ""
+  r = r.ToStr().Trim()
+  m.pendingProgressReason = r
+
+  m.pendingJob = "progress_write"
+  m.gatewayTask.kind = "progress_write"
+  m.gatewayTask.apiBase = cfg.apiBase
+  m.gatewayTask.appToken = cfg.appToken
+  m.gatewayTask.jellyfinToken = cfg.jellyfinToken
+  m.gatewayTask.userId = cfg.userId
+  m.gatewayTask.progressBody = payloadJson
+  m.gatewayTask.control = "run"
+
+  pctStr = ""
+  if pct >= 0 then pctStr = pct.ToStr()
+  print "progress write start itemId=" + itemId + " posMs=" + posMs.ToStr() + " durMs=" + durMs.ToStr() + " pct=" + pctStr + " played=" + played.ToStr() + " reason=" + r
+
+  m.progressPendingFlush = false
+  m.progressPendingPlayed = false
+  m.progressPendingReason = ""
+  return true
 end function
 
 function _fmtTime(sec as Integer) as String
@@ -827,170 +1023,276 @@ function resolveMetadataLang(uiLang as String) as String
   return "en-US"
 end function
 
-function tr(key as String) as String
-  k = key
-  if k = invalid then k = ""
-  k = k.Trim()
-  if k = "" then return ""
+function _t(key as String) as String
+  raw = key
+  if raw = invalid then raw = ""
+  raw = raw.ToStr().Trim()
+  if raw = "" then return ""
+  k = LCase(raw)
 
   lang = m.uiLang
   if lang = invalid then lang = ""
   lang = normalizeLang(lang)
   if lang = "" then lang = "en"
 
-  ' Keep this lightweight: only translate strings we actually show.
-  if lang = "pt" then
-    if k = "home_live" then return "Live TV"
-    if k = "home_tokens" then return "Tokens"
-    if k = "home_logout" then return "Sair"
-    if k = "libraries" then return "Bibliotecas"
-    if k = "recent" then return "Recentes"
-    if k = "recent_prefix" then return "Recentes: "
-    if k = "continue" then return "Continuar Assistindo"
-    if k = "top10" then return "Top 10"
-    if k = "loading" then return "Carregando..."
-    if k = "no_items" then return "Sem itens"
-    if k = "no_libraries" then return "Sem bibliotecas"
-    if k = "press_ok_live" then return "Pressione OK para abrir Live TV"
-    if k = "loading_libraries" then return "carregando bibliotecas..."
-    if k = "loading_items" then return "carregando itens..."
-    if k = "loading_channels" then return "carregando canais..."
-    if k = "please_wait" then return "aguarde..."
-    if k = "cancelled" then return "cancelado"
-    if k = "views_failed" then return "Falhou ao carregar bibliotecas"
-    if k = "items_failed" then return "Falhou ao carregar itens"
-    if k = "channels_failed" then return "Falhou ao carregar canais"
-    if k = "session_expired" then return "Sessao expirada. Faca login novamente."
-    if k = "missing_config" then return "Faltou config (APP_TOKEN/login)"
-    if k = "missing_app_token" then return "faltou APP_TOKEN (pressione *)"
-    if k = "hint_app_token" then return "Pressione * para configurar APP_TOKEN"
-    if k = "vod_checking" then return "vod: verificando disponibilidade..."
-    if k = "vod_processing" then return "vod: processando"
-    if k = "vod_processing_msg" then return "Processando: este conteudo ainda nao esta no R2."
-    if k = "vod_unavailable" then return "vod: indisponivel"
-    if k = "vod_unavailable_msg" then return "Conteudo indisponivel."
-    if k = "series_not_impl" then return "Series ainda nao esta implementado no Roku."
-    if k = "vod_try_again" then return "vod r2 demorou; tente novamente"
-    if k = "off" then return "Desligado"
-    if k = "reload_subs" then return "Atualizar legendas (Jellyfin)"
-    if k = "no_channels" then return "Sem canais"
-  else if lang = "es" then
-    if k = "home_live" then return "En vivo"
-    if k = "home_tokens" then return "Tokens"
-    if k = "home_logout" then return "Salir"
-    if k = "libraries" then return "Bibliotecas"
-    if k = "recent" then return "Recientes"
-    if k = "recent_prefix" then return "Recientes: "
-    if k = "continue" then return "Seguir viendo"
-    if k = "top10" then return "Top 10"
-    if k = "loading" then return "Cargando..."
-    if k = "no_items" then return "Sin elementos"
-    if k = "no_libraries" then return "Sin bibliotecas"
-    if k = "press_ok_live" then return "Pulsa OK para abrir En vivo"
-    if k = "loading_libraries" then return "cargando bibliotecas..."
-    if k = "loading_items" then return "cargando elementos..."
-    if k = "loading_channels" then return "cargando canales..."
-    if k = "please_wait" then return "espera..."
-    if k = "cancelled" then return "cancelado"
-    if k = "views_failed" then return "Fallo al cargar bibliotecas"
-    if k = "items_failed" then return "Fallo al cargar elementos"
-    if k = "channels_failed" then return "Fallo al cargar canales"
-    if k = "session_expired" then return "Sesion expirada. Inicia sesion otra vez."
-    if k = "missing_config" then return "Falta config (APP_TOKEN/login)"
-    if k = "missing_app_token" then return "falta APP_TOKEN (pulsa *)"
-    if k = "hint_app_token" then return "Pulsa * para configurar APP_TOKEN"
-    if k = "vod_checking" then return "vod: comprobando disponibilidad..."
-    if k = "vod_processing" then return "vod: procesando"
-    if k = "vod_processing_msg" then return "Procesando: este contenido aun no esta en R2."
-    if k = "vod_unavailable" then return "vod: no disponible"
-    if k = "vod_unavailable_msg" then return "Contenido no disponible."
-    if k = "series_not_impl" then return "Series aun no esta implementado en Roku."
-    if k = "vod_try_again" then return "vod r2 tardo; intentalo de nuevo"
-    if k = "off" then return "Desactivado"
-    if k = "reload_subs" then return "Actualizar subtitulos (Jellyfin)"
-    if k = "no_channels" then return "Sin canales"
-  else if lang = "it" then
-    if k = "home_live" then return "Diretta"
-    if k = "home_tokens" then return "Token"
-    if k = "home_logout" then return "Esci"
-    if k = "libraries" then return "Librerie"
-    if k = "recent" then return "Recenti"
-    if k = "recent_prefix" then return "Recenti: "
-    if k = "continue" then return "Continua a guardare"
-    if k = "top10" then return "Top 10"
-    if k = "loading" then return "Caricamento..."
-    if k = "no_items" then return "Nessun elemento"
-    if k = "no_libraries" then return "Nessuna libreria"
-    if k = "press_ok_live" then return "Premi OK per aprire la Diretta"
-    if k = "loading_libraries" then return "caricamento librerie..."
-    if k = "loading_items" then return "caricamento elementi..."
-    if k = "loading_channels" then return "caricamento canali..."
-    if k = "please_wait" then return "attendere..."
-    if k = "cancelled" then return "annullato"
-    if k = "views_failed" then return "Caricamento librerie fallito"
-    if k = "items_failed" then return "Caricamento elementi fallito"
-    if k = "channels_failed" then return "Caricamento canali fallito"
-    if k = "session_expired" then return "Sessione scaduta. Esegui di nuovo il login."
-    if k = "missing_config" then return "Config mancante (APP_TOKEN/login)"
-    if k = "missing_app_token" then return "manca APP_TOKEN (premi *)"
-    if k = "hint_app_token" then return "Premi * per configurare APP_TOKEN"
-    if k = "vod_checking" then return "vod: verifica disponibilita..."
-    if k = "vod_processing" then return "vod: in elaborazione"
-    if k = "vod_processing_msg" then return "In elaborazione: questo contenuto non e ancora su R2."
-    if k = "vod_unavailable" then return "vod: non disponibile"
-    if k = "vod_unavailable_msg" then return "Contenuto non disponibile."
-    if k = "series_not_impl" then return "Serie non ancora implementate su Roku."
-    if k = "vod_try_again" then return "vod r2 lento; riprova"
-    if k = "off" then return "Disattivato"
-    if k = "reload_subs" then return "Aggiorna sottotitoli (Jellyfin)"
-    if k = "no_channels" then return "Nessun canale"
+  if m.trMapCache = invalid then
+    m.trMapCache = {
+      en: {
+        home_live: "Live TV"
+        home_tokens: "Tokens"
+        home_logout: "Logout"
+        profile: "Profile"
+        profile_name: "Name"
+        profile_photo_url: "Photo URL"
+        libraries: "Libraries"
+        library_movies: "Movies"
+        library_live: "Live TV"
+        library_series: "Series"
+        recent: "Recent"
+        recent_prefix: "Recent: "
+        continue: "Continue Watching"
+        top10: "Top 10"
+        loading: "Loading..."
+        no_items: "No items"
+        no_libraries: "No libraries"
+        press_ok_live: "Press OK to open Live TV"
+        loading_libraries: "loading libraries..."
+        loading_items: "loading items..."
+        loading_channels: "loading channels..."
+        please_wait: "please wait..."
+        cancelled: "cancelled"
+        views_failed: "Failed to load libraries"
+        items_failed: "Failed to load items"
+        channels_failed: "Failed to load channels"
+        session_expired: "Session expired. Please login again."
+        missing_config: "Missing config (APP_TOKEN/login)"
+        missing_app_token: "Missing APP_TOKEN (press *)"
+        hint_app_token: "Press * to configure APP_TOKEN"
+        vod_checking: "vod: checking availability..."
+        vod_processing: "vod: processing"
+        vod_processing_msg: "Processing: this content is not in R2 yet."
+        vod_unavailable: "vod: unavailable"
+        vod_unavailable_msg: "Content unavailable."
+        series_not_impl: "Series is not implemented on Roku yet."
+        vod_try_again: "vod r2 slow; try again"
+        off: "Off"
+        reload_subs: "Reload subtitles (Jellyfin)"
+        no_channels: "No channels"
+        hero_continue_text: "Want to continue?"
+        hero_continue_cta: "Continue"
+        resume_title: "Continue watching"
+        resume_from_prefix: "Continue from "
+        resume_cancel: "Cancel"
+        resume_restart: "Play from start"
+        resume_continue: "Continue"
+      }
+      pt: {
+        home_live: "Live TV"
+        home_tokens: "Tokens"
+        home_logout: "Sair"
+        profile: "Perfil"
+        profile_name: "Nome"
+        profile_photo_url: "Foto URL"
+        libraries: "Bibliotecas"
+        library_movies: "Filmes"
+        library_live: "Live TV"
+        library_series: "Series"
+        recent: "Recentes"
+        recent_prefix: "Recentes: "
+        continue: "Continuar Assistindo"
+        top10: "Top 10"
+        loading: "Carregando..."
+        no_items: "Sem itens"
+        no_libraries: "Sem bibliotecas"
+        press_ok_live: "Pressione OK para abrir Live TV"
+        loading_libraries: "carregando bibliotecas..."
+        loading_items: "carregando itens..."
+        loading_channels: "carregando canais..."
+        please_wait: "aguarde..."
+        cancelled: "cancelado"
+        views_failed: "Falhou ao carregar bibliotecas"
+        items_failed: "Falhou ao carregar itens"
+        channels_failed: "Falhou ao carregar canais"
+        session_expired: "Sessao expirada. Faca login novamente."
+        missing_config: "Faltou config (APP_TOKEN/login)"
+        missing_app_token: "faltou APP_TOKEN (pressione *)"
+        hint_app_token: "Pressione * para configurar APP_TOKEN"
+        vod_checking: "vod: verificando disponibilidade..."
+        vod_processing: "vod: processando"
+        vod_processing_msg: "Processando: este conteudo ainda nao esta no R2."
+        vod_unavailable: "vod: indisponivel"
+        vod_unavailable_msg: "Conteudo indisponivel."
+        series_not_impl: "Series ainda nao esta implementado no Roku."
+        vod_try_again: "vod r2 demorou; tente novamente"
+        off: "Desligado"
+        reload_subs: "Atualizar legendas (Jellyfin)"
+        no_channels: "Sem canais"
+        hero_continue_text: "Quer continuar?"
+        hero_continue_cta: "Continuar"
+        resume_title: "Continuar assistindo"
+        resume_from_prefix: "Continuar de "
+        resume_cancel: "Cancelar"
+        resume_restart: "Assistir do inicio"
+        resume_continue: "Continuar"
+      }
+      es: {
+        home_live: "En vivo"
+        home_tokens: "Tokens"
+        home_logout: "Salir"
+        profile: "Perfil"
+        profile_name: "Nombre"
+        profile_photo_url: "Foto URL"
+        libraries: "Bibliotecas"
+        library_movies: "Peliculas"
+        library_live: "En vivo"
+        library_series: "Series"
+        recent: "Recientes"
+        recent_prefix: "Recientes: "
+        continue: "Seguir viendo"
+        top10: "Top 10"
+        loading: "Cargando..."
+        no_items: "Sin elementos"
+        no_libraries: "Sin bibliotecas"
+        press_ok_live: "Pulsa OK para abrir En vivo"
+        loading_libraries: "cargando bibliotecas..."
+        loading_items: "cargando elementos..."
+        loading_channels: "cargando canales..."
+        please_wait: "espera..."
+        cancelled: "cancelado"
+        views_failed: "Fallo al cargar bibliotecas"
+        items_failed: "Fallo al cargar elementos"
+        channels_failed: "Fallo al cargar canales"
+        session_expired: "Sesion expirada. Inicia sesion otra vez."
+        missing_config: "Falta config (APP_TOKEN/login)"
+        missing_app_token: "falta APP_TOKEN (pulsa *)"
+        hint_app_token: "Pulsa * para configurar APP_TOKEN"
+        vod_checking: "vod: comprobando disponibilidad..."
+        vod_processing: "vod: procesando"
+        vod_processing_msg: "Procesando: este contenido aun no esta en R2."
+        vod_unavailable: "vod: no disponible"
+        vod_unavailable_msg: "Contenido no disponible."
+        series_not_impl: "Series aun no esta implementado en Roku."
+        vod_try_again: "vod r2 tardo; intentalo de nuevo"
+        off: "Desactivado"
+        reload_subs: "Actualizar subtitulos (Jellyfin)"
+        no_channels: "Sin canales"
+        hero_continue_text: "Quieres continuar?"
+        hero_continue_cta: "Continuar"
+        resume_title: "Seguir viendo"
+        resume_from_prefix: "Continuar desde "
+        resume_cancel: "Cancelar"
+        resume_restart: "Ver desde el inicio"
+        resume_continue: "Continuar"
+      }
+      it: {
+        home_live: "Diretta"
+        home_tokens: "Token"
+        home_logout: "Esci"
+        profile: "Profilo"
+        profile_name: "Nome"
+        profile_photo_url: "URL foto"
+        libraries: "Librerie"
+        library_movies: "Film"
+        library_live: "Diretta"
+        library_series: "Serie"
+        recent: "Recenti"
+        recent_prefix: "Recenti: "
+        continue: "Continua a guardare"
+        top10: "Top 10"
+        loading: "Caricamento..."
+        no_items: "Nessun elemento"
+        no_libraries: "Nessuna libreria"
+        press_ok_live: "Premi OK per aprire la Diretta"
+        loading_libraries: "caricamento librerie..."
+        loading_items: "caricamento elementi..."
+        loading_channels: "caricamento canali..."
+        please_wait: "attendere..."
+        cancelled: "annullato"
+        views_failed: "Caricamento librerie fallito"
+        items_failed: "Caricamento elementi fallito"
+        channels_failed: "Caricamento canali fallito"
+        session_expired: "Sessione scaduta. Esegui di nuovo il login."
+        missing_config: "Config mancante (APP_TOKEN/login)"
+        missing_app_token: "manca APP_TOKEN (premi *)"
+        hint_app_token: "Premi * per configurare APP_TOKEN"
+        vod_checking: "vod: verifica disponibilita..."
+        vod_processing: "vod: in elaborazione"
+        vod_processing_msg: "In elaborazione: questo contenuto non e ancora su R2."
+        vod_unavailable: "vod: non disponibile"
+        vod_unavailable_msg: "Contenuto non disponibile."
+        series_not_impl: "Serie non ancora implementate su Roku."
+        vod_try_again: "vod r2 lento; riprova"
+        off: "Disattivato"
+        reload_subs: "Aggiorna sottotitoli (Jellyfin)"
+        no_channels: "Nessun canale"
+        hero_continue_text: "Vuoi continuare?"
+        hero_continue_cta: "Continua"
+        resume_title: "Continua a guardare"
+        resume_from_prefix: "Continua da "
+        resume_cancel: "Annulla"
+        resume_restart: "Guarda dall'inizio"
+        resume_continue: "Continua"
+      }
+    }
   end if
 
-  ' English (default).
-  if k = "home_live" then return "Live TV"
-  if k = "home_tokens" then return "Tokens"
-  if k = "home_logout" then return "Logout"
-  if k = "libraries" then return "Libraries"
-  if k = "recent" then return "Recent"
-  if k = "recent_prefix" then return "Recent: "
-  if k = "continue" then return "Continue Watching"
-  if k = "top10" then return "Top 10"
-  if k = "loading" then return "Loading..."
-  if k = "no_items" then return "No items"
-  if k = "no_libraries" then return "No libraries"
-  if k = "press_ok_live" then return "Press OK to open Live TV"
-  if k = "loading_libraries" then return "loading libraries..."
-  if k = "loading_items" then return "loading items..."
-  if k = "loading_channels" then return "loading channels..."
-  if k = "please_wait" then return "please wait..."
-  if k = "cancelled" then return "cancelled"
-  if k = "views_failed" then return "Failed to load libraries"
-  if k = "items_failed" then return "Failed to load items"
-  if k = "channels_failed" then return "Failed to load channels"
-  if k = "session_expired" then return "Session expired. Please login again."
-  if k = "missing_config" then return "Missing config (APP_TOKEN/login)"
-  if k = "missing_app_token" then return "Missing APP_TOKEN (press *)"
-  if k = "hint_app_token" then return "Press * to configure APP_TOKEN"
-  if k = "vod_checking" then return "vod: checking availability..."
-  if k = "vod_processing" then return "vod: processing"
-  if k = "vod_processing_msg" then return "Processing: this content is not in R2 yet."
-  if k = "vod_unavailable" then return "vod: unavailable"
-  if k = "vod_unavailable_msg" then return "Content unavailable."
-  if k = "series_not_impl" then return "Series is not implemented on Roku yet."
-  if k = "vod_try_again" then return "vod r2 slow; try again"
-  if k = "off" then return "Off"
-  if k = "reload_subs" then return "Reload subtitles (Jellyfin)"
-  if k = "no_channels" then return "No channels"
+  enMap = m.trMapCache.en
+  map = enMap
+  if lang = "pt" and m.trMapCache.pt <> invalid then
+    map = m.trMapCache.pt
+  else if lang = "es" and m.trMapCache.es <> invalid then
+    map = m.trMapCache.es
+  else if lang = "it" and m.trMapCache.it <> invalid then
+    map = m.trMapCache.it
+  end if
 
-  return k
+  if map[k] <> invalid then return map[k]
+  if enMap[k] <> invalid then return enMap[k]
+  return raw
 end function
 
 sub applyLocalization()
-  if m.homeLiveText <> invalid then m.homeLiveText.text = tr("home_live")
-  if m.homeTokensText <> invalid then m.homeTokensText.text = tr("home_tokens")
-  if m.homeLogoutText <> invalid then m.homeLogoutText.text = tr("home_logout")
-  if m.viewsTitle <> invalid then m.viewsTitle.text = tr("libraries")
-  if m.hintLabel <> invalid then m.hintLabel.text = tr("hint_app_token")
+  if m.homeLiveText <> invalid then m.homeLiveText.text = _t("home_live")
+  if m.homeTokensText <> invalid then m.homeTokensText.text = _t("home_tokens")
+  if m.homeLogoutText <> invalid then m.homeLogoutText.text = _t("home_logout")
+  if m.viewsTitle <> invalid then m.viewsTitle.text = _t("libraries")
+  if m.heroPromptText <> invalid then m.heroPromptText.text = _t("hero_continue_text")
+  if m.heroPromptBtnText <> invalid then m.heroPromptBtnText.text = _t("hero_continue_cta")
+  _syncHeroAvatarVisual()
+  if m.hintLabel <> invalid then m.hintLabel.text = _t("hint_app_token")
+end sub
+
+function _browseListFocusedIndex(lst as Object) as Integer
+  if lst = invalid then return -1
+  idx = lst.itemFocused
+  if idx = invalid or Int(idx) < 0 then
+    idx = lst.itemSelected
+  end if
+  if idx = invalid then return -1
+  i = Int(idx)
+  if i < 0 then return -1
+  return i
+end function
+
+sub _syncHeroAvatarVisual()
+  if m.heroAvatarText = invalid then return
+  m.heroAvatarText.text = ">"
+  m.heroAvatarText.visible = true
+  if m.heroAvatarPhoto <> invalid then
+    m.heroAvatarPhoto.visible = false
+    m.heroAvatarPhoto.uri = ""
+  end if
+end sub
+
+sub _triggerHeroContinue()
+  if m.mode <> "browse" then return
+  m.activeViewId = "__continue"
+  m.activeViewCollection = "continue"
+  if m.itemsTitle <> invalid then m.itemsTitle.text = _t("continue")
+  m.heroContinueAutoplayPending = true
+  loadShelfForView("__continue")
+  m.browseFocus = "hero_continue"
+  applyFocus()
 end sub
 
 function _aaGetCi(a as Object, key as String) as Dynamic
@@ -2335,7 +2637,7 @@ sub refreshPlayerSettingsLists()
   off.addField("streamIndex", "integer", false)
   off.addField("lang", "string", false)
   off.addField("selected", "boolean", false)
-  off.title = tr("off")
+  off.title = _t("off")
   off.trackId = "off"
   off.prefKey = "off"
   off.sourceOnly = false
@@ -2558,7 +2860,7 @@ sub refreshPlayerSettingsLists()
     load.addField("streamIndex", "integer", false)
     load.addField("lang", "string", false)
     load.addField("selected", "boolean", false)
-    load.title = tr("reload_subs")
+    load.title = _t("reload_subs")
     load.trackId = "__load_jellyfin__"
     load.prefKey = "__load_jellyfin__"
     load.sourceOnly = false
@@ -2852,7 +3154,92 @@ sub signAndPlay(rawPath as String, title as String)
   beginSign(target.path, target.query, title, "hls", true, "live", "")
 end sub
 
+function _nodeResumePositionMs(n as Object) as Integer
+  if n = invalid then return 0
+  ms = -1
+  if n.hasField("resumePositionMs") then ms = _sceneIntFromAny(n.resumePositionMs)
+  if ms < 0 and n.hasField("positionMs") then ms = _sceneIntFromAny(n.positionMs)
+  if ms < 0 and n.hasField("position_ms") then ms = _sceneIntFromAny(n.position_ms)
+  if ms < 0 then ms = 0
+  return ms
+end function
+
+sub showResumeDialog(itemId as String, title as String, resumeMs as Integer)
+  if m.pendingDialog <> invalid then return
+
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return
+
+  t = title
+  if t = invalid then t = ""
+  t = t.ToStr().Trim()
+  if t = "" then t = "Video"
+
+  ms = resumeMs
+  if ms < 0 then ms = 0
+  if ms <= 0 then
+    playVodById(id, t)
+    return
+  end if
+
+  resumeSec = Int(ms / 1000)
+  if resumeSec <= 0 then
+    playVodById(id, t)
+    return
+  end if
+
+  m.resumeDialogItemId = id
+  m.resumeDialogTitle = t
+  m.resumeDialogPositionMs = ms
+
+  dlg = CreateObject("roSGNode", "Dialog")
+  dlg.title = _t("resume_title")
+  dlg.message = _t("resume_from_prefix") + _fmtTime(resumeSec)
+  dlg.buttons = [_t("resume_cancel"), _t("resume_restart"), _t("resume_continue")]
+  dlg.observeField("buttonSelected", "onResumeDialogDone")
+  m.pendingDialog = dlg
+  m.top.dialog = dlg
+  dlg.setFocus(true)
+end sub
+
+sub onResumeDialogDone()
+  dlg = m.pendingDialog
+  if dlg = invalid then return
+
+  idx = dlg.buttonSelected
+  itemId = m.resumeDialogItemId
+  title = m.resumeDialogTitle
+  resumeMs = Int(m.resumeDialogPositionMs)
+
+  m.top.dialog = invalid
+  m.pendingDialog = invalid
+  m.resumeDialogItemId = ""
+  m.resumeDialogTitle = ""
+  m.resumeDialogPositionMs = 0
+
+  if itemId = invalid then itemId = ""
+  itemId = itemId.ToStr().Trim()
+  if itemId = "" then return
+  if title = invalid then title = ""
+  title = title.ToStr().Trim()
+
+  if idx = 2 then
+    _beginVodPlay(itemId, title, resumeMs)
+  else if idx = 1 then
+    _beginVodPlay(itemId, title, 0)
+  else
+    setStatus(_t("cancelled"))
+    applyFocus()
+  end if
+end sub
+
 sub playVodById(itemId as String, title as String)
+  _beginVodPlay(itemId, title, 0)
+end sub
+
+sub _beginVodPlay(itemId as String, title as String, resumeMs as Integer)
   id = itemId
   if id = invalid then id = ""
   id = id.Trim()
@@ -2866,10 +3253,18 @@ sub playVodById(itemId as String, title as String)
   t = t.Trim()
   if t = "" then t = "Video"
 
+  startMs = resumeMs
+  if startMs < 0 then startMs = 0
+  m.nextStartResumeMs = startMs
+
   m.playAttemptId = _nowMs().ToStr()
   m.playAttemptSignStarted = false
   m.pendingPlayAttemptId = m.playAttemptId
-  print "vod playAttemptId=" + m.playAttemptId + " itemId=" + id + " title=" + t
+  if startMs > 0 then
+    print "vod playAttemptId=" + m.playAttemptId + " itemId=" + id + " title=" + t + " resumeMs=" + startMs.ToStr()
+  else
+    print "vod playAttemptId=" + m.playAttemptId + " itemId=" + id + " title=" + t
+  end if
 
   m.pendingPlaybackItemId = id
   m.pendingPlaybackTitle = t
@@ -2885,7 +3280,7 @@ sub requestVodStatus(vodKey as String)
     return
   end if
   if m.pendingJob <> "" then
-    setStatus(tr("please_wait"))
+    setStatus(_t("please_wait"))
     return
   end if
 
@@ -2899,11 +3294,11 @@ sub requestVodStatus(vodKey as String)
 
   cfg = loadConfig()
   if cfg.apiBase = "" or cfg.appToken = "" then
-    setStatus(tr("missing_app_token"))
+    setStatus(_t("missing_app_token"))
     return
   end if
 
-  setStatus(tr("vod_checking"))
+  setStatus(_t("vod_checking"))
   m.pendingJob = "vod_status"
   m.gatewayTask.kind = "vod_status"
   m.gatewayTask.apiBase = cfg.apiBase
@@ -2998,12 +3393,44 @@ sub onGatewayTaskStateChanged()
   if job = "" then return
   m.pendingJob = ""
 
+  if job = "progress_write" then
+    posMs = Int(m.pendingProgressPosMs)
+    durMs = Int(m.pendingProgressDurMs)
+    pct = Int(m.pendingProgressPercent)
+    played = (m.pendingProgressPlayed = true)
+    reason = m.pendingProgressReason
+    if reason = invalid then reason = ""
+    reason = reason.ToStr().Trim()
+    m.pendingProgressPosMs = -1
+    m.pendingProgressDurMs = -1
+    m.pendingProgressPercent = -1
+    m.pendingProgressPlayed = false
+    m.pendingProgressReason = ""
+
+    if m.gatewayTask.ok = true then
+      m.progressLastSentAtMs = _nowMs()
+      if posMs >= 0 then m.progressLastSentPosMs = posMs
+      print "progress write ok posMs=" + posMs.ToStr() + " durMs=" + durMs.ToStr() + " pct=" + pct.ToStr() + " played=" + played.ToStr() + " reason=" + reason
+      if m.progressPendingFlush = true or m.progressPendingPlayed = true then
+        ignore = _sendProgressReport("drain", m.progressPendingPlayed, true)
+      end if
+    else
+      errProg = m.gatewayTask.error
+      if errProg = invalid or errProg = "" then errProg = "unknown"
+      print "progress write failed err=" + errProg + " reason=" + reason
+      m.progressPendingFlush = true
+      if played = true then m.progressPendingPlayed = true
+      if reason <> "" then m.progressPendingReason = reason
+    end if
+    return
+  end if
+
   if job = "login" then
     if m.gatewayTask.ok = true then
       cfg = loadConfig()
       saveConfig(m.apiBase, cfg.appToken, m.gatewayTask.accessToken, m.gatewayTask.userId)
       loadSavedIntoForm()
-      enterHome()
+      enterBrowse()
     else
       err = m.gatewayTask.error
       if err = invalid or err = "" then err = "unknown"
@@ -3042,11 +3469,11 @@ sub onGatewayTaskStateChanged()
         setStatus("ready")
         playVodR2Now(id, t)
       else if st = "PROCESSING" then
-        setStatus(tr("vod_processing"))
+        setStatus(_t("vod_processing"))
         if m.pendingDialog = invalid then
           dlg = CreateObject("roSGNode", "Dialog")
           dlg.title = t
-          dlg.message = tr("vod_processing_msg")
+          dlg.message = _t("vod_processing_msg")
           dlg.buttons = ["OK"]
           dlg.observeField("buttonSelected", "onTokensDone")
           m.pendingDialog = dlg
@@ -3054,11 +3481,11 @@ sub onGatewayTaskStateChanged()
           dlg.setFocus(true)
         end if
       else
-        setStatus(tr("vod_unavailable"))
+        setStatus(_t("vod_unavailable"))
         if m.pendingDialog = invalid then
           dlg2 = CreateObject("roSGNode", "Dialog")
           dlg2.title = t
-          dlg2.message = tr("vod_unavailable_msg")
+          dlg2.message = _t("vod_unavailable_msg")
           dlg2.buttons = ["OK"]
           dlg2.observeField("buttonSelected", "onTokensDone")
           m.pendingDialog = dlg2
@@ -3083,28 +3510,33 @@ sub onGatewayTaskStateChanged()
 
       root = CreateObject("roSGNode", "ContentNode")
 
-      ' Special gateway-powered shelves (parity with Flutter clients).
-      cw = CreateObject("roSGNode", "ContentNode")
-      cw.addField("collectionType", "string", false)
-      cw.id = "__continue"
-      cw.title = tr("continue")
-      cw.collectionType = "continue"
-      root.appendChild(cw)
-
-      top10 = CreateObject("roSGNode", "ContentNode")
-      top10.addField("collectionType", "string", false)
-      top10.id = "__top10"
-      top10.title = tr("top10")
-      top10.collectionType = "top10"
-      root.appendChild(top10)
-
       for each v in items
+        ctype0 = ""
+        if v <> invalid and v.collectionType <> invalid then ctype0 = v.collectionType
+        if ctype0 = invalid then ctype0 = ""
+        ctype = LCase(ctype0.ToStr().Trim())
+
+        ' Flutter-like library rail: only real Jellyfin libraries.
+        if ctype <> "movies" and ctype <> "tvshows" and ctype <> "livetv" then
+          continue for
+        end if
+
         c = CreateObject("roSGNode", "ContentNode")
         c.addField("collectionType", "string", false)
         if v <> invalid then
           if v.id <> invalid then c.id = v.id
-          if v.name <> invalid then c.title = v.name else c.title = ""
-          if v.collectionType <> invalid then c.collectionType = v.collectionType else c.collectionType = ""
+          if ctype = "movies" then
+            c.title = _t("library_movies")
+          else if ctype = "tvshows" then
+            c.title = _t("library_series")
+          else if ctype = "livetv" then
+            c.title = _t("library_live")
+          else if v.name <> invalid then
+            c.title = v.name
+          else
+            c.title = ""
+          end if
+          c.collectionType = ctype
         else
           c.title = ""
           c.collectionType = ""
@@ -3117,61 +3549,36 @@ sub onGatewayTaskStateChanged()
       ' Reset items list until a view is focused.
       if m.itemsList <> invalid then m.itemsList.content = CreateObject("roSGNode", "ContentNode")
       if m.browseEmptyLabel <> invalid then
-        m.browseEmptyLabel.text = tr("no_items")
+        m.browseEmptyLabel.text = _t("no_items")
         m.browseEmptyLabel.visible = true
       end if
 
       setStatus("ready")
 
-      ' Preload the first shelf (best-effort).
-      if root.getChildCount() > 0 then
-        first = root.getChild(0)
-        if first <> invalid then
-          m.activeViewId = first.id
-          m.activeViewCollection = first.collectionType
-           if m.itemsTitle <> invalid then
-             t0 = first.title
-             if t0 = invalid then t0 = ""
-             t0 = t0.Trim()
-            ctype0 = first.collectionType
-            if ctype0 = invalid then ctype0 = ""
-            ctype0 = LCase(ctype0.Trim())
-            if ctype0 = "continue" then
-              m.itemsTitle.text = tr("continue")
-            else if ctype0 = "top10" then
-              m.itemsTitle.text = tr("top10")
-            else if t0 = "" then
-              m.itemsTitle.text = tr("recent")
-            else
-              m.itemsTitle.text = tr("recent_prefix") + t0
-            end if
-           end if
-          if first.collectionType <> "livetv" then
-            loadShelfForView(first.id)
-          else
-            if m.browseEmptyLabel <> invalid then
-              m.browseEmptyLabel.text = tr("press_ok_live")
-              m.browseEmptyLabel.visible = true
-            end if
-          end if
-        end if
-      else
+      ' Hero "Continuar" drives the initial shelf.
+      m.activeViewId = "__continue"
+      m.activeViewCollection = "continue"
+      if m.itemsTitle <> invalid then m.itemsTitle.text = _t("continue")
+      m.heroContinueAutoplayPending = false
+      loadShelfForView("__continue")
+
+      if root.getChildCount() <= 0 then
         if m.browseEmptyLabel <> invalid then
-          m.browseEmptyLabel.text = tr("no_libraries")
+          m.browseEmptyLabel.text = _t("no_libraries")
           m.browseEmptyLabel.visible = true
         end if
       end if
 
       if m.mode = "browse" and m.viewsList <> invalid then
-        m.browseFocus = "views"
-        m.viewsList.setFocus(true)
+        m.browseFocus = "hero_continue"
+        applyFocus()
       end if
     else
       err = m.gatewayTask.error
       if err = invalid or err = "" then err = "unknown"
       setStatus("views failed: " + err)
       if m.browseEmptyLabel <> invalid then
-        m.browseEmptyLabel.text = tr("views_failed")
+        m.browseEmptyLabel.text = _t("views_failed")
         m.browseEmptyLabel.visible = true
       end if
     end if
@@ -3181,6 +3588,12 @@ sub onGatewayTaskStateChanged()
   if job = "shelf" then
     viewId = m.pendingShelfViewId
     m.pendingShelfViewId = ""
+    if viewId = invalid then viewId = ""
+    viewId = viewId.ToStr().Trim()
+
+    if viewId = "__continue" and m.activeViewId <> "__continue" then
+      m.heroContinueAutoplayPending = false
+    end if
 
     if m.gatewayTask.ok = true then
       raw = m.gatewayTask.resultJson
@@ -3196,7 +3609,7 @@ sub onGatewayTaskStateChanged()
       if err = invalid or err = "" then err = "unknown"
       setStatus("shelf failed: " + err)
       if m.browseEmptyLabel <> invalid then
-        m.browseEmptyLabel.text = tr("items_failed")
+        m.browseEmptyLabel.text = _t("items_failed")
         m.browseEmptyLabel.visible = true
       end if
     end if
@@ -3236,7 +3649,7 @@ sub onGatewayTaskStateChanged()
       if m.channelsList <> invalid then m.channelsList.content = root
 
       if m.liveEmptyLabel <> invalid then
-        m.liveEmptyLabel.text = tr("no_channels")
+        m.liveEmptyLabel.text = _t("no_channels")
         m.liveEmptyLabel.visible = (root.getChildCount() = 0)
       end if
 
@@ -3275,11 +3688,11 @@ sub onGatewayTaskStateChanged()
         clearAuthSession()
         loadSavedIntoForm()
         enterLogin()
-        setStatus(tr("session_expired"))
+        setStatus(_t("session_expired"))
         return
       end if
       if m.liveEmptyLabel <> invalid then
-        m.liveEmptyLabel.text = tr("channels_failed")
+        m.liveEmptyLabel.text = _t("channels_failed")
         m.liveEmptyLabel.visible = true
       end if
     end if
@@ -3697,6 +4110,19 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
     return
   end if
 
+  resumeMs = Int(m.nextStartResumeMs)
+  if resumeMs < 0 then resumeMs = 0
+  if isLive = true then resumeMs = 0
+  m.nextStartResumeMs = 0
+  resumeSec = Int(resumeMs / 1000)
+  if resumeSec < 0 then resumeSec = 0
+  m.playbackResumeTargetSec = -1
+  m.playbackResumePending = false
+  if isLive <> true and resumeSec > 0 then
+    m.playbackResumeTargetSec = resumeSec
+    m.playbackResumePending = true
+  end if
+
   ' Reset per-playback track preference application.
   m.trackPrefsAppliedAudio = false
   m.trackPrefsAppliedSub = false
@@ -3714,6 +4140,17 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
   m.lastSubtitleTrackId = ""
   m.lastSubtitleTrackKey = ""
   m.debugPrintedSubtitleTracks = false
+  m.progressLastSentPosMs = -1
+  m.progressLastSentAtMs = 0
+  m.progressPendingFlush = false
+  m.progressPendingPlayed = false
+  m.progressPendingReason = ""
+  m.pendingProgressPosMs = -1
+  m.pendingProgressDurMs = -1
+  m.pendingProgressPercent = -1
+  m.pendingProgressPlayed = false
+  m.pendingProgressReason = ""
+  if m.progressTimer <> invalid then m.progressTimer.control = "stop"
 
   ' Cancel any in-flight scrubbing.
   m.scrubActive = false
@@ -3803,6 +4240,20 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
 
   end if
 
+  if isLive <> true and resumeSec > 0 then
+    if c.hasField("PlayStart") then
+      c.PlayStart = resumeSec
+    else if c.hasField("playStart") then
+      c.playStart = resumeSec
+    else if c.hasField("playstart") then
+      c.playstart = resumeSec
+    else
+      c.addField("PlayStart", "float", false)
+      c.PlayStart = resumeSec
+    end if
+    print "vod resume startSec=" + resumeSec.ToStr()
+  end if
+
   ' Disable Roku built-in transport UI; we render our own OSD/settings.
   if c.hasField("VideoDisableUI") then
     c.VideoDisableUI = true
@@ -3870,7 +4321,7 @@ sub onPlayTimeoutFire()
   if id = "" then return
 
   print "VOD R2 timeout (state=" + st + "): stopping"
-  setStatus(tr("vod_try_again"))
+  setStatus(_t("vod_try_again"))
   stopPlaybackAndReturn("vod_r2_timeout")
 end sub
 
@@ -3904,6 +4355,11 @@ sub stopPlaybackAndReturn(reason as String)
   m.pendingSubtitleSignStreamIndex = -1
   m.pendingSubtitleSignSourceUrl = ""
   m.pendingSubtitleSignExtraQuery = {}
+  if m.progressTimer <> invalid then m.progressTimer.control = "stop"
+  playedStop = false
+  rr = LCase(r.Trim())
+  if rr = "finished" then playedStop = true
+  ignore = _sendProgressReport("stop_" + rr, playedStop, true)
 
   if m.playTimeoutTimer <> invalid then m.playTimeoutTimer.control = "stop"
   if m.sigCheckTimer <> invalid then m.sigCheckTimer.control = "stop"
@@ -3985,6 +4441,13 @@ sub onSigCheckTimerFire()
   print "live: renew signature remaining=" + remaining.ToStr() + " path=" + p
   m.liveResignPending = true
   beginSign(p, m.playbackSignExtraQuery, m.playbackTitle, m.playbackStreamFormat, true, m.playbackKind, m.playbackItemId)
+end sub
+
+sub onProgressTimerFire()
+  if _shouldTrackProgress() <> true then return
+  if m.player = invalid or m.player.visible <> true then return
+  if m.lastPlayerState <> "playing" and m.progressPendingFlush <> true then return
+  ignore = _sendProgressReport("timer", false, false)
 end sub
 
 sub _togglePauseResume()
@@ -4258,6 +4721,14 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         m.browseFocus = "views"
         applyFocus()
         return true
+      else if m.browseFocus = "views" then
+        m.browseFocus = "hero_logout"
+        applyFocus()
+        return true
+      else if m.browseFocus = "hero_continue" then
+        m.browseFocus = "hero_logout"
+        applyFocus()
+        return true
       end if
     end if
 
@@ -4266,7 +4737,71 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         m.browseFocus = "items"
         applyFocus()
         return true
+      else if m.browseFocus = "hero_logout" then
+        m.browseFocus = "hero_continue"
+        applyFocus()
+        return true
       end if
+    end if
+
+    if kl = "up" then
+      if m.browseFocus = "views" then
+        vIdx = _browseListFocusedIndex(m.viewsList)
+        if vIdx <= 0 then
+          m.browseFocus = "hero_logout"
+          applyFocus()
+          return true
+        end if
+      else if m.browseFocus = "items" then
+        iIdx = _browseListFocusedIndex(m.itemsList)
+        if iIdx <= 0 then
+          m.browseFocus = "hero_continue"
+          applyFocus()
+          return true
+        end if
+      else if m.browseFocus = "hero_logout" or m.browseFocus = "hero_continue" then
+        return true
+      end if
+    end if
+
+    if kl = "down" then
+      if m.browseFocus = "hero_logout" then
+        m.browseFocus = "views"
+        applyFocus()
+        return true
+      else if m.browseFocus = "hero_continue" then
+        m.browseFocus = "views"
+        applyFocus()
+        return true
+      end if
+    end if
+
+    if kl = "ok" then
+      if m.browseFocus = "hero_continue" then
+        _triggerHeroContinue()
+        return true
+      else if m.browseFocus = "hero_logout" then
+        doLogout()
+        return true
+      end if
+    end if
+
+    if kl = "back" then
+      if m.browseFocus = "items" then
+        m.browseFocus = "views"
+        applyFocus()
+        return true
+      else if m.browseFocus = "views" then
+        m.browseFocus = "hero_continue"
+        applyFocus()
+        return true
+      else if m.browseFocus = "hero_logout" or m.browseFocus = "hero_continue" then
+        m.browseFocus = "views"
+        applyFocus()
+        return true
+      end if
+      setStatus("ready")
+      return true
     end if
   end if
 
@@ -4330,8 +4865,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         m.browseFocus = "views"
         applyFocus()
         return true
+      else if m.browseFocus = "views" then
+        m.browseFocus = "hero_continue"
+        applyFocus()
+        return true
       end if
-      enterHome()
+      setStatus("ready")
       return true
     end if
   end if
@@ -4374,7 +4913,38 @@ sub applyFocus()
   end if
 
   if m.mode = "browse" then
-    if m.browseFocus = "items" then
+    profileFocused = (m.browseFocus = "hero_logout")
+    continueFocused = (m.browseFocus = "hero_continue")
+    _syncHeroAvatarVisual()
+
+    if m.heroAvatarBg <> invalid then
+      m.heroAvatarBg.uri = "pkg:/images/overlay_circle.png"
+    end if
+    if m.heroAvatarText <> invalid then
+      if profileFocused then
+        m.heroAvatarText.color = "0xD8B765"
+      else
+        m.heroAvatarText.color = "0xD0D6E0"
+      end if
+    end if
+    if m.heroPromptBtnBg <> invalid then
+      if continueFocused then
+        m.heroPromptBtnBg.uri = "pkg:/images/button_focus.png"
+      else
+        m.heroPromptBtnBg.uri = "pkg:/images/field_normal.png"
+      end if
+    end if
+    if m.heroPromptBtnText <> invalid then
+      if continueFocused then
+        m.heroPromptBtnText.color = "0x0B0F16"
+      else
+        m.heroPromptBtnText.color = "0xD0D6E0"
+      end if
+    end if
+
+    if profileFocused or continueFocused then
+      if m.top <> invalid then m.top.setFocus(true)
+    else if m.browseFocus = "items" then
       if m.itemsList <> invalid then
         m.itemsList.setFocus(true)
       else if m.viewsList <> invalid then
@@ -4506,10 +5076,36 @@ sub onPlayerStateChanged()
   if curDur <> invalid then d = Int(curDur)
   print "player state=" + st + " kind=" + m.playbackKind + " pos=" + p.ToStr() + " dur=" + d.ToStr()
   if st = "playing" then
+    skipPlayingProgress = false
+    if m.playbackResumePending = true and m.playbackIsLive <> true then
+      targetSec = Int(m.playbackResumeTargetSec)
+      if targetSec > 0 then
+        skipPlayingProgress = true
+        curSec = 0
+        if m.player.position <> invalid then curSec = Int(m.player.position)
+        if curSec < (targetSec - 5) then
+          if m.player.hasField("seek") then
+            m.player.seek = targetSec
+            print "vod resume seek targetSec=" + targetSec.ToStr() + " currentSec=" + curSec.ToStr()
+          else
+            print "vod resume seek unsupported targetSec=" + targetSec.ToStr()
+          end if
+        else
+          print "vod resume already at target currentSec=" + curSec.ToStr() + " targetSec=" + targetSec.ToStr()
+        end if
+      end if
+      m.playbackResumePending = false
+    end if
     if m.playTimeoutTimer <> invalid then m.playTimeoutTimer.control = "stop"
+    if m.progressTimer <> invalid and _shouldTrackProgress() then m.progressTimer.control = "start"
+    if skipPlayingProgress <> true then
+      ignore = _sendProgressReport("playing", false, false)
+    end if
     ' Best-effort: apply preferred tracks once playback is stable.
     applyPreferredTracks()
     _requestPlaybackSubtitleSources()
+  else if st = "paused" then
+    ignore = _sendProgressReport("paused", false, true)
   else if st = "stopped" then
     if m.ignoreNextStopped = true then
       m.ignoreNextStopped = false
@@ -4519,6 +5115,7 @@ sub onPlayerStateChanged()
     ' while the Video UI has focus), ensure we return to our UI.
     stopPlaybackAndReturn("state_stopped")
   else if st = "finished" then
+    ignore = _sendProgressReport("finished", true, true)
     stopPlaybackAndReturn("finished")
   end if
 end sub
@@ -4543,7 +5140,7 @@ sub onPlayerError()
   if m.playTimeoutTimer <> invalid then m.playTimeoutTimer.control = "stop"
 
   if m.playbackKind = "vod-r2" then
-    setStatus(tr("vod_unavailable"))
+    setStatus(_t("vod_unavailable"))
   end if
 
   ' If multi-channel LIVE path fails, fallback to the single-channel route.
@@ -4582,6 +5179,7 @@ sub onPlayerError()
     end if
   end if
 
+  ignore = _sendProgressReport("error", false, true)
   stopPlaybackAndReturn("error")
 end sub
 
@@ -4630,7 +5228,7 @@ sub onKeyboardDone()
   m.pendingDialog = invalid
 
   if idx <> 0 then
-    setStatus(tr("cancelled"))
+    setStatus(_t("cancelled"))
     m.pendingPrompt = ""
     return
   end if
@@ -4711,7 +5309,9 @@ end sub
 
 sub enterBrowse()
   m.mode = "browse"
-  m.browseFocus = "views"
+  m.browseFocus = "hero_continue"
+  m.heroContinueAutoplayPending = false
+  _syncHeroAvatarVisual()
 
   if m.logoPoster <> invalid then m.logoPoster.visible = false
   if m.titleLabel <> invalid then m.titleLabel.visible = false
@@ -4733,7 +5333,7 @@ sub enterBrowse()
   if m.viewsList <> invalid then m.viewsList.content = CreateObject("roSGNode", "ContentNode")
   if m.itemsList <> invalid then m.itemsList.content = CreateObject("roSGNode", "ContentNode")
   if m.browseEmptyLabel <> invalid then
-    m.browseEmptyLabel.text = tr("no_items")
+    m.browseEmptyLabel.text = _t("no_items")
     m.browseEmptyLabel.visible = true
   end if
 
@@ -4751,7 +5351,7 @@ sub loadViews()
     return
   end if
   if m.pendingJob <> "" then
-    setStatus(tr("please_wait"))
+    setStatus(_t("please_wait"))
     return
   end if
 
@@ -4759,7 +5359,7 @@ sub loadViews()
   if cfg.apiBase = "" or cfg.appToken = "" or cfg.jellyfinToken = "" or cfg.userId = "" then
     setStatus("views: missing config")
     if m.browseEmptyLabel <> invalid then
-      m.browseEmptyLabel.text = tr("missing_config")
+      m.browseEmptyLabel.text = _t("missing_config")
       m.browseEmptyLabel.visible = true
     end if
     return
@@ -4782,6 +5382,7 @@ sub onViewFocused()
   end if
 
   if m.mode <> "browse" then return
+  if m.browseFocus = "hero_continue" or m.browseFocus = "hero_logout" then return
   if m.viewsList = invalid then return
 
   idx = m.viewsList.itemFocused
@@ -4810,20 +5411,20 @@ sub onViewFocused()
     if ct = invalid then ct = ""
     ct = LCase(ct.Trim())
     if ct = "continue" then
-      m.itemsTitle.text = tr("continue")
+      m.itemsTitle.text = _t("continue")
     else if ct = "top10" then
-      m.itemsTitle.text = tr("top10")
+      m.itemsTitle.text = _t("top10")
     else if t = "" then
-      m.itemsTitle.text = tr("recent")
+      m.itemsTitle.text = _t("recent")
     else
-      m.itemsTitle.text = tr("recent_prefix") + t
+      m.itemsTitle.text = _t("recent_prefix") + t
     end if
   end if
 
   if ctype = "livetv" then
     if m.itemsList <> invalid then m.itemsList.content = CreateObject("roSGNode", "ContentNode")
     if m.browseEmptyLabel <> invalid then
-      m.browseEmptyLabel.text = tr("press_ok_live")
+      m.browseEmptyLabel.text = _t("press_ok_live")
       m.browseEmptyLabel.visible = true
     end if
     return
@@ -4839,6 +5440,7 @@ sub onViewSelected()
   end if
 
   if m.mode <> "browse" then return
+  if m.browseFocus <> "views" then return
   if m.viewsList = invalid then return
 
   idx = m.viewsList.itemSelected
@@ -4943,18 +5545,18 @@ sub loadShelfForView(viewId as String)
   if cfg.apiBase = "" or cfg.appToken = "" or cfg.jellyfinToken = "" or cfg.userId = "" then
     setStatus("shelf: missing config")
     if m.browseEmptyLabel <> invalid then
-      m.browseEmptyLabel.text = tr("missing_config")
+      m.browseEmptyLabel.text = _t("missing_config")
       m.browseEmptyLabel.visible = true
     end if
     return
   end if
 
   if m.browseEmptyLabel <> invalid then
-    m.browseEmptyLabel.text = tr("loading")
+    m.browseEmptyLabel.text = _t("loading")
     m.browseEmptyLabel.visible = true
   end if
 
-  setStatus(tr("loading_items"))
+  setStatus(_t("loading_items"))
   m.pendingJob = "shelf"
   m.pendingShelfViewId = id
   if id = "__continue" then
@@ -5023,20 +5625,55 @@ sub renderShelfItems(raw as String)
     c = CreateObject("roSGNode", "ContentNode")
     c.addField("itemType", "string", false)
     c.addField("path", "string", false)
+    c.addField("resumePositionMs", "integer", false)
+    c.addField("resumeDurationMs", "integer", false)
+    c.addField("resumePercent", "integer", false)
     if it <> invalid then
       if it.id <> invalid then c.id = it.id
       c.title = name0
       c.itemType = typ0
       c.path = path0
+      rPos = -1
+      if it.positionMs <> invalid then rPos = _sceneIntFromAny(it.positionMs)
+      if rPos < 0 and it.position_ms <> invalid then rPos = _sceneIntFromAny(it.position_ms)
+      if rPos < 0 then rPos = 0
+      c.resumePositionMs = rPos
+
+      rDur = -1
+      if it.durationMs <> invalid then rDur = _sceneIntFromAny(it.durationMs)
+      if rDur < 0 and it.duration_ms <> invalid then rDur = _sceneIntFromAny(it.duration_ms)
+      if rDur < 0 then rDur = 0
+      c.resumeDurationMs = rDur
+
+      rPct = -1
+      if it.percent <> invalid then rPct = _sceneIntFromAny(it.percent)
+      if rPct < 0 then rPct = 0
+      c.resumePercent = rPct
     else
       c.title = ""
       c.itemType = ""
       c.path = ""
+      c.resumePositionMs = 0
+      c.resumeDurationMs = 0
+      c.resumePercent = 0
     end if
     root.appendChild(c)
   end for
 
   m.itemsList.content = root
+
+  if m.heroContinueAutoplayPending = true then
+    if ctype = "continue" then
+      m.heroContinueAutoplayPending = false
+      if root.getChildCount() > 0 then
+        firstContinue = root.getChild(0)
+        if firstContinue <> invalid then
+          _playBrowseItemNode(firstContinue)
+          return
+        end if
+      end if
+    end if
+  end if
 
   if m.devAutoplay = "vod" and m.devAutoplayDone <> true then
     ' Helpful for debugging when we can't inject keypress events remotely.
@@ -5051,26 +5688,12 @@ sub renderShelfItems(raw as String)
   end if
 
   if m.browseEmptyLabel <> invalid then
-    m.browseEmptyLabel.text = tr("no_items")
+    m.browseEmptyLabel.text = _t("no_items")
     m.browseEmptyLabel.visible = (root.getChildCount() = 0)
   end if
 end sub
 
-sub onItemSelected()
-  if _isPlaybackVisible() then
-    print "[guard] ignore onItemSelected while playback visible"
-    return
-  end if
-
-  if m.mode <> "browse" then return
-  if m.itemsList = invalid then return
-
-  idx = m.itemsList.itemSelected
-  if idx = invalid or idx < 0 then return
-
-  root = m.itemsList.content
-  if root = invalid then return
-  it = root.getChild(idx)
+sub _playBrowseItemNode(it as Object)
   if it = invalid then return
 
   typ = ""
@@ -5092,7 +5715,33 @@ sub onItemSelected()
     return
   end if
 
+  resumeMs = _nodeResumePositionMs(it)
+  if resumeMs > 5000 then
+    showResumeDialog(it.id, it.title, resumeMs)
+    return
+  end if
+
   playVodById(it.id, it.title)
+end sub
+
+sub onItemSelected()
+  if _isPlaybackVisible() then
+    print "[guard] ignore onItemSelected while playback visible"
+    return
+  end if
+
+  if m.mode <> "browse" then return
+  if m.browseFocus <> "items" then return
+  if m.itemsList = invalid then return
+
+  idx = m.itemsList.itemSelected
+  if idx = invalid or idx < 0 then return
+
+  root = m.itemsList.content
+  if root = invalid then return
+  it = root.getChild(idx)
+  if it = invalid then return
+  _playBrowseItemNode(it)
 end sub
 
 sub enterLive()
@@ -5124,19 +5773,19 @@ sub loadChannels()
   m.channelsList.content = CreateObject("roSGNode", "ContentNode")
 
   if m.pendingJob <> "" then
-    setStatus(tr("please_wait"))
+    setStatus(_t("please_wait"))
     return
   end if
 
   cfg = loadConfig()
   if cfg.apiBase = "" or cfg.appToken = "" or cfg.jellyfinToken = "" then
-    setStatus(tr("missing_config"))
+    setStatus(_t("missing_config"))
     if m.liveEmptyLabel <> invalid then m.liveEmptyLabel.visible = true
     return
   end if
 
   print "channels request..."
-  setStatus(tr("loading_channels"))
+  setStatus(_t("loading_channels"))
   m.pendingJob = "channels"
   m.gatewayTask.kind = "channels"
   m.gatewayTask.apiBase = cfg.apiBase
@@ -5413,7 +6062,7 @@ sub beginSign(path as String, extraQuery as Object, title as String, streamForma
     return
   end if
   if m.pendingJob <> "" then
-    setStatus(tr("please_wait"))
+    setStatus(_t("please_wait"))
     return
   end if
 
@@ -5486,7 +6135,7 @@ sub requestJellyfinPlayback2(itemId as String, title as String, isLive as Boolea
     return
   end if
   if m.pendingJob <> "" then
-    setStatus(tr("please_wait"))
+    setStatus(_t("please_wait"))
     return
   end if
 

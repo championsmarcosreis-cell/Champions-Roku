@@ -73,7 +73,8 @@ function httpJson(method as String, url as String, headers = invalid as Object, 
   end if
 
   if resp = "" then
-    return { ok: false, error: "empty_response", status: code }
+    ' Some gateway endpoints intentionally return 204 No Content.
+    return { ok: true, status: code, data: invalid, raw: "" }
   end if
 
   parsed = ParseJson(resp)

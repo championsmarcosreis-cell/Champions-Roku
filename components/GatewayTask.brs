@@ -12,6 +12,7 @@ sub init()
   m.top.exp = 0
   m.top.resultJson = ""
   m.top.probeUrl = ""
+  m.top.progressBody = ""
 end sub
 
 sub doWork()
@@ -170,6 +171,16 @@ sub doWork()
         loc: resp.loc
         bodySnippet: resp.bodySnippet
       })
+    else
+      m.top.error = resp.error
+    end if
+    return
+  end if
+
+  if kind = "progress_write" then
+    resp = gatewayProgressUpsert(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.progressBody)
+    if resp.ok = true then
+      m.top.ok = true
     else
       m.top.error = resp.error
     end if
