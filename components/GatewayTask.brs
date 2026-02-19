@@ -11,6 +11,8 @@ sub init()
   m.top.signedUrl = ""
   m.top.exp = 0
   m.top.resultJson = ""
+  m.top.probeUrl = ""
+  m.top.progressBody = ""
 end sub
 
 sub doWork()
@@ -60,6 +62,34 @@ sub doWork()
     return
   end if
 
+  if kind = "continue" then
+    lim = m.top.limit
+    if lim = invalid then lim = 0
+    if lim <= 0 then lim = 12
+    resp = gatewayContinueWatchingShelf(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, lim)
+    if resp.ok = true then
+      m.top.ok = true
+      m.top.resultJson = FormatJson(resp.items)
+    else
+      m.top.error = resp.error
+    end if
+    return
+  end if
+
+  if kind = "top10" then
+    lim = m.top.limit
+    if lim = invalid then lim = 0
+    if lim <= 0 then lim = 10
+    resp = gatewayMostWatchedShelf(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, 7, lim)
+    if resp.ok = true then
+      m.top.ok = true
+      m.top.resultJson = FormatJson(resp.items)
+    else
+      m.top.error = resp.error
+    end if
+    return
+  end if
+
   if kind = "channels" then
     resp = gatewayJellyfinLiveChannels(m.top.apiBase, m.top.appToken, m.top.jellyfinToken)
     if resp.ok = true then
@@ -81,7 +111,32 @@ sub doWork()
         path: resp.path
         query: resp.query
         container: resp.container
+        subtitleSources: resp.subtitleSources
       })
+    else
+      m.top.error = resp.error
+    end if
+    return
+  end if
+
+  if kind = "subtitle_sources" then
+    resp = gatewayJellyfinExternalSubtitleSources(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.itemId)
+    if resp.ok = true then
+      m.top.ok = true
+      m.top.resultJson = FormatJson({
+        sources: resp.sources
+      })
+    else
+      m.top.error = resp.error
+    end if
+    return
+  end if
+
+  if kind = "vod_status" then
+    resp = gatewayVodStatus(m.top.apiBase, m.top.appToken, m.top.itemId)
+    if resp.ok = true then
+      m.top.ok = true
+      m.top.resultJson = FormatJson({ status: resp.status })
     else
       m.top.error = resp.error
     end if
@@ -97,6 +152,35 @@ sub doWork()
         ' Gateway exp may come back as float/string; store a best-effort integer.
         m.top.exp = Int(resp.exp)
       end if
+    else
+      m.top.error = resp.error
+    end if
+    return
+  end if
+
+  if kind = "probe_live" then
+    resp = gatewayProbeLiveUrl(m.top.probeUrl, m.top.appToken, m.top.jellyfinToken)
+    if resp.ok = true then
+      m.top.ok = true
+      m.top.resultJson = FormatJson({
+        method: resp.method
+        status: resp.status
+        ct: resp.ct
+        ce: resp.ce
+        cl: resp.cl
+        loc: resp.loc
+        bodySnippet: resp.bodySnippet
+      })
+    else
+      m.top.error = resp.error
+    end if
+    return
+  end if
+
+  if kind = "progress_write" then
+    resp = gatewayProgressUpsert(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.progressBody)
+    if resp.ok = true then
+      m.top.ok = true
     else
       m.top.error = resp.error
     end if

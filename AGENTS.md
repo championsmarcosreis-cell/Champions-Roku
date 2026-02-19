@@ -45,6 +45,13 @@ cd C:\Champions-Roku
 .\scripts\sync-gateway.ps1
 ```
 
+## Dominios (API / R2 VOD)
+
+- `api.champions.place`: gateway publico (Cloudflare Tunnel -> VM).
+- `api-vm.champions.place`: alias do gateway usado para **bypassar** rotas Cloudflare Worker que possam interceptar `api.champions.place/r2/vod/*`.
+  - O app usa esse host automaticamente para `vod-r2` (R2) para garantir que o gateway consiga reescrever a playlist/injetar legendas quando necessario.
+- `vod.champions.place`: hostname opcional para servir R2 via Worker (se/quando existir DNS + route na Cloudflare).
+
 ## Loop de desenvolvimento (Windows / PowerShell)
 
 Build + install + screenshot:

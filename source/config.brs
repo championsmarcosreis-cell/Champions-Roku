@@ -40,7 +40,15 @@ function loadConfig() as Object
   end if
 
   appToken = _readOrEmpty(sec, "appToken")
-  if appToken = "" then appToken = bundledAppToken()
+  bundledToken = bundledAppToken()
+  if bundledToken <> "" and bundledToken <> appToken then
+    ' Keep APP_TOKEN in sync with packaged builds (avoids stale registry causing 401s).
+    appToken = bundledToken
+    sec.Write("appToken", appToken)
+    sec.Flush()
+  else if appToken = "" then
+    appToken = bundledToken
+  end if
 
   jellyfinToken = _readOrEmpty(sec, "jellyfinToken")
   userId = _readOrEmpty(sec, "userId")
@@ -63,6 +71,8 @@ sub clearConfig()
   ' VOD player prefs
   sec.Delete("vod_prefAudioLang")
   sec.Delete("vod_prefSubtitleLang")
+  sec.Delete("vod_prefAudioKey")
+  sec.Delete("vod_prefSubtitleKey")
   sec.Delete("vod_subtitlesEnabled")
   ' Legacy (migrated) keys
   sec.Delete("prefAudioLang")
@@ -70,16 +80,25 @@ sub clearConfig()
   sec.Flush()
 end sub
 
+sub clearAuthSession()
+  sec = _cfgSection()
+  sec.Delete("jellyfinToken")
+  sec.Delete("userId")
+  sec.Flush()
+end sub
+
 ' VOD player preferences (audio/subtitles). Stored per-device.
 ' ExoPlayer-like behavior: prefer language and persist choices across items.
 '
 ' Notes:
-' - We store language codes (e.g., "por", "eng", "pt-BR") instead of track IDs,
-'   because track IDs can change per asset/playlist.
+' - We store language codes and stable track keys (title|lang|codec based).
+'   Track IDs can change per asset/playlist, so keys are more reliable.
 function loadVodPlayerPrefs() as Object
   sec = _cfgSection()
   audioLang = _readOrEmpty(sec, "vod_prefAudioLang")
   subLang = _readOrEmpty(sec, "vod_prefSubtitleLang")
+  audioKey = _readOrEmpty(sec, "vod_prefAudioKey")
+  subKey = _readOrEmpty(sec, "vod_prefSubtitleKey")
   enabledRaw = _readOrEmpty(sec, "vod_subtitlesEnabled")
   enabled = false
   if enabledRaw <> "" then
@@ -107,6 +126,8 @@ function loadVodPlayerPrefs() as Object
   return {
     audioLang: audioLang
     subtitleLang: subLang
+    audioKey: audioKey
+    subtitleKey: subKey
     subtitlesEnabled: enabled
   }
 end function
@@ -120,5 +141,28 @@ sub saveVodPlayerPrefs(audioLang as String, subtitleLang as String, subtitlesEna
   else
     sec.Write("vod_subtitlesEnabled", "0")
   end if
+  sec.Flush()
+end sub
+
+sub saveVodPlayerPrefKeys(audioKey, subtitleKey)
+  sec = _cfgSection()
+
+  a = ""
+  if audioKey <> invalid then a = audioKey.ToStr().Trim()
+  s = ""
+  if subtitleKey <> invalid then s = subtitleKey.ToStr().Trim()
+
+  if a = "" then
+    sec.Delete("vod_prefAudioKey")
+  else
+    sec.Write("vod_prefAudioKey", a)
+  end if
+
+  if s = "" then
+    sec.Delete("vod_prefSubtitleKey")
+  else
+    sec.Write("vod_prefSubtitleKey", s)
+  end if
+
   sec.Flush()
 end sub
