@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="BrowseLibraryItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onItemContentChanged" />
+    <field id="itemHasFocus" type="boolean" onChange="onItemHasFocusChanged" />
+  </interface>
+
+  <children>
+    <Poster
+      id="bg"
+      width="180"
+      height="48"
+      translation="[0, 2]"
+      uri="pkg:/images/field_normal.png"
+    />
+
+    <Label
+      id="label"
+      translation="[10, 12]"
+      width="160"
+      height="28"
+      font="font:MediumSystemFont"
+      color="0xD0D6E0"
+      horizAlign="center"
+      text=""
+    />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/BrowseLibraryItem.brs" />
+</component>

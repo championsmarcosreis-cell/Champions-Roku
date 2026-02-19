@@ -5,22 +5,22 @@
     <Poster
       id="cardBg"
       translation="[0, 0]"
-      width="1100"
-      height="560"
+      width="1180"
+      height="640"
       uri="pkg:/images/card.png"
     />
 
     <Poster
       id="heroPromptBg"
-      translation="[40, 22]"
-      width="1020"
+      translation="[30, 22]"
+      width="1120"
       height="56"
       uri="pkg:/images/field_normal.png"
     />
 
     <Poster
       id="heroAvatarBg"
-      translation="[50, 24]"
+      translation="[40, 24]"
       width="40"
       height="40"
       uri="pkg:/images/overlay_circle.png"
@@ -28,7 +28,7 @@
 
     <Poster
       id="heroAvatarPhoto"
-      translation="[57, 31]"
+      translation="[47, 31]"
       width="26"
       height="26"
       uri=""
@@ -37,7 +37,7 @@
 
     <Label
       id="heroAvatarText"
-      translation="[50, 34]"
+      translation="[40, 34]"
       width="40"
       height="22"
       font="font:SmallSystemFont"
@@ -48,8 +48,8 @@
 
     <Label
       id="heroPromptText"
-      translation="[104, 36]"
-      width="718"
+      translation="[94, 36]"
+      width="860"
       height="28"
       font="font:MediumSystemFont"
       color="0xD0D6E0"
@@ -58,16 +58,16 @@
 
     <Poster
       id="heroPromptBtnBg"
-      translation="[900, 30]"
-      width="160"
+      translation="[980, 30]"
+      width="170"
       height="40"
       uri="pkg:/images/field_normal.png"
     />
 
     <Label
       id="heroPromptBtnText"
-      translation="[900, 40]"
-      width="160"
+      translation="[980, 40]"
+      width="170"
       height="22"
       font="font:SmallSystemFont"
       horizAlign="center"
@@ -77,9 +77,9 @@
 
     <Label
       id="viewsTitle"
-      translation="[40, 96]"
-      width="440"
-      height="34"
+      translation="[30, 98]"
+      width="540"
+      height="32"
       font="font:MediumSystemFont"
       color="0xD8B765"
       text="Bibliotecas"
@@ -87,34 +87,36 @@
 
     <Label
       id="itemsTitle"
-      translation="[620, 96]"
-      width="440"
+      translation="[30, 184]"
+      width="540"
       height="34"
       font="font:MediumSystemFont"
       color="0xD8B765"
       text="Recentes"
     />
 
-    <MarkupList
+    <MarkupGrid
       id="viewsList"
-      translation="[40, 142]"
-      itemSize="[440, 60]"
-      numRows="6"
-      itemComponentName="ChampionsMenuItem"
+      translation="[30, 130]"
+      itemSize="[180, 52]"
+      numColumns="3"
+      numRows="1"
+      itemComponentName="BrowseLibraryItem"
     />
 
-    <MarkupList
+    <MarkupGrid
       id="itemsList"
-      translation="[620, 142]"
-      itemSize="[440, 60]"
-      numRows="6"
-      itemComponentName="ChampionsMenuItem"
+      translation="[30, 224]"
+      itemSize="[368, 182]"
+      numColumns="3"
+      numRows="2"
+      itemComponentName="BrowsePosterItem"
     />
 
     <Label
       id="browseEmptyLabel"
-      translation="[620, 320]"
-      width="440"
+      translation="[30, 502]"
+      width="1120"
       height="34"
       font="font:SmallSystemFont"
       horizAlign="center"

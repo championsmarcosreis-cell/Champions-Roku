@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="BrowsePosterItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onItemContentChanged" />
+    <field id="itemHasFocus" type="boolean" onChange="onItemHasFocusChanged" />
+  </interface>
+
+  <children>
+    <Rectangle
+      id="cardBg"
+      translation="[6, 3]"
+      width="356"
+      height="176"
+      color="0x132035"
+    />
+
+    <Poster
+      id="cover"
+      translation="[14, 12]"
+      width="340"
+      height="118"
+      uri=""
+    />
+
+    <Rectangle
+      id="progressBg"
+      translation="[14, 133]"
+      width="340"
+      height="4"
+      color="0x253247"
+      visible="false"
+    />
+
+    <Rectangle
+      id="progressFill"
+      translation="[14, 133]"
+      width="0"
+      height="4"
+      color="0xD8B765"
+      visible="false"
+    />
+
+    <Label
+      id="title"
+      translation="[14, 140]"
+      width="340"
+      height="24"
+      font="font:MediumSystemFont"
+      color="0xE6EBF3"
+      text=""
+    />
+
+    <Label
+      id="meta"
+      translation="[14, 160]"
+      width="340"
+      height="20"
+      font="font:SmallSystemFont"
+      color="0x9FB0C5"
+      text=""
+    />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/BrowsePosterItem.brs" />
+</component>

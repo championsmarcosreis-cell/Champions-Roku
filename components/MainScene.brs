@@ -41,6 +41,8 @@ sub init()
   m.devAutoplay = ""
   m.devAutoplayDone = false
   m.browseFocus = "views" ' views | items | hero_logout | hero_continue
+  m.viewsGridCols = 3
+  m.itemsGridCols = 3
   m.activeViewId = ""
   m.activeViewCollection = ""
   m.pendingShelfViewId = ""
@@ -247,6 +249,12 @@ sub bindUiNodes()
   m.heroAvatarBg = m.top.findNode("heroAvatarBg")
   m.heroAvatarPhoto = m.top.findNode("heroAvatarPhoto")
   m.heroAvatarText = m.top.findNode("heroAvatarText")
+  if m.viewsList <> invalid and m.viewsList.hasField("numColumns") then
+    m.viewsGridCols = _gridCols(m.viewsList.numColumns, m.viewsGridCols)
+  end if
+  if m.itemsList <> invalid and m.itemsList.hasField("numColumns") then
+    m.itemsGridCols = _gridCols(m.itemsList.numColumns, m.itemsGridCols)
+  end if
   m.liveCard = m.top.findNode("liveCard")
   m.channelsList = m.top.findNode("channelsList")
   m.liveEmptyLabel = m.top.findNode("emptyLabel")
@@ -445,7 +453,7 @@ sub layoutCards()
   y = 390
   if m.loginCard <> invalid then m.loginCard.translation = [x, y]
   if m.homeCard <> invalid then m.homeCard.translation = [x, y]
-  if m.browseCard <> invalid then m.browseCard.translation = [90, 130]
+  if m.browseCard <> invalid then m.browseCard.translation = [50, 40]
   if m.liveCard <> invalid then m.liveCard.translation = [x, 150]
 end sub
 
@@ -1274,6 +1282,32 @@ function _browseListFocusedIndex(lst as Object) as Integer
   return i
 end function
 
+function _browseListCount(lst as Object) as Integer
+  if lst = invalid then return 0
+  root = lst.content
+  if root = invalid then return 0
+  n = root.getChildCount()
+  if n = invalid then return 0
+  return Int(n)
+end function
+
+function _gridCols(n as Integer, fallbackCols as Integer) as Integer
+  cols = n
+  if cols = invalid then cols = 0
+  cols = Int(cols)
+  if cols <= 0 then cols = fallbackCols
+  if cols <= 0 then cols = 1
+  return cols
+end function
+
+function _browseViewCols() as Integer
+  return _gridCols(m.viewsGridCols, 3)
+end function
+
+function _browseItemCols() as Integer
+  return _gridCols(m.itemsGridCols, 3)
+end function
+
 sub _syncHeroAvatarVisual()
   if m.heroAvatarText = invalid then return
   m.heroAvatarText.text = ">"
@@ -1294,6 +1328,33 @@ sub _triggerHeroContinue()
   m.browseFocus = "hero_continue"
   applyFocus()
 end sub
+
+function _browsePosterUri(itemId as String, apiBase as String, jellyfinToken as String) as String
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return ""
+
+  base = apiBase
+  if base = invalid then base = ""
+  base = base.ToStr().Trim()
+  if base = "" then return ""
+  if Right(base, 1) = "/" then base = Left(base, Len(base) - 1)
+
+  u = base + "/jellyfin/Items/" + id + "/Images/Primary"
+  q = {
+    maxWidth: "720"
+    quality: "90"
+  }
+  tok = jellyfinToken
+  if tok = invalid then tok = ""
+  tok = tok.ToStr().Trim()
+  if tok <> "" then
+    q["X-Emby-Token"] = tok
+    q["X-Jellyfin-Token"] = tok
+  end if
+  return appendQuery(u, q)
+end function
 
 function _aaGetCi(a as Object, key as String) as Dynamic
   if type(a) <> "roAssociativeArray" then return invalid
@@ -3509,6 +3570,7 @@ sub onGatewayTaskStateChanged()
       if type(items) <> "roArray" then items = []
 
       root = CreateObject("roSGNode", "ContentNode")
+      byType = {}
 
       for each v in items
         ctype0 = ""
@@ -3521,26 +3583,28 @@ sub onGatewayTaskStateChanged()
           continue for
         end if
 
+        byType[ctype] = v
+      end for
+
+      ordered = ["movies", "livetv", "tvshows"]
+      for each ctype in ordered
+        v = byType[ctype]
+        if v = invalid then continue for
         c = CreateObject("roSGNode", "ContentNode")
         c.addField("collectionType", "string", false)
-        if v <> invalid then
-          if v.id <> invalid then c.id = v.id
-          if ctype = "movies" then
-            c.title = _t("library_movies")
-          else if ctype = "tvshows" then
-            c.title = _t("library_series")
-          else if ctype = "livetv" then
-            c.title = _t("library_live")
-          else if v.name <> invalid then
-            c.title = v.name
-          else
-            c.title = ""
-          end if
-          c.collectionType = ctype
+        if v.id <> invalid then c.id = v.id
+        if ctype = "movies" then
+          c.title = _t("library_movies")
+        else if ctype = "tvshows" then
+          c.title = _t("library_series")
+        else if ctype = "livetv" then
+          c.title = _t("library_live")
+        else if v.name <> invalid then
+          c.title = v.name
         else
           c.title = ""
-          c.collectionType = ""
         end if
+        c.collectionType = ctype
         root.appendChild(c)
       end for
 
@@ -4718,10 +4782,22 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
 
     if kl = "left" then
       if m.browseFocus = "items" then
+        iIdx = _browseListFocusedIndex(m.itemsList)
+        iCols = _browseItemCols()
+        if iIdx > 0 and (iIdx mod iCols) > 0 then
+          ' Let MarkupGrid move inside the row.
+          return false
+        end if
         m.browseFocus = "views"
         applyFocus()
         return true
       else if m.browseFocus = "views" then
+        vIdx = _browseListFocusedIndex(m.viewsList)
+        vCols = _browseViewCols()
+        if vIdx > 0 and (vIdx mod vCols) > 0 then
+          ' Let MarkupGrid move inside the row.
+          return false
+        end if
         m.browseFocus = "hero_logout"
         applyFocus()
         return true
@@ -4734,6 +4810,17 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
 
     if kl = "right" then
       if m.browseFocus = "views" then
+        vIdx = _browseListFocusedIndex(m.viewsList)
+        vCount = _browseListCount(m.viewsList)
+        vCols = _browseViewCols()
+        if vIdx >= 0 and vCount > 0 then
+          col = vIdx mod vCols
+          if col < (vCols - 1) and (vIdx + 1) < vCount then
+            ' Let MarkupGrid move inside the row.
+            return false
+          end if
+        end if
+        if _browseListCount(m.itemsList) <= 0 then return true
         m.browseFocus = "items"
         applyFocus()
         return true
@@ -4747,14 +4834,14 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     if kl = "up" then
       if m.browseFocus = "views" then
         vIdx = _browseListFocusedIndex(m.viewsList)
-        if vIdx <= 0 then
+        if vIdx < _browseViewCols() then
           m.browseFocus = "hero_logout"
           applyFocus()
           return true
         end if
       else if m.browseFocus = "items" then
         iIdx = _browseListFocusedIndex(m.itemsList)
-        if iIdx <= 0 then
+        if iIdx < _browseItemCols() then
           m.browseFocus = "hero_continue"
           applyFocus()
           return true
@@ -4773,6 +4860,20 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         m.browseFocus = "views"
         applyFocus()
         return true
+      else if m.browseFocus = "views" then
+        vIdx = _browseListFocusedIndex(m.viewsList)
+        vCount = _browseListCount(m.viewsList)
+        vCols = _browseViewCols()
+        nextIdx = vIdx + vCols
+        if vIdx >= 0 and nextIdx < vCount then
+          ' Let MarkupGrid move down if there are multiple view rows in the future.
+          return false
+        end if
+        if _browseListCount(m.itemsList) > 0 then
+          m.browseFocus = "items"
+          applyFocus()
+          return true
+        end if
       end if
     end if
 
@@ -5589,6 +5690,10 @@ sub renderShelfItems(raw as String)
   items = ParseJson(raw)
   if type(items) <> "roArray" then items = []
 
+  cfg = loadConfig()
+  posterBase = cfg.apiBase
+  posterToken = cfg.jellyfinToken
+
   ctype = ""
   if m.activeViewCollection <> invalid then ctype = m.activeViewCollection
   if ctype = invalid then ctype = ""
@@ -5628,11 +5733,16 @@ sub renderShelfItems(raw as String)
     c.addField("resumePositionMs", "integer", false)
     c.addField("resumeDurationMs", "integer", false)
     c.addField("resumePercent", "integer", false)
+    c.addField("hdPosterUrl", "string", false)
+    c.addField("posterUrl", "string", false)
     if it <> invalid then
       if it.id <> invalid then c.id = it.id
       c.title = name0
       c.itemType = typ0
       c.path = path0
+      posterUri = _browsePosterUri(c.id, posterBase, posterToken)
+      c.hdPosterUrl = posterUri
+      c.posterUrl = posterUri
       rPos = -1
       if it.positionMs <> invalid then rPos = _sceneIntFromAny(it.positionMs)
       if rPos < 0 and it.position_ms <> invalid then rPos = _sceneIntFromAny(it.position_ms)
@@ -5656,6 +5766,8 @@ sub renderShelfItems(raw as String)
       c.resumePositionMs = 0
       c.resumeDurationMs = 0
       c.resumePercent = 0
+      c.hdPosterUrl = ""
+      c.posterUrl = ""
     end if
     root.appendChild(c)
   end for
