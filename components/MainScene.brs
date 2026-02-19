@@ -3619,12 +3619,12 @@ sub onGatewayTaskStateChanged()
 
       setStatus("ready")
 
-      ' Hero "Continuar" drives the initial shelf.
-      m.activeViewId = "__continue"
-      m.activeViewCollection = "continue"
-      if m.itemsTitle <> invalid then m.itemsTitle.text = _t("continue")
+      ' Keep hero "Continuar" as primary action, but load a rich shelf by default.
+      m.activeViewId = "__top10"
+      m.activeViewCollection = "top10"
+      if m.itemsTitle <> invalid then m.itemsTitle.text = _t("top10")
       m.heroContinueAutoplayPending = false
-      loadShelfForView("__continue")
+      loadShelfForView("__top10")
 
       if root.getChildCount() <= 0 then
         if m.browseEmptyLabel <> invalid then
