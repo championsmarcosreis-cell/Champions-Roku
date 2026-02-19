@@ -2,6 +2,22 @@
 ' Note: On Roku, roUrlTransfer must run on a MAIN or TASK thread (not render).
 
 function httpJson(method as String, url as String, headers = invalid as Object, body = invalid as Object) as Object
+  ' Log only the path (no query) to avoid leaking secrets like api_key/sig.
+  safePath = url
+  if safePath = invalid then safePath = ""
+  safePath = safePath.ToStr()
+  scheme = Instr(1, safePath, "://") ' 1-based; returns 0 when not found
+  if scheme > 0 then
+    slash = Instr(scheme + 3, safePath, "/")
+    if slash > 0 then
+      safePath = Mid(safePath, slash)
+    else
+      safePath = "/"
+    end if
+  end if
+  qpos = Instr(1, safePath, "?")
+  if qpos > 0 then safePath = Left(safePath, qpos - 1)
+
   port = CreateObject("roMessagePort")
   xfer = CreateObject("roUrlTransfer")
   xfer.SetMessagePort(port)
@@ -30,15 +46,18 @@ function httpJson(method as String, url as String, headers = invalid as Object, 
   end if
 
   if started <> true then
+    print "[http] " + method + " " + safePath + " -> start_failed"
     return { ok: false, error: "request_start_failed" }
   end if
 
   msg = wait(30000, port)
   if type(msg) <> "roUrlEvent" then
+    print "[http] " + method + " " + safePath + " -> timeout"
     return { ok: false, error: "timeout" }
   end if
 
   code = msg.GetResponseCode()
+  print "[http] " + method + " " + safePath + " -> " + code.ToStr()
   resp = msg.GetString()
   if resp = invalid then resp = ""
 

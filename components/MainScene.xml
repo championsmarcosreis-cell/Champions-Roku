@@ -64,11 +64,47 @@
       visible="false"
     />
 
-    <!-- Custom overlay shown during playback (OK). Avoids depending on * for settings. -->
+    <!-- Legacy overlay (kept). Player settings are opened via * (OPTIONS). -->
     <Group
       id="playerOverlay"
       visible="false"
     >
+      <Label
+        id="osdSeekLabel"
+        translation="[40, 532]"
+        width="1070"
+        height="28"
+        font="font:SmallSystemFont"
+        color="0xD8B765"
+        visible="false"
+        text=""
+      />
+
+      <Label
+        id="osdTimeLabel"
+        translation="[40, 560]"
+        width="1070"
+        height="28"
+        font="font:SmallSystemFont"
+        color="0xAAB4C2"
+        text=""
+      />
+
+      <Rectangle
+        id="osdBarBg"
+        translation="[40, 595]"
+        width="1070"
+        height="10"
+        color="0x223040"
+      />
+      <Rectangle
+        id="osdBarFill"
+        translation="[40, 595]"
+        width="0"
+        height="10"
+        color="0xD8B765"
+      />
+
       <Label
         id="playerOverlayHint"
         translation="[40, 650]"
@@ -76,10 +112,18 @@
         height="30"
         font="font:SmallSystemFont"
         color="0xAAB4C2"
-        text="OK: Configuracoes do Player    BACK: Voltar"
+        text="OK: confirmar    UP/DOWN: Engrenagem/Barra (VOD)    *: Configuracoes (VOD)    BACK: Fechar"
       />
 
       <!-- Floating settings button (no boxed list). -->
+      <Rectangle
+        id="osdGearFocus"
+        translation="[1138, 586]"
+        width="108"
+        height="108"
+        color="0x33D8B765"
+        visible="false"
+      />
       <Poster
         id="playerOverlayCircle"
         translation="[1144, 592]"

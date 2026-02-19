@@ -8,6 +8,9 @@
 
     <!-- Scrub signals for VOD seek without relying on OK to confirm trickplay. -->
     <field id="scrubEvent" type="string" alwaysNotify="true" />
+
+    <!-- Generic key signals emitted while Video has focus. -->
+    <field id="keyEvent" type="string" alwaysNotify="true" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/ChampionsVideo.brs" />
