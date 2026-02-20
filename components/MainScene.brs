@@ -111,6 +111,9 @@ sub init()
   m.resumeDialogItemId = ""
   m.resumeDialogTitle = ""
   m.resumeDialogPositionMs = 0
+  m.lastHeroContinueMs = 0
+  m.lastBrowseOpenMs = 0
+  m.lastBrowseOpenItemId = ""
 
   cfg0 = loadConfig()
   m.apiBase = cfg0.apiBase
@@ -453,7 +456,7 @@ sub layoutCards()
   y = 390
   if m.loginCard <> invalid then m.loginCard.translation = [x, y]
   if m.homeCard <> invalid then m.homeCard.translation = [x, y]
-  if m.browseCard <> invalid then m.browseCard.translation = [50, 40]
+  if m.browseCard <> invalid then m.browseCard.translation = [0, 0]
   if m.liveCard <> invalid then m.liveCard.translation = [x, 150]
 end sub
 
@@ -1059,7 +1062,10 @@ function _t(key as String) as String
         recent: "Recent"
         recent_prefix: "Recent: "
         continue: "Continue Watching"
-        top10: "Top 10"
+        top10: "Highlights"
+        recent_movies: "Recent Movies"
+        recent_series: "Recent Series"
+        recent_live: "Live Now"
         loading: "Loading..."
         no_items: "No items"
         no_libraries: "No libraries"
@@ -1108,7 +1114,10 @@ function _t(key as String) as String
         recent: "Recentes"
         recent_prefix: "Recentes: "
         continue: "Continuar Assistindo"
-        top10: "Top 10"
+        top10: "Destaques"
+        recent_movies: "Filmes recentes"
+        recent_series: "Series recentes"
+        recent_live: "Ao vivo agora"
         loading: "Carregando..."
         no_items: "Sem itens"
         no_libraries: "Sem bibliotecas"
@@ -1157,7 +1166,10 @@ function _t(key as String) as String
         recent: "Recientes"
         recent_prefix: "Recientes: "
         continue: "Seguir viendo"
-        top10: "Top 10"
+        top10: "Destacados"
+        recent_movies: "Peliculas recientes"
+        recent_series: "Series recientes"
+        recent_live: "En vivo ahora"
         loading: "Cargando..."
         no_items: "Sin elementos"
         no_libraries: "Sin bibliotecas"
@@ -1206,7 +1218,10 @@ function _t(key as String) as String
         recent: "Recenti"
         recent_prefix: "Recenti: "
         continue: "Continua a guardare"
-        top10: "Top 10"
+        top10: "In evidenza"
+        recent_movies: "Film recenti"
+        recent_series: "Serie recenti"
+        recent_live: "In diretta ora"
         loading: "Caricamento..."
         no_items: "Nessun elemento"
         no_libraries: "Nessuna libreria"
@@ -1320,6 +1335,12 @@ end sub
 
 sub _triggerHeroContinue()
   if m.mode <> "browse" then return
+  nowMs = _nowMs()
+  if nowMs - Int(m.lastHeroContinueMs) < 700 then
+    print "hero continue debounce"
+    return
+  end if
+  m.lastHeroContinueMs = nowMs
   m.activeViewId = "__continue"
   m.activeViewCollection = "continue"
   if m.itemsTitle <> invalid then m.itemsTitle.text = _t("continue")
@@ -1344,6 +1365,33 @@ function _browsePosterUri(itemId as String, apiBase as String, jellyfinToken as 
   u = base + "/jellyfin/Items/" + id + "/Images/Primary"
   q = {
     maxWidth: "720"
+    quality: "90"
+  }
+  tok = jellyfinToken
+  if tok = invalid then tok = ""
+  tok = tok.ToStr().Trim()
+  if tok <> "" then
+    q["X-Emby-Token"] = tok
+    q["X-Jellyfin-Token"] = tok
+  end if
+  return appendQuery(u, q)
+end function
+
+function _browseChannelPosterUri(channelId as String, apiBase as String, jellyfinToken as String) as String
+  id = channelId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return ""
+
+  base = apiBase
+  if base = invalid then base = ""
+  base = base.ToStr().Trim()
+  if base = "" then return ""
+  if Right(base, 1) = "/" then base = Left(base, Len(base) - 1)
+
+  u = base + "/jellyfin/LiveTv/Channels/" + id + "/Images/Primary"
+  q = {
+    maxWidth: "600"
     quality: "90"
   }
   tok = jellyfinToken
@@ -3687,6 +3735,64 @@ sub onGatewayTaskStateChanged()
     return
   end if
 
+  if job = "live_preview" then
+    if m.gatewayTask.ok = true then
+      raw = m.gatewayTask.resultJson
+      items = ParseJson(raw)
+      if type(items) <> "roArray" then items = []
+
+      cfgPrev = loadConfig()
+      basePrev = cfgPrev.apiBase
+      tokenPrev = cfgPrev.jellyfinToken
+
+      root = CreateObject("roSGNode", "ContentNode")
+      for each ch in items
+        c = CreateObject("roSGNode", "ContentNode")
+        c.addField("itemType", "string", false)
+        c.addField("path", "string", false)
+        c.addField("rank", "integer", false)
+        c.addField("hdPosterUrl", "string", false)
+        c.addField("posterUrl", "string", false)
+        if ch <> invalid then
+          if ch.id <> invalid then c.id = ch.id
+          if ch.name <> invalid then c.title = ch.name else c.title = ""
+          c.itemType = "LiveTVChannel"
+          if ch.path <> invalid then c.path = ch.path else c.path = ""
+          poster = _browseChannelPosterUri(c.id, basePrev, tokenPrev)
+          c.hdPosterUrl = poster
+          c.posterUrl = poster
+        else
+          c.title = ""
+          c.itemType = "LiveTVChannel"
+          c.path = ""
+          c.hdPosterUrl = ""
+          c.posterUrl = ""
+        end if
+        c.rank = 0
+        root.appendChild(c)
+      end for
+
+      if m.activeViewCollection = "livetv" then
+        if m.itemsList <> invalid then m.itemsList.content = root
+        if m.browseEmptyLabel <> invalid then
+          m.browseEmptyLabel.text = _t("no_channels")
+          m.browseEmptyLabel.visible = (root.getChildCount() = 0)
+        end if
+      end if
+
+      setStatus("ready")
+    else
+      err = m.gatewayTask.error
+      if err = invalid or err = "" then err = "unknown"
+      setStatus("live preview failed: " + err)
+      if m.activeViewCollection = "livetv" and m.browseEmptyLabel <> invalid then
+        m.browseEmptyLabel.text = _t("channels_failed")
+        m.browseEmptyLabel.visible = true
+      end if
+    end if
+    return
+  end if
+
   if job = "channels" then
     if m.gatewayTask.ok = true then
       raw = m.gatewayTask.resultJson
@@ -5515,6 +5621,12 @@ sub onViewFocused()
       m.itemsTitle.text = _t("continue")
     else if ct = "top10" then
       m.itemsTitle.text = _t("top10")
+    else if ct = "movies" then
+      m.itemsTitle.text = _t("recent_movies")
+    else if ct = "tvshows" then
+      m.itemsTitle.text = _t("recent_series")
+    else if ct = "livetv" then
+      m.itemsTitle.text = _t("recent_live")
     else if t = "" then
       m.itemsTitle.text = _t("recent")
     else
@@ -5523,11 +5635,7 @@ sub onViewFocused()
   end if
 
   if ctype = "livetv" then
-    if m.itemsList <> invalid then m.itemsList.content = CreateObject("roSGNode", "ContentNode")
-    if m.browseEmptyLabel <> invalid then
-      m.browseEmptyLabel.text = _t("press_ok_live")
-      m.browseEmptyLabel.visible = true
-    end if
+    loadLivePreview()
     return
   end if
 
@@ -5557,7 +5665,8 @@ sub onViewSelected()
   if ctype = invalid then ctype = ""
 
   if ctype = "livetv" then
-    enterLive()
+    m.browseFocus = "items"
+    applyFocus()
     return
   end if
 
@@ -5684,6 +5793,38 @@ sub loadShelfForView(viewId as String)
   m.gatewayTask.control = "run"
 end sub
 
+sub loadLivePreview()
+  if m.itemsList = invalid then return
+  if m.gatewayTask = invalid then return
+
+  if m.pendingJob <> "" then
+    if m.pendingJob = "live_preview" then return
+    return
+  end if
+
+  cfg = loadConfig()
+  if cfg.apiBase = "" or cfg.appToken = "" or cfg.jellyfinToken = "" then
+    if m.browseEmptyLabel <> invalid then
+      m.browseEmptyLabel.text = _t("missing_config")
+      m.browseEmptyLabel.visible = true
+    end if
+    return
+  end if
+
+  if m.browseEmptyLabel <> invalid then
+    m.browseEmptyLabel.text = _t("loading_channels")
+    m.browseEmptyLabel.visible = true
+  end if
+
+  m.pendingJob = "live_preview"
+  m.gatewayTask.kind = "channels"
+  m.gatewayTask.apiBase = cfg.apiBase
+  m.gatewayTask.appToken = cfg.appToken
+  m.gatewayTask.jellyfinToken = cfg.jellyfinToken
+  m.gatewayTask.userId = cfg.userId
+  m.gatewayTask.control = "run"
+end sub
+
 sub renderShelfItems(raw as String)
   if m.itemsList = invalid then return
 
@@ -5701,6 +5842,7 @@ sub renderShelfItems(raw as String)
   isTop10 = (ctype = "top10")
 
   root = CreateObject("roSGNode", "ContentNode")
+  rank = 0
   for each it in items
      name0 = ""
      typ0 = ""
@@ -5733,6 +5875,7 @@ sub renderShelfItems(raw as String)
     c.addField("resumePositionMs", "integer", false)
     c.addField("resumeDurationMs", "integer", false)
     c.addField("resumePercent", "integer", false)
+    c.addField("rank", "integer", false)
     c.addField("hdPosterUrl", "string", false)
     c.addField("posterUrl", "string", false)
     if it <> invalid then
@@ -5759,6 +5902,12 @@ sub renderShelfItems(raw as String)
       if it.percent <> invalid then rPct = _sceneIntFromAny(it.percent)
       if rPct < 0 then rPct = 0
       c.resumePercent = rPct
+      if isTop10 then
+        rank = rank + 1
+        c.rank = rank
+      else
+        c.rank = 0
+      end if
     else
       c.title = ""
       c.itemType = ""
@@ -5766,6 +5915,7 @@ sub renderShelfItems(raw as String)
       c.resumePositionMs = 0
       c.resumeDurationMs = 0
       c.resumePercent = 0
+      c.rank = 0
       c.hdPosterUrl = ""
       c.posterUrl = ""
     end if
@@ -5807,14 +5957,39 @@ end sub
 
 sub _playBrowseItemNode(it as Object)
   if it = invalid then return
+  itemId = ""
+  if it.id <> invalid then itemId = it.id
+  if itemId = invalid then itemId = ""
+  itemId = itemId.ToStr().Trim()
+
+  nowMs = _nowMs()
+  if itemId <> "" then
+    if m.lastBrowseOpenItemId = itemId and (nowMs - Int(m.lastBrowseOpenMs)) < 1200 then
+      print "browse item debounce id=" + itemId
+      return
+    end if
+    m.lastBrowseOpenItemId = itemId
+    m.lastBrowseOpenMs = nowMs
+  end if
 
   typ = ""
   if it.hasField("itemType") then typ = it.itemType
   if typ = invalid then typ = ""
   typ = typ.Trim()
+  typL = LCase(typ)
+
+  if typL = "livetvchannel" or typL = "livetv" then
+    p = ""
+    if it.hasField("path") then p = it.path
+    if p = invalid then p = ""
+    p = p.ToStr().Trim()
+    if p = "" then p = "/hls/master.m3u8"
+    signAndPlay(p, it.title)
+    return
+  end if
 
   ' TODO: Implement series -> resolve next episode; for now, show a clear message.
-  if LCase(typ) = "series" then
+  if typL = "series" then
     if m.pendingDialog <> invalid then return
     dlg = CreateObject("roSGNode", "Dialog")
     dlg.title = it.title

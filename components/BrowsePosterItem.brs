@@ -5,6 +5,8 @@ sub init()
   m.meta = m.top.findNode("meta")
   m.progressBg = m.top.findNode("progressBg")
   m.progressFill = m.top.findNode("progressFill")
+  m.rankBadgeBg = m.top.findNode("rankBadgeBg")
+  m.rankBadgeText = m.top.findNode("rankBadgeText")
 end sub
 
 sub onItemContentChanged()
@@ -15,6 +17,8 @@ sub onItemContentChanged()
     if m.meta <> invalid then m.meta.text = ""
     if m.progressBg <> invalid then m.progressBg.visible = false
     if m.progressFill <> invalid then m.progressFill.visible = false
+    if m.rankBadgeBg <> invalid then m.rankBadgeBg.visible = false
+    if m.rankBadgeText <> invalid then m.rankBadgeText.visible = false
     return
   end if
 
@@ -49,6 +53,19 @@ sub onItemContentChanged()
     if pct > 0 then m.progressFill.width = Int(3.4 * pct)
   end if
 
+  rank = 0
+  if c.rank <> invalid then rank = Int(Val(c.rank.ToStr()))
+  if rank > 0 and rank <= 3 then
+    if m.rankBadgeBg <> invalid then m.rankBadgeBg.visible = true
+    if m.rankBadgeText <> invalid then
+      m.rankBadgeText.visible = true
+      m.rankBadgeText.text = "TOP " + rank.ToStr()
+    end if
+  else
+    if m.rankBadgeBg <> invalid then m.rankBadgeBg.visible = false
+    if m.rankBadgeText <> invalid then m.rankBadgeText.visible = false
+  end if
+
   applyStyle()
 end sub
 
@@ -58,18 +75,26 @@ end sub
 
 sub applyStyle()
   focused = (m.top.itemHasFocus = true)
-  if m.cardBg <> invalid then
-    if focused then
-      m.cardBg.color = "0x2A3347"
-    else
-      m.cardBg.color = "0x132035"
-    end if
-  end if
+  if m.cardBg <> invalid then m.cardBg.uri = "pkg:/images/card.png"
   if m.title <> invalid then
     if focused then
       m.title.color = "0xFFFFFF"
     else
       m.title.color = "0xE6EBF3"
+    end if
+  end if
+  if m.rankBadgeBg <> invalid and m.rankBadgeBg.visible = true then
+    if focused then
+      m.rankBadgeBg.uri = "pkg:/images/button_focus.png"
+    else
+      m.rankBadgeBg.uri = "pkg:/images/button_normal.png"
+    end if
+  end if
+  if m.rankBadgeText <> invalid and m.rankBadgeText.visible = true then
+    if focused then
+      m.rankBadgeText.color = "0x0B0F16"
+    else
+      m.rankBadgeText.color = "0x0B0F16"
     end if
   end if
 end sub

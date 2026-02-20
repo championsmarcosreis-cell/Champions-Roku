@@ -1,15 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component name="BrowseCard" extends="Group">
   <children>
-    <!-- Main content layout (post-login home) -->
-    <Poster
-      id="cardBg"
-      translation="[0, 0]"
-      width="1180"
-      height="640"
-      uri="pkg:/images/card.png"
-    />
-
     <Poster
       id="heroPromptBg"
       translation="[30, 22]"
@@ -101,15 +92,17 @@
       itemSize="[180, 52]"
       numColumns="3"
       numRows="1"
+      drawFocusFeedback="false"
       itemComponentName="BrowseLibraryItem"
     />
 
     <MarkupGrid
       id="itemsList"
       translation="[30, 224]"
-      itemSize="[368, 182]"
+      itemSize="[368, 196]"
       numColumns="3"
       numRows="2"
+      drawFocusFeedback="false"
       itemComponentName="BrowsePosterItem"
     />
 
