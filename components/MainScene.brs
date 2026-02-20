@@ -71,6 +71,7 @@ sub init()
   m.seriesDetailFocus = "header" ' back | header | seasons | episodes | cast
   m.seriesDetailMode = "series" ' series | episode
   m.seriesDetailEpisode = {}
+  m.seriesDetailIsSeries = true
   m.seriesDetailSeasonIndex = -1
   m.seriesDetailData = {}
   m.seriesDetailSeasons = []
@@ -78,21 +79,25 @@ sub init()
   m.seriesDetailCast = []
   m.seriesDetailCastCount = 0
   m.seriesDetailHasTrailer = false
+  m.seriesDetailTrailerUrl = ""
+  m.seriesDetailTrailerId = ""
+  m.trailerEnabled = false
   m.seriesDetailHeroUri = ""
   m.seriesDetailStatus = ""
   m.seriesDetailStatusItemId = ""
   m.seriesDetailActionFocus = 0
   m.seriesDetailScrollY = 0
-  m.seriesDetailContentHeight = 1700
+  m.seriesDetailContentHeight = 1840
   m.seriesDetailRowHeight = 200
-  m.seriesDetailYSeasons = 920
-  m.seriesDetailYEpisodes = 1160
-  m.seriesDetailYCast = 1400
+  m.seriesDetailYSeasons = 1010
+  m.seriesDetailYEpisodes = 1250
+  m.seriesDetailYCast = 1510
   m.pendingResumeProbeItemId = ""
   m.pendingResumeProbeTitle = ""
   m.pendingResumeProbeQueued = false
   m.pendingResumeProbeQueuedItemId = ""
   m.pendingResumeProbeQueuedTitle = ""
+  m.trailerLaunchInFlight = false
   m.pendingShelfViewId = ""
   m.queuedShelfViewId = ""
   m.shelfCache = {}
@@ -110,6 +115,8 @@ sub init()
   m.playAttemptId = ""
   m.playAttemptSignStarted = false
   m.pendingPlayAttemptId = ""
+  m.pendingSignAttemptId = ""
+  m.playbackStarting = false
   m.shelfShortTtlMs = 60000
   m.settingsOpen = false
   m.overlayOpen = false
@@ -182,7 +189,7 @@ sub init()
   if cfg0.appToken <> invalid then appTokenLen = Len(cfg0.appToken)
   jellyfinLen = 0
   if cfg0.jellyfinToken <> invalid then jellyfinLen = Len(cfg0.jellyfinToken)
-  print "MainScene init apiBase=" + m.apiBase + " appTokenLen=" + appTokenLen.ToStr() + " jellyfinTokenLen=" + jellyfinLen.ToStr() + " devAutoplay=" + m.devAutoplay + " uiLang=" + m.uiLang + " metaLang=" + m.metaLang + " build=2026-02-20b"
+  print "MainScene init apiBase=" + m.apiBase + " appTokenLen=" + appTokenLen.ToStr() + " jellyfinTokenLen=" + jellyfinLen.ToStr() + " devAutoplay=" + m.devAutoplay + " uiLang=" + m.uiLang + " metaLang=" + m.metaLang + " build=2026-02-20q"
 
   if cfg0.jellyfinToken <> invalid and cfg0.jellyfinToken <> "" then
     m.startupMode = "browse"
@@ -1263,7 +1270,7 @@ function _t(key as String) as String
         hint_app_token: "Press * to configure APP_TOKEN"
         vod_checking: "vod: checking availability..."
         vod_processing: "vod: processing"
-        vod_processing_msg: "Processing: this content is not in R2 yet."
+        vod_processing_msg: "We are processing this content. It will be available soon."
         vod_unavailable: "vod: unavailable"
         vod_unavailable_msg: "Content unavailable."
         series_not_impl: "Series is not implemented on Roku yet."
@@ -1290,6 +1297,8 @@ function _t(key as String) as String
         detail_trailer: "Trailer"
         detail_processing: "Processing"
         detail_play: "Play"
+        detail_series: "Series"
+        detail_movie: "Movie"
         detail_episode: "Episode"
         detail_runtime: "Runtime:"
         detail_synopsis: "Synopsis"
@@ -1334,7 +1343,7 @@ function _t(key as String) as String
         hint_app_token: "Pressione * para configurar APP_TOKEN"
         vod_checking: "vod: verificando disponibilidade..."
         vod_processing: "vod: processando"
-        vod_processing_msg: "Processando: este conteudo ainda nao esta no R2."
+        vod_processing_msg: "Estamos processando este conteudo. Em breve estara disponivel."
         vod_unavailable: "vod: indisponivel"
         vod_unavailable_msg: "Conteudo indisponivel."
         series_not_impl: "Series ainda nao esta implementado no Roku."
@@ -1361,6 +1370,8 @@ function _t(key as String) as String
         detail_trailer: "Trailer"
         detail_processing: "Processando"
         detail_play: "Assistir"
+        detail_series: "Serie"
+        detail_movie: "Filme"
         detail_episode: "Episodio"
         detail_runtime: "Runtime:"
         detail_synopsis: "Sinopse"
@@ -1405,7 +1416,7 @@ function _t(key as String) as String
         hint_app_token: "Pulsa * para configurar APP_TOKEN"
         vod_checking: "vod: comprobando disponibilidad..."
         vod_processing: "vod: procesando"
-        vod_processing_msg: "Procesando: este contenido aun no esta en R2."
+        vod_processing_msg: "Estamos procesando este contenido. Estara disponible pronto."
         vod_unavailable: "vod: no disponible"
         vod_unavailable_msg: "Contenido no disponible."
         series_not_impl: "Series aun no esta implementado en Roku."
@@ -1432,6 +1443,8 @@ function _t(key as String) as String
         detail_trailer: "Trailer"
         detail_processing: "Procesando"
         detail_play: "Reproducir"
+        detail_series: "Serie"
+        detail_movie: "Película"
         detail_episode: "Episodio"
         detail_runtime: "Runtime:"
         detail_synopsis: "Sinopsis"
@@ -1476,7 +1489,7 @@ function _t(key as String) as String
         hint_app_token: "Premi * per configurare APP_TOKEN"
         vod_checking: "vod: verifica disponibilita..."
         vod_processing: "vod: in elaborazione"
-        vod_processing_msg: "In elaborazione: questo contenuto non e ancora su R2."
+        vod_processing_msg: "Stiamo elaborando questo contenuto. Sara disponibile a breve."
         vod_unavailable: "vod: non disponibile"
         vod_unavailable_msg: "Contenuto non disponibile."
         series_not_impl: "Serie non ancora implementate su Roku."
@@ -1503,6 +1516,8 @@ function _t(key as String) as String
         detail_trailer: "Trailer"
         detail_processing: "In elaborazione"
         detail_play: "Guarda"
+        detail_series: "Serie"
+        detail_movie: "Film"
         detail_episode: "Episodio"
         detail_runtime: "Runtime:"
         detail_synopsis: "Sinossi"
@@ -1729,6 +1744,11 @@ end sub
 
 sub _runDeferredBrowseActions()
   if _hasDeferredBrowseActions() <> true then return
+
+  if m.playbackStarting = true or (m.player <> invalid and m.player.visible = true) then
+    if m.deferredBrowseTimer <> invalid then m.deferredBrowseTimer.control = "start"
+    return
+  end if
 
   if m.pendingJob <> "" then
     if m.deferredBrowseTimer <> invalid then m.deferredBrowseTimer.control = "start"
@@ -1982,9 +2002,9 @@ sub _setDetailChip(chip as Object, bg as Object, label as Object, text as String
   chip.visible = true
   if label <> invalid then label.text = t
 
-  w = 24 + (Len(t) * 10)
-  if w < 60 then w = 60
-  if w > 180 then w = 180
+  w = 20 + (Len(t) * 8)
+  if w < 50 then w = 50
+  if w > 160 then w = 160
   if bg <> invalid then bg.width = w
   if label <> invalid then label.width = w
 end sub
@@ -2024,7 +2044,7 @@ sub _applySeriesDetailStatus(status as String)
   m.seriesDetailStatus = s
 
   isProcessing = (s = "PROCESSING")
-  txt = ""
+  txt = _t("detail_play")
   if isProcessing then txt = _t("detail_processing")
 
   if m.seriesDetailChipStatus <> invalid then
@@ -2034,17 +2054,12 @@ sub _applySeriesDetailStatus(status as String)
   if m.seriesDetailChipStatusText <> invalid then m.seriesDetailChipStatusText.text = ""
   _layoutDetailChips()
 
-  if m.seriesDetailActionStatusBg <> invalid then m.seriesDetailActionStatusBg.visible = isProcessing
+  if m.seriesDetailActionStatusBg <> invalid then m.seriesDetailActionStatusBg.visible = true
   if m.seriesDetailActionStatusText <> invalid then
-    m.seriesDetailActionStatusText.visible = isProcessing
-    if isProcessing then
-      m.seriesDetailActionStatusText.text = txt
-    else
-      m.seriesDetailActionStatusText.text = ""
-    end if
+    m.seriesDetailActionStatusText.visible = true
+    m.seriesDetailActionStatusText.text = txt
   end if
 
-  if isProcessing = true then m.seriesDetailActionFocus = 0
   _applySeriesDetailActionFocus()
 end sub
 
@@ -2056,31 +2071,66 @@ sub _applySeriesDetailActionFocus()
   if m.seriesDetailActionStatusBg <> invalid and m.seriesDetailActionStatusBg.visible = true then
     statusVisible = true
   end if
-  trailerVisible = false
-  if m.seriesDetailActionTrailerBg <> invalid and m.seriesDetailActionTrailerBg.visible = true then
-    trailerVisible = true
-  end if
+  trailerVisible = (m.seriesDetailHasTrailer = true)
 
   if headerFocused then
-    if statusVisible and trailerVisible then
-      if m.seriesDetailActionFocus <> 0 and m.seriesDetailActionFocus <> 1 then
-        m.seriesDetailActionFocus = 0
-      end if
-    else if statusVisible then
-      m.seriesDetailActionFocus = 0
-    else if trailerVisible then
-      m.seriesDetailActionFocus = 1
-    else
+    if trailerVisible <> true then
       m.seriesDetailActionFocus = 0
     end if
   end if
 
   if m.seriesDetailActionStatusFocus <> invalid then
-    m.seriesDetailActionStatusFocus.visible = (headerFocused and statusVisible and m.seriesDetailActionFocus = 0)
+    m.seriesDetailActionStatusFocus.visible = (headerFocused and m.seriesDetailActionFocus = 0)
   end if
   if m.seriesDetailActionTrailerFocus <> invalid then
     m.seriesDetailActionTrailerFocus.visible = (headerFocused and trailerVisible and m.seriesDetailActionFocus = 1)
   end if
+end sub
+
+sub _playSeriesDetailPrimary()
+  if m.seriesDetailOpen <> true then return
+
+  modeVal = m.seriesDetailMode
+  if modeVal = invalid then modeVal = ""
+  isEpisodeMode = (LCase(modeVal.ToStr().Trim()) = "episode")
+
+  data = m.seriesDetailData
+  if type(data) <> "roAssociativeArray" then data = {}
+  series = data.series
+  if type(series) <> "roAssociativeArray" then series = {}
+
+  id = ""
+  title = ""
+
+  if isEpisodeMode then
+    if m.seriesDetailStatusItemId <> invalid then id = m.seriesDetailStatusItemId
+    if id = invalid or id = "" then
+      ep = m.seriesDetailEpisode
+      if type(ep) <> "roAssociativeArray" then ep = {}
+      if ep.id <> invalid then id = ep.id
+      if id = "" and ep.Id <> invalid then id = ep.Id
+    end if
+    if m.seriesDetailTitle <> invalid and m.seriesDetailTitle.text <> invalid then title = m.seriesDetailTitle.text
+  else if m.seriesDetailIsSeries = true then
+    if data.firstEpisodeId <> invalid then id = data.firstEpisodeId
+    if data.firstEpisodeTitle <> invalid then title = data.firstEpisodeTitle
+  else
+    if series.id <> invalid then id = series.id
+    if id = "" and series.Id <> invalid then id = series.Id
+    if series.name <> invalid then title = series.name
+  end if
+
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return
+
+  if title = invalid then title = ""
+  title = title.ToStr().Trim()
+  if title = "" and m.seriesDetailTitle <> invalid and m.seriesDetailTitle.text <> invalid then
+    title = m.seriesDetailTitle.text.ToStr().Trim()
+  end if
+
+  requestResumeProbe(id, title)
 end sub
 
 sub _applySeriesDetailBackFocus()
@@ -4146,6 +4196,7 @@ sub _beginVodPlay(itemId as String, title as String, resumeMs as Integer)
   startMs = resumeMs
   if startMs < 0 then startMs = 0
   m.nextStartResumeMs = startMs
+  m.playbackStarting = true
 
   m.playAttemptId = _nowMs().ToStr()
   m.playAttemptSignStarted = false
@@ -4188,12 +4239,19 @@ sub requestVodStatus(vodKey as String)
     return
   end if
 
+  normId = normalizeJellyfinId(k)
+  if normId = invalid then normId = ""
+  normId = normId.Trim()
+  if normId = "" then normId = k
+
+  base = _vodR2PlaybackBase(cfg.apiBase)
+
   setStatus(_t("vod_checking"))
   m.pendingJob = "vod_status"
   m.gatewayTask.kind = "vod_status"
-  m.gatewayTask.apiBase = cfg.apiBase
+  m.gatewayTask.apiBase = base
   m.gatewayTask.appToken = cfg.appToken
-  m.gatewayTask.itemId = k
+  m.gatewayTask.itemId = normId
   m.gatewayTask.control = "run"
 end sub
 
@@ -4389,6 +4447,7 @@ sub onGatewayTaskStateChanged()
         setStatus("ready")
         playVodR2Now(id, t)
       else if st = "PROCESSING" then
+        m.playbackStarting = false
         setStatus(_t("vod_processing"))
         if m.pendingDialog = invalid then
           dlg = CreateObject("roSGNode", "Dialog")
@@ -4401,6 +4460,7 @@ sub onGatewayTaskStateChanged()
           dlg.setFocus(true)
         end if
       else
+        m.playbackStarting = false
         setStatus(_t("vod_unavailable"))
         if m.pendingDialog = invalid then
           dlg2 = CreateObject("roSGNode", "Dialog")
@@ -4416,6 +4476,7 @@ sub onGatewayTaskStateChanged()
     else
       err = m.gatewayTask.error
       if err = invalid or err = "" then err = "unknown"
+      m.playbackStarting = false
       setStatus("vod status failed: " + err)
     end if
 
@@ -4535,16 +4596,24 @@ sub onGatewayTaskStateChanged()
 
     _startNextHomeShelfRequest()
     if m.pendingLibraryLoad = true and m.pendingJob = "" then
-      m.pendingLibraryLoad = false
-      _loadBrowseLibraryItems()
+      if m.playbackStarting = true or (m.player <> invalid and m.player.visible = true) then
+        _scheduleDeferredBrowseActions()
+      else
+        m.pendingLibraryLoad = false
+        _loadBrowseLibraryItems()
+      end if
     end if
     if m.pendingSeriesDetailQueued = true and m.pendingJob = "" then
-      qId = m.pendingSeriesDetailQueuedItemId
-      qTitle = m.pendingSeriesDetailQueuedTitle
-      m.pendingSeriesDetailQueued = false
-      m.pendingSeriesDetailQueuedItemId = ""
-      m.pendingSeriesDetailQueuedTitle = ""
-      requestSeriesDetails(qId, qTitle)
+      if m.playbackStarting = true or (m.player <> invalid and m.player.visible = true) then
+        _scheduleDeferredBrowseActions()
+      else
+        qId = m.pendingSeriesDetailQueuedItemId
+        qTitle = m.pendingSeriesDetailQueuedTitle
+        m.pendingSeriesDetailQueued = false
+        m.pendingSeriesDetailQueuedItemId = ""
+        m.pendingSeriesDetailQueuedTitle = ""
+        requestSeriesDetails(qId, qTitle)
+      end if
     end if
     return
   end if
@@ -5199,6 +5268,18 @@ sub onGatewayTaskStateChanged()
   end if
 
   if job = "sign" then
+    expectedAttempt = m.pendingSignAttemptId
+    if expectedAttempt = invalid then expectedAttempt = ""
+    expectedAttempt = expectedAttempt.ToStr().Trim()
+    currentAttempt = m.pendingPlayAttemptId
+    if currentAttempt = invalid then currentAttempt = ""
+    currentAttempt = currentAttempt.ToStr().Trim()
+    if expectedAttempt <> "" and currentAttempt <> "" and expectedAttempt <> currentAttempt then
+      print "sign stale attempt expected=" + expectedAttempt + " current=" + currentAttempt
+      return
+    end if
+    m.pendingSignAttemptId = ""
+
     if m.gatewayTask.ok = true then
       cfg = loadConfig()
       kind = m.pendingPlaybackKind
@@ -5278,6 +5359,7 @@ sub onGatewayTaskStateChanged()
       err = m.gatewayTask.error
       if err = invalid or err = "" then err = "unknown"
       m.liveResignPending = false
+      m.playbackStarting = false
       setStatus("sign failed: " + err)
     end if
     return
@@ -5289,6 +5371,8 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
     setStatus("player: missing node")
     return
   end if
+
+  _setUiVisibleForPlayback(true)
 
   resumeMs = Int(m.nextStartResumeMs)
   if resumeMs < 0 then resumeMs = 0
@@ -5453,6 +5537,7 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
   m.player.content = c
   m.player.visible = true
   m.player.control = "play"
+  m.playbackStarting = false
 
   m.uiState = "PLAYING"
   m.osdFocus = "TIMELINE"
@@ -5547,6 +5632,9 @@ sub stopPlaybackAndReturn(reason as String)
   m.player.control = "stop"
   m.player.visible = false
   m.player.content = invalid
+
+  m.playbackStarting = false
+  _setUiVisibleForPlayback(false)
 
   m.playbackKind = ""
   m.playbackIsLive = false
@@ -5887,20 +5975,22 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     modeVal = m.seriesDetailMode
     if modeVal = invalid then modeVal = ""
     isEpisodeMode = (LCase(modeVal.ToStr().Trim()) = "episode")
+    isSeries = (m.seriesDetailIsSeries = true)
+    isSimple = (isEpisodeMode or isSeries <> true)
     if kl = "back" then
       _closeSeriesDetail()
       return true
     end if
     if kl = "up" then
       if m.seriesDetailFocus = "cast" then
-        if isEpisodeMode then
+        if isSimple then
           m.seriesDetailFocus = "header"
         else
           m.seriesDetailFocus = "episodes"
         end if
         applyFocus()
       else if m.seriesDetailFocus = "episodes" then
-        if isEpisodeMode <> true then
+        if isSimple <> true then
           m.seriesDetailFocus = "seasons"
           applyFocus()
         end if
@@ -5918,7 +6008,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         m.seriesDetailFocus = "header"
         applyFocus()
       else if m.seriesDetailFocus = "header" then
-        if isEpisodeMode then
+        if isSimple then
           if _browseListCount(m.seriesDetailCastList) > 0 then
             m.seriesDetailFocus = "cast"
             applyFocus()
@@ -5934,12 +6024,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
           applyFocus()
         end if
       else if m.seriesDetailFocus = "seasons" then
-        if isEpisodeMode <> true then
+        if isSimple <> true then
           m.seriesDetailFocus = "episodes"
           applyFocus()
         end if
       else if m.seriesDetailFocus = "episodes" then
-        if isEpisodeMode <> true then
+        if isSimple <> true then
           if _browseListCount(m.seriesDetailCastList) > 0 then
             m.seriesDetailFocus = "cast"
             applyFocus()
@@ -5950,24 +6040,15 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
     if kl = "left" or kl = "right" then
       if m.seriesDetailFocus = "header" then
-        trailerVisible = false
-        if m.seriesDetailActionTrailerBg <> invalid and m.seriesDetailActionTrailerBg.visible = true then
-          trailerVisible = true
-        end if
-        if kl = "left" then
-          if m.seriesDetailActionStatusBg <> invalid and m.seriesDetailActionStatusBg.visible = true then
-            m.seriesDetailActionFocus = 0
-          else if trailerVisible then
-            m.seriesDetailActionFocus = 1
-          else
-            m.seriesDetailActionFocus = 0
+        trailerVisible = (m.seriesDetailHasTrailer = true)
+        if trailerVisible then
+          if kl = "left" then
+            if m.seriesDetailActionFocus = 1 then m.seriesDetailActionFocus = 0
+          else if kl = "right" then
+            if m.seriesDetailActionFocus = 0 then m.seriesDetailActionFocus = 1
           end if
         else
-          if trailerVisible then
-            m.seriesDetailActionFocus = 1
-          else
-            m.seriesDetailActionFocus = 0
-          end if
+          m.seriesDetailActionFocus = 0
         end if
         _applySeriesDetailActionFocus()
         return true
@@ -5978,6 +6059,11 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         _closeSeriesDetail()
         return true
       else if m.seriesDetailFocus = "header" then
+        if m.seriesDetailActionFocus = 1 and m.seriesDetailHasTrailer = true then
+          _openTrailerFromSeries()
+          return true
+        end if
+        _playSeriesDetailPrimary()
         return true
       end if
     end if
@@ -6303,6 +6389,11 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
 end function
 
 sub applyFocus()
+  if m.player <> invalid and m.player.visible = true then
+    _setPlaybackInputFocus()
+    return
+  end if
+
   if m.seriesDetailOpen = true then
     if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = true
     _applySeriesDetailBackFocus()
@@ -6313,7 +6404,8 @@ sub applyFocus()
     modeVal = m.seriesDetailMode
     if modeVal = invalid then modeVal = ""
     isEpisodeMode = (LCase(modeVal.ToStr().Trim()) = "episode")
-    if isEpisodeMode and (focusTarget = "seasons" or focusTarget = "episodes") then
+    isSeries = (m.seriesDetailIsSeries = true)
+    if (isEpisodeMode or isSeries <> true) and (focusTarget = "seasons" or focusTarget = "episodes") then
       focusTarget = "header"
     end if
     if focusTarget = "back" then
@@ -6920,6 +7012,46 @@ sub onViewFocused()
 
   m.activeViewId = viewId
   m.activeViewCollection = ctype
+end sub
+
+sub _setUiVisibleForPlayback(active as Boolean)
+  if active = true then
+    if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = false
+    if m.loginCard <> invalid then m.loginCard.visible = false
+    if m.homeCard <> invalid then m.homeCard.visible = false
+    if m.browseCard <> invalid then m.browseCard.visible = false
+    if m.liveCard <> invalid then m.liveCard.visible = false
+    if m.hintLabel <> invalid then m.hintLabel.visible = false
+    return
+  end if
+
+  if m.mode = "login" then
+    if m.loginCard <> invalid then m.loginCard.visible = true
+    if m.homeCard <> invalid then m.homeCard.visible = false
+    if m.browseCard <> invalid then m.browseCard.visible = false
+    if m.liveCard <> invalid then m.liveCard.visible = false
+  else if m.mode = "home" then
+    if m.loginCard <> invalid then m.loginCard.visible = false
+    if m.homeCard <> invalid then m.homeCard.visible = true
+    if m.browseCard <> invalid then m.browseCard.visible = false
+    if m.liveCard <> invalid then m.liveCard.visible = false
+  else if m.mode = "live" then
+    if m.loginCard <> invalid then m.loginCard.visible = false
+    if m.homeCard <> invalid then m.homeCard.visible = false
+    if m.browseCard <> invalid then m.browseCard.visible = false
+    if m.liveCard <> invalid then m.liveCard.visible = true
+  else if m.mode = "browse" then
+    if m.loginCard <> invalid then m.loginCard.visible = false
+    if m.homeCard <> invalid then m.homeCard.visible = false
+    if m.liveCard <> invalid then m.liveCard.visible = false
+    if m.seriesDetailOpen = true then
+      if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = true
+      if m.browseCard <> invalid then m.browseCard.visible = false
+    else
+      if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = false
+      if m.browseCard <> invalid then m.browseCard.visible = true
+    end if
+  end if
 end sub
 
 sub onViewSelected()
@@ -7608,7 +7740,7 @@ sub _openBrowseLibrary(viewId as String, collectionType as String, title as Stri
 
   _setBrowseLibraryVisible(true)
   _refreshBrowseLibraryHeader()
-  m.browseFocus = "library_search"
+  m.browseFocus = "library_items"
   applyFocus()
 
   if m.pendingJob = "home_shelf" then m.homeShelfQueue = []
@@ -8037,6 +8169,108 @@ function _hasTrailerFromItem(item as Object) as Boolean
   return true
 end function
 
+function _pickTrailerUrlFromArray(arr as Object) as String
+  if type(arr) <> "roArray" then return ""
+  best = ""
+  yt = ""
+  for each t in arr
+    if t = invalid then continue for
+    u = ""
+    if t.Url <> invalid then u = t.Url.ToStr().Trim()
+    if u = "" and t.url <> invalid then u = t.url.ToStr().Trim()
+    if u = "" then
+      continue for
+    end if
+    low = LCase(u)
+    if Instr(1, low, "youtube") > 0 or Instr(1, low, "youtu.be") > 0 then
+      if yt = "" then yt = u
+    else
+      return u
+    end if
+    if best = "" then best = u
+  end for
+  if yt <> "" then return yt
+  return best
+end function
+
+function _resolveTrailerUrlFromSeries(series as Object) as String
+  if type(series) <> "roAssociativeArray" then return ""
+
+  u = ""
+  if series.trailerUrl <> invalid then u = series.trailerUrl.ToStr().Trim()
+  if u = "" and series.TrailerUrl <> invalid then u = series.TrailerUrl.ToStr().Trim()
+  if u <> "" then return u
+
+  u = _pickTrailerUrlFromArray(series.remoteTrailers)
+  if u <> "" then return u
+  u = _pickTrailerUrlFromArray(series.RemoteTrailers)
+  if u <> "" then return u
+
+  u = _pickTrailerUrlFromArray(series.trailers)
+  if u <> "" then return u
+  u = _pickTrailerUrlFromArray(series.Trailers)
+  return u
+end function
+
+function _extractYoutubeId(rawUrl as String) as String
+  if rawUrl = invalid then return ""
+  s = rawUrl.ToStr()
+  if s = invalid then return ""
+  s = s.Trim()
+  if s = "" then return ""
+
+  re = CreateObject("roRegex", "(?:v=|youtu\\.be/|/embed/|/shorts/|/v/)([A-Za-z0-9_-]+)", "i")
+  if re = invalid then return ""
+  m = re.Match(s)
+  if m = invalid or m.Count() < 2 then return ""
+
+  return m[1].ToStr().Trim()
+end function
+
+sub _openTrailerFromSeries()
+  url = m.seriesDetailTrailerUrl
+  if url = invalid then url = ""
+  url = url.ToStr().Trim()
+  if url = "" then
+    setStatus("trailer: missing url")
+    return
+  end if
+
+  title = _t("detail_trailer")
+  if m.seriesDetailTitle <> invalid and m.seriesDetailTitle.text <> invalid then
+    t = m.seriesDetailTitle.text.ToStr().Trim()
+    if t <> "" then title = t
+  end if
+
+  lowUrl = LCase(url)
+  isYouTube = (Instr(1, lowUrl, "youtube") > 0 or Instr(1, lowUrl, "youtu.be") > 0)
+
+  vid = m.seriesDetailTrailerId
+  if vid = invalid then vid = ""
+  vid = vid.ToStr().Trim()
+  if vid = "" and isYouTube then vid = _extractYoutubeId(url)
+  if isYouTube then
+    ytUrl = "https://www.youtube.com/watch?v=" + vid
+    print "trailer manual fallback vid=" + vid + " url=" + ytUrl
+    if m.pendingDialog = invalid then
+      dlg = CreateObject("roSGNode", "Dialog")
+      dlg.title = "Trailer"
+      q = title
+      if q = invalid or q = "" then q = "Trailer"
+      dlg.message = "Abra o YouTube e busque por:" + Chr(10) + q + " trailer"
+      dlg.buttons = ["OK"]
+      dlg.observeField("buttonSelected", "onTokensDone")
+      m.pendingDialog = dlg
+      m.top.dialog = dlg
+      dlg.setFocus(true)
+    end if
+    return
+  end if
+
+  fmt = inferStreamFormat(url, "")
+  startVideo(url, title, fmt, false, "trailer", "")
+end sub
+
 sub _renderSeriesDetailCast(people as Object)
   if m.seriesDetailCastList = invalid then return
 
@@ -8160,9 +8394,34 @@ sub _renderSeriesDetail(payload as Object)
   if title = "" then title = "Series"
   if m.seriesDetailTitle <> invalid then m.seriesDetailTitle.text = title
 
-  if m.seriesDetailType <> invalid then m.seriesDetailType.text = _t("library_series")
+  typRaw = ""
+  if series.type <> invalid then typRaw = series.type.ToStr().Trim()
+  if typRaw = "" and series.Type <> invalid then typRaw = series.Type.ToStr().Trim()
+  typL = LCase(typRaw)
+  isSeries = (typL = "series" or typL = "tvshow" or typL = "tvshows")
+  m.seriesDetailIsSeries = (isSeries = true)
+  if m.seriesDetailType <> invalid then
+    if isSeries then
+      m.seriesDetailType.text = _t("detail_series")
+    else if typL = "movie" then
+      m.seriesDetailType.text = _t("detail_movie")
+    else if typRaw <> "" then
+      m.seriesDetailType.text = typRaw
+    else
+      m.seriesDetailType.text = _t("detail_movie")
+    end if
+  end if
 
-  m.seriesDetailHasTrailer = _hasTrailerFromItem(series)
+  trailerUrl = _resolveTrailerUrlFromSeries(series)
+  trailerId = _extractYoutubeId(trailerUrl)
+  m.seriesDetailTrailerUrl = trailerUrl
+  m.seriesDetailTrailerId = trailerId
+  m.seriesDetailHasTrailer = (trailerUrl <> "")
+  if m.trailerEnabled <> true then
+    m.seriesDetailHasTrailer = false
+    m.seriesDetailTrailerUrl = ""
+    m.seriesDetailTrailerId = ""
+  end if
 
   yr = 0
   if series.productionYear <> invalid then yr = _sceneIntFromAny(series.productionYear)
@@ -8223,9 +8482,17 @@ sub _renderSeriesDetail(payload as Object)
   m.seriesDetailCast = people
   _renderSeriesDetailCast(people)
   if m.seriesDetailCastCount > 0 then
-    m.seriesDetailContentHeight = 1700
+    if m.seriesDetailIsSeries = true then
+      m.seriesDetailContentHeight = 1840
+    else
+      m.seriesDetailContentHeight = 1290
+    end if
   else
-    m.seriesDetailContentHeight = 1450
+    if m.seriesDetailIsSeries = true then
+      m.seriesDetailContentHeight = 1590
+    else
+      m.seriesDetailContentHeight = 1140
+    end if
   end if
 
   if m.seriesDetailSeasonsList <> invalid then
@@ -8281,6 +8548,8 @@ sub _renderEpisodeDetail(ep as Object)
 
   if m.seriesDetailType <> invalid then m.seriesDetailType.text = _t("detail_episode")
   m.seriesDetailHasTrailer = false
+  m.seriesDetailTrailerUrl = ""
+  m.seriesDetailTrailerId = ""
 
   yr = 0
   if e.productionYear <> invalid then yr = _sceneIntFromAny(e.productionYear)
@@ -8372,35 +8641,38 @@ sub _applySeriesDetailModeLayout()
   modeVal = m.seriesDetailMode
   if modeVal = invalid then modeVal = ""
   isEpisodeMode = (LCase(modeVal.ToStr().Trim()) = "episode")
+  isSeries = (m.seriesDetailIsSeries = true)
+  isSimple = (isEpisodeMode or isSeries <> true)
 
-  if m.seriesDetailSeasonsTitle <> invalid then m.seriesDetailSeasonsTitle.visible = (isEpisodeMode <> true)
-  if m.seriesDetailSeasonsList <> invalid then m.seriesDetailSeasonsList.visible = (isEpisodeMode <> true)
-  if m.seriesDetailEpisodesTitle <> invalid then m.seriesDetailEpisodesTitle.visible = (isEpisodeMode <> true)
-  if m.seriesDetailEpisodesList <> invalid then m.seriesDetailEpisodesList.visible = (isEpisodeMode <> true)
+  if m.seriesDetailSeasonsTitle <> invalid then m.seriesDetailSeasonsTitle.visible = (isSimple <> true)
+  if m.seriesDetailSeasonsList <> invalid then m.seriesDetailSeasonsList.visible = (isSimple <> true)
+  if m.seriesDetailEpisodesTitle <> invalid then m.seriesDetailEpisodesTitle.visible = (isSimple <> true)
+  if m.seriesDetailEpisodesList <> invalid then m.seriesDetailEpisodesList.visible = (isSimple <> true)
 
   if m.seriesDetailActionTrailerBg <> invalid then m.seriesDetailActionTrailerBg.visible = (isEpisodeMode <> true)
   if m.seriesDetailActionTrailerText <> invalid then m.seriesDetailActionTrailerText.visible = (isEpisodeMode <> true)
   if m.seriesDetailActionTrailerFocus <> invalid then m.seriesDetailActionTrailerFocus.visible = (isEpisodeMode <> true)
   if isEpisodeMode <> true then
-    if m.seriesDetailActionTrailerBg <> invalid then m.seriesDetailActionTrailerBg.visible = true
-    if m.seriesDetailActionTrailerText <> invalid then m.seriesDetailActionTrailerText.visible = true
+    hasTrailer = (m.seriesDetailHasTrailer = true)
+    if m.seriesDetailActionTrailerBg <> invalid then m.seriesDetailActionTrailerBg.visible = hasTrailer
+    if m.seriesDetailActionTrailerText <> invalid then m.seriesDetailActionTrailerText.visible = hasTrailer
     if m.seriesDetailActionTrailerFocus <> invalid then m.seriesDetailActionTrailerFocus.visible = false
   end if
 
-  if isEpisodeMode then
-    if m.seriesDetailCastTitle <> invalid then m.seriesDetailCastTitle.translation = [60, 900]
-    if m.seriesDetailCastList <> invalid then m.seriesDetailCastList.translation = [60, 920]
-    m.seriesDetailYCast = 920
+  if isSimple then
+    if m.seriesDetailCastTitle <> invalid then m.seriesDetailCastTitle.translation = [60, 990]
+    if m.seriesDetailCastList <> invalid then m.seriesDetailCastList.translation = [60, 1010]
+    m.seriesDetailYCast = 1010
     if m.seriesDetailCastCount > 0 then
-      m.seriesDetailContentHeight = 1200
+      m.seriesDetailContentHeight = 1290
     else
-      m.seriesDetailContentHeight = 1050
+      m.seriesDetailContentHeight = 1140
     end if
     m.seriesDetailActionFocus = 0
   else
-    if m.seriesDetailCastTitle <> invalid then m.seriesDetailCastTitle.translation = [60, 1230]
-    if m.seriesDetailCastList <> invalid then m.seriesDetailCastList.translation = [60, 1250]
-    m.seriesDetailYCast = 1250
+    if m.seriesDetailCastTitle <> invalid then m.seriesDetailCastTitle.translation = [60, 1490]
+    if m.seriesDetailCastList <> invalid then m.seriesDetailCastList.translation = [60, 1510]
+    m.seriesDetailYCast = 1510
     if m.seriesDetailHasTrailer <> true then m.seriesDetailActionFocus = 0
   end if
 end sub
@@ -8418,7 +8690,16 @@ sub _showSeriesDetailScreen(payload as Object)
   _renderSeriesDetail(payload)
   _applySeriesDetailModeLayout()
   statusId = ""
-  if payload <> invalid and payload.firstEpisodeId <> invalid then statusId = payload.firstEpisodeId.ToStr().Trim()
+  if payload <> invalid then
+    if m.seriesDetailIsSeries = true then
+      if payload.firstEpisodeId <> invalid then statusId = payload.firstEpisodeId.ToStr().Trim()
+    else
+      series0 = payload.series
+      if type(series0) <> "roAssociativeArray" then series0 = {}
+      if series0.id <> invalid then statusId = series0.id.ToStr().Trim()
+      if statusId = "" and series0.Id <> invalid then statusId = series0.Id.ToStr().Trim()
+    end if
+  end if
   m.seriesDetailStatusItemId = statusId
   m.seriesDetailActionFocus = 0
   _applySeriesDetailStatus("")
@@ -8428,7 +8709,6 @@ sub _showSeriesDetailScreen(payload as Object)
   if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = true
   if m.browseCard <> invalid then m.browseCard.visible = false
   applyFocus()
-  if statusId <> "" then requestSeriesStatus(statusId)
 end sub
 
 sub _showEpisodeDetailScreen(it as Object)
@@ -8469,7 +8749,6 @@ sub _showEpisodeDetailScreen(it as Object)
   _setSeriesDetailScroll(0)
   m.seriesDetailFocus = "header"
   applyFocus()
-  if eid <> "" then requestSeriesStatus(eid)
 end sub
 
 sub _closeSeriesDetail()
@@ -8508,7 +8787,6 @@ sub _exitEpisodeDetail()
   _setSeriesDetailScroll(0)
   m.seriesDetailFocus = "header"
   applyFocus()
-  if statusId <> "" then requestSeriesStatus(statusId)
 end sub
 
 sub onSeriesSeasonSelected()
@@ -8641,14 +8919,14 @@ sub _playBrowseItemNode(it as Object)
     return
   end if
 
-  if typL = "series" then
-    requestSeriesDetails(it.id, it.title)
-    return
-  end if
-
   resumeMs = _nodeResumePositionMs(it)
   if resumeMs > 5000 then
     showResumeDialog(it.id, it.title, resumeMs)
+    return
+  end if
+
+  if typL = "series" or typL = "movie" then
+    requestSeriesDetails(it.id, it.title)
     return
   end if
 
@@ -9048,6 +9326,16 @@ sub beginSign(path as String, extraQuery as Object, title as String, streamForma
   m.pendingPlaybackKind = playbackKind
   m.pendingPlaybackItemId = itemId
 
+  attempt = m.pendingPlayAttemptId
+  if attempt = invalid then attempt = ""
+  attempt = attempt.ToStr().Trim()
+  if attempt = "" then
+    attempt = m.playAttemptId
+    if attempt = invalid then attempt = ""
+    attempt = attempt.ToStr().Trim()
+  end if
+  m.pendingSignAttemptId = attempt
+
   setStatus("signing " + p)
   liveStr = "false"
   if isLive = true then liveStr = "true"
@@ -9064,7 +9352,11 @@ sub beginSign(path as String, extraQuery as Object, title as String, streamForma
   m.pendingJob = "sign"
   m.gatewayTask.kind = "sign"
   apiBase = cfg.apiBase
-  if isLive = true then apiBase = _livePlaybackBase(apiBase)
+  if isLive = true then
+    apiBase = _livePlaybackBase(apiBase)
+  else if playbackKind = "vod-r2" then
+    apiBase = _vodR2PlaybackBase(apiBase)
+  end if
   m.gatewayTask.apiBase = apiBase
   m.gatewayTask.appToken = cfg.appToken
   m.gatewayTask.jellyfinToken = cfg.jellyfinToken

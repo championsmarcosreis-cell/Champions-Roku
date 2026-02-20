@@ -5,7 +5,6 @@ sub Main()
 
   scene = screen.CreateScene("MainScene")
   screen.Show()
-
   while true
     msg = wait(0, port)
     if type(msg) = "roSGScreenEvent"
@@ -13,4 +12,3 @@ sub Main()
     end if
   end while
 end sub
-

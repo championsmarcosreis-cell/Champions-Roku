@@ -319,7 +319,7 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
 
   seriesUrl = base + "/jellyfin/Users/" + uid + "/Items/" + sid
   seriesUrl = _urlWithQuery(seriesUrl, {
-    Fields: "Overview,Genres,CommunityRating,ProductionYear,OfficialRating,RunTimeTicks,BackdropImageTags,People,Path,MediaSources"
+    Fields: "Overview,Genres,CommunityRating,ProductionYear,OfficialRating,RunTimeTicks,BackdropImageTags,People,Path,MediaSources,RemoteTrailers,LocalTrailerCount,TrailerCount,Trailers"
   })
   seriesResp = httpJson("GET", seriesUrl, headers)
   if seriesResp.ok <> true then
@@ -340,6 +340,11 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
   seriesGenres = []
   seriesBackdropTags = []
   seriesPeople = []
+  seriesRemoteTrailers = []
+  seriesTrailers = []
+  seriesLocalTrailerCount = 0
+  seriesTrailerCount = 0
+  seriesTrailerUrl = ""
   if seriesData.Name <> invalid then seriesName = seriesData.Name
   if seriesData.Type <> invalid and seriesData.Type.ToStr().Trim() <> "" then seriesType = seriesData.Type
   if seriesData.Overview <> invalid then seriesOverview = seriesData.Overview
@@ -354,6 +359,13 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
   if type(seriesBackdropTags) <> "roArray" then seriesBackdropTags = []
   if seriesData.People <> invalid then seriesPeople = seriesData.People
   if type(seriesPeople) <> "roArray" then seriesPeople = []
+  if seriesData.RemoteTrailers <> invalid then seriesRemoteTrailers = seriesData.RemoteTrailers
+  if type(seriesRemoteTrailers) <> "roArray" then seriesRemoteTrailers = []
+  if seriesData.Trailers <> invalid then seriesTrailers = seriesData.Trailers
+  if type(seriesTrailers) <> "roArray" then seriesTrailers = []
+  if seriesData.LocalTrailerCount <> invalid then seriesLocalTrailerCount = Int(Val(seriesData.LocalTrailerCount.ToStr()))
+  if seriesData.TrailerCount <> invalid then seriesTrailerCount = Int(Val(seriesData.TrailerCount.ToStr()))
+  if seriesData.TrailerUrl <> invalid then seriesTrailerUrl = seriesData.TrailerUrl.ToStr()
 
   seasons = []
   seasonsUrl = base + "/jellyfin/Shows/" + sid + "/Seasons"
@@ -478,6 +490,11 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
       genres: seriesGenres
       backdropTags: seriesBackdropTags
       people: seriesPeople
+      remoteTrailers: seriesRemoteTrailers
+      trailers: seriesTrailers
+      localTrailerCount: seriesLocalTrailerCount
+      trailerCount: seriesTrailerCount
+      trailerUrl: seriesTrailerUrl
     }
     seasons: seasons
     episodes: episodes
