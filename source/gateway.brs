@@ -247,14 +247,26 @@ function gatewayJellyfinLiveChannels(apiBase as String, appToken as String, jell
     id = ""
     name = ""
     path = ""
+    logoPath = ""
+    logoTag = ""
 
     if it <> invalid then
       if it.Id <> invalid then id = it.Id
       if it.Name <> invalid then name = it.Name
       path = _jellyfinExtractPath(it)
+      if it.ImageTags <> invalid and it.ImageTags.Primary <> invalid then
+        logoTag = it.ImageTags.Primary
+      end if
     end if
 
-    out.Push({ id: id, name: name, path: path })
+    if id <> invalid and id.Trim() <> "" then
+      logoPath = "/jellyfin/Items/" + id.Trim() + "/Images/Primary"
+      if logoTag <> invalid and logoTag.Trim() <> "" then
+        logoPath = _urlWithQuery(logoPath, { tag: logoTag.Trim() })
+      end if
+    end if
+
+    out.Push({ id: id, name: name, path: path, logoPath: logoPath, logoTag: logoTag })
   end for
 
   return { ok: true, items: out }

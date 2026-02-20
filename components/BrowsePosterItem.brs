@@ -1,5 +1,6 @@
 sub init()
   m.cardBg = m.top.findNode("cardBg")
+  m.focusRing = m.top.findNode("focusRing")
   m.cover = m.top.findNode("cover")
   m.title = m.top.findNode("title")
   m.meta = m.top.findNode("meta")
@@ -12,7 +13,11 @@ end sub
 sub onItemContentChanged()
   c = m.top.itemContent
   if c = invalid then
-    if m.cover <> invalid then m.cover.uri = ""
+    if m.cover <> invalid then
+      if m.cover.hasField("loadDisplayMode") then m.cover.loadDisplayMode = "zoomToFill"
+      m.cover.uri = ""
+    end if
+    if m.focusRing <> invalid then m.focusRing.visible = false
     if m.title <> invalid then m.title.text = ""
     if m.meta <> invalid then m.meta.text = ""
     if m.progressBg <> invalid then m.progressBg.visible = false
@@ -36,7 +41,15 @@ sub onItemContentChanged()
   if poster = "" and c.sdPosterUrl <> invalid then poster = c.sdPosterUrl.ToStr().Trim()
   if poster = "" and c.SDPosterUrl <> invalid then poster = c.SDPosterUrl.ToStr().Trim()
   if poster = "" and c.posterUrl <> invalid then poster = c.posterUrl.ToStr().Trim()
-  if m.cover <> invalid then m.cover.uri = poster
+  if m.cover <> invalid then
+    mode = "zoomToFill"
+    if c.posterMode <> invalid then
+      mode = c.posterMode.ToStr().Trim()
+      if mode = "" then mode = "zoomToFill"
+    end if
+    if m.cover.hasField("loadDisplayMode") then m.cover.loadDisplayMode = mode
+    m.cover.uri = poster
+  end if
 
   pct = 0
   if c.resumePercent <> invalid then
@@ -50,7 +63,7 @@ sub onItemContentChanged()
   if m.progressBg <> invalid then m.progressBg.visible = (pct > 0)
   if m.progressFill <> invalid then
     m.progressFill.visible = (pct > 0)
-    if pct > 0 then m.progressFill.width = Int(3.4 * pct)
+    if pct > 0 then m.progressFill.width = Int(3.08 * pct)
   end if
 
   rank = 0
@@ -76,6 +89,7 @@ end sub
 sub applyStyle()
   focused = (m.top.itemHasFocus = true)
   if m.cardBg <> invalid then m.cardBg.uri = "pkg:/images/card.png"
+  if m.focusRing <> invalid then m.focusRing.visible = focused
   if m.title <> invalid then
     if focused then
       m.title.color = "0xFFFFFF"

@@ -99,7 +99,7 @@
     <MarkupGrid
       id="itemsList"
       translation="[30, 224]"
-      itemSize="[368, 196]"
+      itemSize="[336, 210]"
       numColumns="3"
       numRows="2"
       drawFocusFeedback="false"

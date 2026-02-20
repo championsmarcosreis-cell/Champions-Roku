@@ -9,17 +9,35 @@
     <Poster
       id="cardBg"
       translation="[6, 3]"
-      width="356"
-      height="190"
+      width="324"
+      height="204"
       uri="pkg:/images/card.png"
+    />
+
+    <Poster
+      id="focusRing"
+      translation="[6, 3]"
+      width="324"
+      height="204"
+      uri="pkg:/images/field_focus.png"
+      visible="false"
     />
 
     <Poster
       id="cover"
       translation="[14, 14]"
-      width="340"
-      height="122"
+      width="308"
+      height="166"
+      loadDisplayMode="zoomToFill"
       uri=""
+    />
+
+    <Rectangle
+      id="textOverlay"
+      translation="[14, 136]"
+      width="308"
+      height="44"
+      color="0x7F0B1220"
     />
 
     <Poster
@@ -45,27 +63,27 @@
 
     <Rectangle
       id="progressBg"
-      translation="[14, 140]"
-      width="340"
-      height="4"
+      translation="[14, 177]"
+      width="308"
+      height="3"
       color="0x253247"
       visible="false"
     />
 
     <Rectangle
       id="progressFill"
-      translation="[14, 140]"
+      translation="[14, 177]"
       width="0"
-      height="4"
+      height="3"
       color="0xD8B765"
       visible="false"
     />
 
     <Label
       id="title"
-      translation="[14, 148]"
-      width="340"
-      height="28"
+      translation="[20, 141]"
+      width="292"
+      height="24"
       font="font:MediumSystemFont"
       color="0xE6EBF3"
       text=""
@@ -73,8 +91,8 @@
 
     <Label
       id="meta"
-      translation="[14, 172]"
-      width="340"
+      translation="[20, 160]"
+      width="292"
       height="20"
       font="font:SmallSystemFont"
       color="0x9FB0C5"

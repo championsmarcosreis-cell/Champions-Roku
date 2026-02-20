@@ -3744,6 +3744,10 @@ sub onGatewayTaskStateChanged()
       cfgPrev = loadConfig()
       basePrev = cfgPrev.apiBase
       tokenPrev = cfgPrev.jellyfinToken
+      baseNoSlash = basePrev
+      if baseNoSlash = invalid then baseNoSlash = ""
+      baseNoSlash = baseNoSlash.ToStr().Trim()
+      if Right(baseNoSlash, 1) = "/" then baseNoSlash = Left(baseNoSlash, Len(baseNoSlash) - 1)
 
       root = CreateObject("roSGNode", "ContentNode")
       for each ch in items
@@ -3751,6 +3755,7 @@ sub onGatewayTaskStateChanged()
         c.addField("itemType", "string", false)
         c.addField("path", "string", false)
         c.addField("rank", "integer", false)
+        c.addField("posterMode", "string", false)
         c.addField("hdPosterUrl", "string", false)
         c.addField("posterUrl", "string", false)
         if ch <> invalid then
@@ -3758,13 +3763,31 @@ sub onGatewayTaskStateChanged()
           if ch.name <> invalid then c.title = ch.name else c.title = ""
           c.itemType = "LiveTVChannel"
           if ch.path <> invalid then c.path = ch.path else c.path = ""
-          poster = _browseChannelPosterUri(c.id, basePrev, tokenPrev)
+          poster = ""
+          if ch.logoPath <> invalid then
+            lp = ch.logoPath.ToStr().Trim()
+            if lp <> "" then
+              if Left(lp, 1) = "/" and baseNoSlash <> "" then
+                poster = baseNoSlash + lp
+              else
+                poster = lp
+              end if
+            end if
+          end if
+          if poster = "" then poster = _browsePosterUri(c.id, basePrev, tokenPrev)
+          if poster = "" then poster = _browseChannelPosterUri(c.id, basePrev, tokenPrev)
+          if poster <> "" and tokenPrev <> invalid and tokenPrev.ToStr().Trim() <> "" and Instr(1, poster, "X-Emby-Token=") = 0 then
+            poster = appendQuery(poster, { "X-Emby-Token": tokenPrev, "X-Jellyfin-Token": tokenPrev })
+          end if
+          if poster = "" then poster = "pkg:/images/logo.png"
           c.hdPosterUrl = poster
           c.posterUrl = poster
+          c.posterMode = "scaleToFit"
         else
           c.title = ""
           c.itemType = "LiveTVChannel"
           c.path = ""
+          c.posterMode = "scaleToFit"
           c.hdPosterUrl = ""
           c.posterUrl = ""
         end if
@@ -5876,6 +5899,7 @@ sub renderShelfItems(raw as String)
     c.addField("resumeDurationMs", "integer", false)
     c.addField("resumePercent", "integer", false)
     c.addField("rank", "integer", false)
+    c.addField("posterMode", "string", false)
     c.addField("hdPosterUrl", "string", false)
     c.addField("posterUrl", "string", false)
     if it <> invalid then
@@ -5886,6 +5910,7 @@ sub renderShelfItems(raw as String)
       posterUri = _browsePosterUri(c.id, posterBase, posterToken)
       c.hdPosterUrl = posterUri
       c.posterUrl = posterUri
+      c.posterMode = "zoomToFill"
       rPos = -1
       if it.positionMs <> invalid then rPos = _sceneIntFromAny(it.positionMs)
       if rPos < 0 and it.position_ms <> invalid then rPos = _sceneIntFromAny(it.position_ms)
@@ -5916,6 +5941,7 @@ sub renderShelfItems(raw as String)
       c.resumeDurationMs = 0
       c.resumePercent = 0
       c.rank = 0
+      c.posterMode = "zoomToFill"
       c.hdPosterUrl = ""
       c.posterUrl = ""
     end if
