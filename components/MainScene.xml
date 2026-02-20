@@ -135,15 +135,15 @@
               <Poster
                 id="seriesDetailHero"
                 translation="[300, 80]"
-                width="900"
-                height="280"
+                width="920"
+                height="320"
                 loadDisplayMode="zoomToFill"
                 uri=""
               />
 
               <Label
                 id="seriesDetailTitle"
-                translation="[70, 378]"
+                translation="[70, 384]"
                 width="1160"
                 height="30"
                 font="font:LargeSystemFont"
@@ -153,9 +153,9 @@
 
               <Label
                 id="seriesDetailType"
-                translation="[70, 416]"
+                translation="[70, 412]"
                 width="360"
-                height="18"
+                height="16"
                 font="font:SmallSystemFont"
                 color="0xAAB4C2"
                 text=""
@@ -163,15 +163,15 @@
 
               <Group
                 id="seriesDetailChips"
-                translation="[70, 438]"
+                translation="[70, 430]"
               >
                 <Group id="seriesDetailChipYear">
-                  <Rectangle id="seriesDetailChipYearBg" width="80" height="24" color="0x2D3A4E" />
+                  <Rectangle id="seriesDetailChipYearBg" width="76" height="20" color="0x2D3A4E" cornerRadius="10" />
                   <Label
                     id="seriesDetailChipYearText"
-                    translation="[0, 2]"
-                    width="80"
-                    height="20"
+                    translation="[0, 1]"
+                    width="76"
+                    height="18"
                     font="font:SmallSystemFont"
                     horizAlign="center"
                     color="0xE6EBF3"
@@ -179,12 +179,12 @@
                   />
                 </Group>
                 <Group id="seriesDetailChipAge">
-                  <Rectangle id="seriesDetailChipAgeBg" width="80" height="24" color="0x2D3A4E" />
+                  <Rectangle id="seriesDetailChipAgeBg" width="76" height="20" color="0x2D3A4E" cornerRadius="10" />
                   <Label
                     id="seriesDetailChipAgeText"
-                    translation="[0, 2]"
-                    width="80"
-                    height="20"
+                    translation="[0, 1]"
+                    width="76"
+                    height="18"
                     font="font:SmallSystemFont"
                     horizAlign="center"
                     color="0xE6EBF3"
@@ -192,12 +192,12 @@
                   />
                 </Group>
                 <Group id="seriesDetailChipRating">
-                  <Rectangle id="seriesDetailChipRatingBg" width="80" height="24" color="0x2D3A4E" />
+                  <Rectangle id="seriesDetailChipRatingBg" width="76" height="20" color="0x2D3A4E" cornerRadius="10" />
                   <Label
                     id="seriesDetailChipRatingText"
-                    translation="[0, 2]"
-                    width="80"
-                    height="20"
+                    translation="[0, 1]"
+                    width="76"
+                    height="18"
                     font="font:SmallSystemFont"
                     horizAlign="center"
                     color="0xE6EBF3"
@@ -205,12 +205,12 @@
                   />
                 </Group>
                 <Group id="seriesDetailChipStatus">
-                  <Rectangle id="seriesDetailChipStatusBg" width="120" height="24" color="0x2D3A4E" />
+                  <Rectangle id="seriesDetailChipStatusBg" width="108" height="20" color="0x2D3A4E" cornerRadius="10" />
                   <Label
                     id="seriesDetailChipStatusText"
-                    translation="[0, 2]"
-                    width="120"
-                    height="20"
+                    translation="[0, 1]"
+                    width="108"
+                    height="18"
                     font="font:SmallSystemFont"
                     horizAlign="center"
                     color="0xE6EBF3"
@@ -221,9 +221,9 @@
 
               <Label
                 id="seriesDetailGenres"
-                translation="[70, 462]"
+                translation="[70, 456]"
                 width="880"
-                height="18"
+                height="16"
                 font="font:SmallSystemFont"
                 color="0xC5D0E0"
                 text=""
@@ -239,7 +239,7 @@
               />
               <Poster
                 id="seriesDetailActionStatusBg"
-                translation="[70, 476]"
+                translation="[70, 474]"
                 width="200"
                 height="36"
                 uri="pkg:/images/card.png"
