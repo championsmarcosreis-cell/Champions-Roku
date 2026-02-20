@@ -76,6 +76,12 @@ sub init()
   m.seriesDetailCast = []
   m.seriesDetailStatus = ""
   m.seriesDetailStatusItemId = ""
+  m.seriesDetailScrollY = 0
+  m.seriesDetailContentHeight = 1040
+  m.seriesDetailRowHeight = 70
+  m.seriesDetailYSeasons = 690
+  m.seriesDetailYEpisodes = 800
+  m.seriesDetailYCast = 910
   m.pendingResumeProbeItemId = ""
   m.pendingResumeProbeTitle = ""
   m.pendingResumeProbeQueued = false
@@ -313,6 +319,8 @@ sub bindUiNodes()
   m.heroAvatarPhoto = m.top.findNode("heroAvatarPhoto")
   m.heroAvatarText = m.top.findNode("heroAvatarText")
   m.seriesDetailGroup = m.top.findNode("seriesDetailGroup")
+  m.seriesDetailViewport = m.top.findNode("seriesDetailViewport")
+  m.seriesDetailContent = m.top.findNode("seriesDetailContent")
   m.seriesDetailBack = m.top.findNode("seriesDetailBack")
   m.seriesDetailHero = m.top.findNode("seriesDetailHero")
   m.seriesDetailPosterGlow = m.top.findNode("seriesDetailPosterGlow")
@@ -621,14 +629,31 @@ sub setStatus(msg as String)
   if t = invalid then t = ""
   t = t.Trim()
 
-  ' Keep the UI clean: hide transient player states like "playing".
   tl = LCase(t)
   if tl = "" or tl = "ready" or tl = "playing" or tl = "buffering" or tl = "stopped" or tl = "finished" then
     m.statusLabel.visible = false
     m.statusLabel.text = ""
-  else
+    return
+  end if
+
+  ' Only show critical errors; hide noisy endpoint/status chatter.
+  isCritical = false
+  if Instr(1, tl, "failed") > 0 then isCritical = true
+  if Instr(1, tl, "falhou") > 0 then isCritical = true
+  if Instr(1, tl, "error") > 0 then isCritical = true
+  if Instr(1, tl, "erro") > 0 then isCritical = true
+  if Instr(1, tl, "missing") > 0 then isCritical = true
+  if Instr(1, tl, "faltou") > 0 then isCritical = true
+  if Instr(1, tl, "indispon") > 0 then isCritical = true
+  if Instr(1, tl, "expired") > 0 then isCritical = true
+  if Instr(1, tl, "expir") > 0 then isCritical = true
+
+  if isCritical then
     m.statusLabel.visible = true
     m.statusLabel.text = t
+  else
+    m.statusLabel.visible = false
+    m.statusLabel.text = ""
   end if
 end sub
 
@@ -1995,6 +2020,39 @@ sub _applySeriesDetailStatus(status as String)
       m.seriesDetailActionStatusText.text = ""
     end if
   end if
+end sub
+
+sub _setSeriesDetailScroll(targetY as Integer)
+  if m.seriesDetailContent = invalid then return
+
+  maxScroll = m.seriesDetailContentHeight - 720
+  if maxScroll < 0 then maxScroll = 0
+
+  y = targetY
+  if y < 0 then y = 0
+  if y > maxScroll then y = maxScroll
+
+  m.seriesDetailScrollY = y
+  m.seriesDetailContent.translation = [0, -y]
+end sub
+
+sub _ensureSeriesDetailVisible(itemY as Integer, itemH as Integer)
+  topPad = 80
+  bottomPad = 80
+
+  viewTop = m.seriesDetailScrollY
+  viewBottom = viewTop + 720
+
+  itTop = itemY
+  itBottom = itemY + itemH
+
+  if (itBottom + bottomPad) > viewBottom then
+    viewTop = (itBottom + bottomPad) - 720
+  else if (itTop - topPad) < viewTop then
+    viewTop = itTop - topPad
+  end if
+
+  _setSeriesDetailScroll(viewTop)
 end sub
 
 function _browseChannelPosterUri(channelId as String, apiBase as String, jellyfinToken as String) as String
@@ -6112,10 +6170,13 @@ sub applyFocus()
     focusTarget = LCase(focusTarget.ToStr().Trim())
     if focusTarget = "seasons" then
       if m.seriesDetailSeasonsList <> invalid then m.seriesDetailSeasonsList.setFocus(true)
+      _ensureSeriesDetailVisible(m.seriesDetailYSeasons, m.seriesDetailRowHeight)
     else if focusTarget = "cast" then
       if m.seriesDetailCastList <> invalid then m.seriesDetailCastList.setFocus(true)
+      _ensureSeriesDetailVisible(m.seriesDetailYCast, m.seriesDetailRowHeight)
     else
       if m.seriesDetailEpisodesList <> invalid then m.seriesDetailEpisodesList.setFocus(true)
+      _ensureSeriesDetailVisible(m.seriesDetailYEpisodes, m.seriesDetailRowHeight)
     end if
     return
   end if
@@ -7959,6 +8020,11 @@ sub _renderSeriesDetail(payload as Object)
       m.seriesDetailCastTitle.visible = (castRoot.getChildCount() > 0)
     end if
     m.seriesDetailCastList.visible = (castRoot.getChildCount() > 0)
+    if castRoot.getChildCount() > 0 then
+      m.seriesDetailContentHeight = 1040
+    else
+      m.seriesDetailContentHeight = 900
+    end if
   end if
 
   if m.seriesDetailSeasonsList <> invalid then
@@ -8010,6 +8076,7 @@ sub _showSeriesDetailScreen(payload as Object)
   if payload <> invalid and payload.firstEpisodeId <> invalid then statusId = payload.firstEpisodeId.ToStr().Trim()
   m.seriesDetailStatusItemId = statusId
   _applySeriesDetailStatus("")
+  _setSeriesDetailScroll(0)
   m.seriesDetailOpen = true
   m.seriesDetailFocus = "episodes"
   if _browseListCount(m.seriesDetailEpisodesList) = 0 then
@@ -8033,6 +8100,7 @@ sub _closeSeriesDetail()
   m.seriesDetailStatus = ""
   m.seriesDetailStatusItemId = ""
   _applySeriesDetailStatus("")
+  _setSeriesDetailScroll(0)
   if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = false
   if m.mode = "browse" and m.browseCard <> invalid then m.browseCard.visible = true
   applyFocus()

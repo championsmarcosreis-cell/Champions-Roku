@@ -68,236 +68,271 @@
         color="0xCC000000"
       />
 
-      <Label
-        id="seriesDetailBack"
-        translation="[40, 18]"
-        width="240"
-        height="24"
-        font="font:SmallSystemFont"
-        color="0xD0D6E0"
-        text="< Detalhe"
-      />
-
-      <Poster
-        id="seriesDetailHero"
-        translation="[320, 40]"
-        width="860"
-        height="200"
-        loadDisplayMode="scaleToFit"
-        uri=""
-      />
-
-      <Poster
-        id="seriesDetailPosterGlow"
-        translation="[52, 52]"
-        width="216"
-        height="240"
-        uri="pkg:/images/button_focus.png"
-      />
-
-      <Poster
-        id="seriesDetailPoster"
-        translation="[60, 60]"
-        width="200"
-        height="230"
-        loadDisplayMode="zoomToFill"
-        uri=""
-      />
-
-      <Label
-        id="seriesDetailTitle"
-        translation="[60, 292]"
-        width="1160"
-        height="28"
-        font="font:MediumSystemFont"
-        color="0xFFFFFF"
-        text=""
-      />
-
-      <Label
-        id="seriesDetailType"
-        translation="[60, 316]"
-        width="360"
-        height="18"
-        font="font:SmallSystemFont"
-        color="0xAAB4C2"
-        text=""
-      />
-
       <Group
-        id="seriesDetailChips"
-        translation="[60, 336]"
+        id="seriesDetailViewport"
+        translation="[0, 0]"
+        clippingRect="[0, 0, 1280, 720]"
+        clipChildren="true"
       >
-        <Group id="seriesDetailChipYear">
-          <Rectangle id="seriesDetailChipYearBg" width="80" height="24" color="0x2D3A4E" />
-          <Label
-            id="seriesDetailChipYearText"
-            translation="[0, 2]"
-            width="80"
-            height="20"
-            font="font:SmallSystemFont"
-            horizAlign="center"
-            color="0xE6EBF3"
-            text=""
-          />
-        </Group>
-        <Group id="seriesDetailChipAge">
-          <Rectangle id="seriesDetailChipAgeBg" width="80" height="24" color="0x2D3A4E" />
-          <Label
-            id="seriesDetailChipAgeText"
-            translation="[0, 2]"
-            width="80"
-            height="20"
-            font="font:SmallSystemFont"
-            horizAlign="center"
-            color="0xE6EBF3"
-            text=""
-          />
-        </Group>
-        <Group id="seriesDetailChipRating">
-          <Rectangle id="seriesDetailChipRatingBg" width="80" height="24" color="0x2D3A4E" />
-          <Label
-            id="seriesDetailChipRatingText"
-            translation="[0, 2]"
-            width="80"
-            height="20"
-            font="font:SmallSystemFont"
-            horizAlign="center"
-            color="0xE6EBF3"
-            text=""
-          />
-        </Group>
-        <Group id="seriesDetailChipStatus">
-          <Rectangle id="seriesDetailChipStatusBg" width="120" height="24" color="0x2D3A4E" />
-          <Label
-            id="seriesDetailChipStatusText"
-            translation="[0, 2]"
-            width="120"
-            height="20"
-            font="font:SmallSystemFont"
-            horizAlign="center"
-            color="0xE6EBF3"
-            text=""
-          />
-        </Group>
+        <children>
+          <Group
+            id="seriesDetailContent"
+            translation="[0, 0]"
+          >
+            <children>
+              <Label
+                id="seriesDetailBack"
+                translation="[40, 18]"
+                width="240"
+                height="24"
+                font="font:SmallSystemFont"
+                color="0xD0D6E0"
+                text="< Detalhe"
+              />
+
+              <Poster
+                id="seriesDetailPosterGlow"
+                translation="[50, 60]"
+                width="240"
+                height="320"
+                uri="pkg:/images/button_focus.png"
+              />
+
+              <Poster
+                id="seriesDetailPoster"
+                translation="[60, 70]"
+                width="220"
+                height="300"
+                loadDisplayMode="zoomToFill"
+                uri=""
+              />
+
+              <Poster
+                id="seriesDetailHero"
+                translation="[320, 60]"
+                width="900"
+                height="280"
+                loadDisplayMode="zoomToFill"
+                uri=""
+              />
+
+              <Label
+                id="seriesDetailTitle"
+                translation="[60, 390]"
+                width="1160"
+                height="28"
+                font="font:MediumSystemFont"
+                color="0xFFFFFF"
+                text=""
+              />
+
+              <Label
+                id="seriesDetailType"
+                translation="[60, 420]"
+                width="360"
+                height="18"
+                font="font:SmallSystemFont"
+                color="0xAAB4C2"
+                text=""
+              />
+
+              <Group
+                id="seriesDetailChips"
+                translation="[60, 444]"
+              >
+                <Group id="seriesDetailChipYear">
+                  <Rectangle id="seriesDetailChipYearBg" width="80" height="24" color="0x2D3A4E" />
+                  <Label
+                    id="seriesDetailChipYearText"
+                    translation="[0, 2]"
+                    width="80"
+                    height="20"
+                    font="font:SmallSystemFont"
+                    horizAlign="center"
+                    color="0xE6EBF3"
+                    text=""
+                  />
+                </Group>
+                <Group id="seriesDetailChipAge">
+                  <Rectangle id="seriesDetailChipAgeBg" width="80" height="24" color="0x2D3A4E" />
+                  <Label
+                    id="seriesDetailChipAgeText"
+                    translation="[0, 2]"
+                    width="80"
+                    height="20"
+                    font="font:SmallSystemFont"
+                    horizAlign="center"
+                    color="0xE6EBF3"
+                    text=""
+                  />
+                </Group>
+                <Group id="seriesDetailChipRating">
+                  <Rectangle id="seriesDetailChipRatingBg" width="80" height="24" color="0x2D3A4E" />
+                  <Label
+                    id="seriesDetailChipRatingText"
+                    translation="[0, 2]"
+                    width="80"
+                    height="20"
+                    font="font:SmallSystemFont"
+                    horizAlign="center"
+                    color="0xE6EBF3"
+                    text=""
+                  />
+                </Group>
+                <Group id="seriesDetailChipStatus">
+                  <Rectangle id="seriesDetailChipStatusBg" width="120" height="24" color="0x2D3A4E" />
+                  <Label
+                    id="seriesDetailChipStatusText"
+                    translation="[0, 2]"
+                    width="120"
+                    height="20"
+                    font="font:SmallSystemFont"
+                    horizAlign="center"
+                    color="0xE6EBF3"
+                    text=""
+                  />
+                </Group>
+              </Group>
+
+              <Label
+                id="seriesDetailGenres"
+                translation="[60, 470]"
+                width="880"
+                height="18"
+                font="font:SmallSystemFont"
+                color="0xC5D0E0"
+                text=""
+              />
+
+              <Poster
+                id="seriesDetailActionStatusBg"
+                translation="[60, 500]"
+                width="200"
+                height="34"
+                uri="pkg:/images/field_normal.png"
+              />
+              <Label
+                id="seriesDetailActionStatusText"
+                translation="[60, 508]"
+                width="200"
+                height="18"
+                font="font:SmallSystemFont"
+                horizAlign="center"
+                color="0xE6EBF3"
+                text=""
+              />
+
+              <Poster
+                id="seriesDetailActionTrailerBg"
+                translation="[270, 500]"
+                width="200"
+                height="34"
+                uri="pkg:/images/field_normal.png"
+              />
+              <Label
+                id="seriesDetailActionTrailerText"
+                translation="[270, 508]"
+                width="200"
+                height="18"
+                font="font:SmallSystemFont"
+                horizAlign="center"
+                color="0xE6EBF3"
+                text="Trailer"
+              />
+
+              <Label
+                id="seriesDetailOverview"
+                translation="[60, 540]"
+                width="1140"
+                height="90"
+                font="font:SmallSystemFont"
+                color="0xE6EBF3"
+                wrap="true"
+                numLines="5"
+                text=""
+              />
+
+              <Label
+                id="seriesDetailRuntime"
+                translation="[60, 640]"
+                width="640"
+                height="18"
+                font="font:SmallSystemFont"
+                color="0xAAB4C2"
+                text=""
+              />
+
+              <Label
+                id="seriesDetailSeasonsTitle"
+                translation="[60, 670]"
+                width="240"
+                height="18"
+                font="font:SmallSystemFont"
+                color="0xD8B765"
+                text="Temporadas"
+              />
+              <MarkupGrid
+                id="seriesDetailSeasonsList"
+                translation="[60, 690]"
+                itemSize="[240, 70]"
+                numColumns="4"
+                numRows="1"
+                drawFocusFeedback="false"
+                itemComponentName="SeriesDetailRowItem"
+              />
+
+              <Label
+                id="seriesDetailEpisodesTitle"
+                translation="[60, 780]"
+                width="240"
+                height="18"
+                font="font:SmallSystemFont"
+                color="0xD8B765"
+                text="Episodios"
+              />
+              <MarkupGrid
+                id="seriesDetailEpisodesList"
+                translation="[60, 800]"
+                itemSize="[240, 70]"
+                numColumns="4"
+                numRows="1"
+                drawFocusFeedback="false"
+                itemComponentName="SeriesDetailRowItem"
+              />
+
+              <Label
+                id="seriesDetailCastTitle"
+                translation="[60, 890]"
+                width="240"
+                height="18"
+                font="font:SmallSystemFont"
+                color="0xD8B765"
+                text="Elenco"
+              />
+              <MarkupGrid
+                id="seriesDetailCastList"
+                translation="[60, 910]"
+                itemSize="[160, 70]"
+                numColumns="5"
+                numRows="1"
+                drawFocusFeedback="false"
+                itemComponentName="SeriesDetailCastItem"
+              />
+
+              <Label
+                id="seriesDetailHint"
+                translation="[60, 708]"
+                width="1140"
+                height="16"
+                font="font:SmallSystemFont"
+                color="0xAAB4C2"
+                visible="false"
+                text=""
+              />
+            </children>
+          </Group>
+        </children>
       </Group>
-
-      <Label
-        id="seriesDetailGenres"
-        translation="[60, 356]"
-        width="880"
-        height="18"
-        font="font:SmallSystemFont"
-        color="0xC5D0E0"
-        text=""
-      />
-
-      <Poster
-        id="seriesDetailActionStatusBg"
-        translation="[60, 378]"
-        width="200"
-        height="34"
-        uri="pkg:/images/field_normal.png"
-      />
-      <Label
-        id="seriesDetailActionStatusText"
-        translation="[60, 386]"
-        width="200"
-        height="18"
-        font="font:SmallSystemFont"
-        horizAlign="center"
-        color="0xE6EBF3"
-        text=""
-      />
-
-      <Poster
-        id="seriesDetailActionTrailerBg"
-        translation="[270, 378]"
-        width="200"
-        height="34"
-        uri="pkg:/images/field_normal.png"
-      />
-      <Label
-        id="seriesDetailActionTrailerText"
-        translation="[270, 386]"
-        width="200"
-        height="18"
-        font="font:SmallSystemFont"
-        horizAlign="center"
-        color="0xE6EBF3"
-        text="Trailer"
-      />
-
-      <Label
-        id="seriesDetailOverview"
-        translation="[60, 418]"
-        width="1140"
-        height="54"
-        font="font:SmallSystemFont"
-        color="0xE6EBF3"
-        wrap="true"
-        numLines="3"
-        text=""
-      />
-
-      <Label
-        id="seriesDetailRuntime"
-        translation="[60, 474]"
-        width="640"
-        height="18"
-        font="font:SmallSystemFont"
-        color="0xAAB4C2"
-        text=""
-      />
-
-      <Label
-        id="seriesDetailSeasonsTitle"
-        translation="[60, 494]"
-        width="240"
-        height="18"
-        font="font:SmallSystemFont"
-        color="0xD8B765"
-        text="Temporadas"
-      />
-      <MarkupGrid
-        id="seriesDetailSeasonsList"
-        translation="[60, 512]"
-        itemSize="[240, 70]"
-        numColumns="4"
-        numRows="1"
-        drawFocusFeedback="false"
-        itemComponentName="SeriesDetailRowItem"
-      />
-
-      <Label
-        id="seriesDetailEpisodesTitle"
-        translation="[60, 592]"
-        width="240"
-        height="18"
-        font="font:SmallSystemFont"
-        color="0xD8B765"
-        text="Episodios"
-      />
-      <MarkupGrid
-        id="seriesDetailEpisodesList"
-        translation="[60, 610]"
-        itemSize="[240, 70]"
-        numColumns="4"
-        numRows="1"
-        drawFocusFeedback="false"
-        itemComponentName="SeriesDetailRowItem"
-      />
-
-      <Label
-        id="seriesDetailHint"
-        translation="[60, 708]"
-        width="1140"
-        height="16"
-        font="font:SmallSystemFont"
-        color="0xAAB4C2"
-        visible="false"
-        text=""
-      />
     </Group>
 
     <ChampionsVideo
