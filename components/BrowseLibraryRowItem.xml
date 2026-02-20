@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="BrowseLibraryRowItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onItemContentChanged" />
+    <field id="itemHasFocus" type="boolean" onChange="onItemHasFocusChanged" />
+  </interface>
+
+  <children>
+    <Poster
+      id="bg"
+      translation="[4, 4]"
+      width="392"
+      height="112"
+      uri="pkg:/images/field_normal.png"
+    />
+
+    <Poster
+      id="focusRing"
+      translation="[0, 0]"
+      width="400"
+      height="120"
+      uri="pkg:/images/field_focus.png"
+      visible="false"
+    />
+
+    <Poster
+      id="cover"
+      translation="[14, 14]"
+      width="68"
+      height="92"
+      loadDisplayMode="zoomToFill"
+      uri=""
+    />
+
+    <Rectangle
+      id="accent"
+      translation="[92, 24]"
+      width="4"
+      height="72"
+      color="0x2B3950"
+    />
+
+    <Label
+      id="title"
+      translation="[108, 24]"
+      width="272"
+      height="40"
+      font="font:MediumSystemFont"
+      color="0xE6EBF3"
+      wrap="true"
+      numLines="2"
+      text=""
+    />
+
+    <Label
+      id="meta"
+      translation="[108, 68]"
+      width="272"
+      height="22"
+      font="font:SmallSystemFont"
+      color="0x9FB0C5"
+      text=""
+    />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/BrowseLibraryRowItem.brs" />
+</component>

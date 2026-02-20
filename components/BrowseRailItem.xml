@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="BrowseRailItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onItemContentChanged" />
+    <field id="itemHasFocus" type="boolean" onChange="onItemHasFocusChanged" />
+  </interface>
+
+  <children>
+    <Poster
+      id="cardBg"
+      translation="[10, 8]"
+      width="188"
+      height="220"
+      uri="pkg:/images/card.png"
+    />
+
+    <Poster
+      id="focusRing"
+      translation="[6, 4]"
+      width="196"
+      height="228"
+      uri="pkg:/images/field_focus.png"
+      visible="false"
+    />
+
+    <Poster
+      id="cover"
+      translation="[16, 14]"
+      width="176"
+      height="162"
+      loadDisplayMode="zoomToFill"
+      uri=""
+    />
+
+    <Rectangle
+      id="textOverlay"
+      translation="[16, 116]"
+      width="176"
+      height="60"
+      color="0xB00A111D"
+    />
+
+    <Rectangle
+      id="progressBg"
+      translation="[16, 176]"
+      width="176"
+      height="3"
+      color="0x253247"
+      visible="false"
+    />
+
+    <Rectangle
+      id="progressFill"
+      translation="[16, 176]"
+      width="0"
+      height="3"
+      color="0xD8B765"
+      visible="false"
+    />
+
+    <Label
+      id="title"
+      translation="[20, 122]"
+      width="166"
+      height="30"
+      font="font:SmallSystemFont"
+      color="0xE6EBF3"
+      wrap="true"
+      numLines="2"
+      text=""
+    />
+
+    <Label
+      id="meta"
+      translation="[20, 152]"
+      width="166"
+      height="18"
+      font="font:SmallSystemFont"
+      color="0x9FB0C5"
+      text=""
+    />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/BrowseRailItem.brs" />
+</component>

@@ -1,5 +1,6 @@
 sub init()
   m.bg = m.top.findNode("bg")
+  m.accent = m.top.findNode("accent")
   m.label = m.top.findNode("label")
 end sub
 
@@ -28,7 +29,7 @@ sub applyStyle()
   focused = (m.top.itemHasFocus = true)
   if m.bg <> invalid then
     if focused then
-      m.bg.uri = "pkg:/images/button_focus.png"
+      m.bg.uri = "pkg:/images/field_focus.png"
     else
       m.bg.uri = "pkg:/images/field_normal.png"
     end if
@@ -36,9 +37,16 @@ sub applyStyle()
 
   if m.label <> invalid then
     if focused then
-      m.label.color = "0x0B0F16"
+      m.label.color = "0xFFFFFF"
     else
       m.label.color = "0xD0D6E0"
+    end if
+  end if
+  if m.accent <> invalid then
+    if focused then
+      m.accent.color = "0xE4BF6A"
+    else
+      m.accent.color = "0xD7B25C"
     end if
   end if
 end sub

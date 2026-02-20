@@ -15,6 +15,53 @@ sub init()
   m.top.progressBody = ""
 end sub
 
+function _progressRowItemId(row as Object) as String
+  if type(row) <> "roAssociativeArray" then return ""
+  rid = ""
+  if row.itemId <> invalid then rid = row.itemId.ToStr().Trim()
+  if rid = "" and row.item_id <> invalid then rid = row.item_id.ToStr().Trim()
+  if rid = "" and row.id <> invalid then rid = row.id.ToStr().Trim()
+  return rid
+end function
+
+function _progressRowToSummary(row as Object) as Object
+  out = {}
+  if type(row) <> "roAssociativeArray" then return out
+
+  posMs = -1
+  if row.positionMs <> invalid then posMs = Int(Val(row.positionMs.ToStr()))
+  if posMs < 0 and row.position_ms <> invalid then posMs = Int(Val(row.position_ms.ToStr()))
+  if posMs >= 0 then out.positionMs = posMs
+
+  durMs = -1
+  if row.durationMs <> invalid then durMs = Int(Val(row.durationMs.ToStr()))
+  if durMs < 0 and row.duration_ms <> invalid then durMs = Int(Val(row.duration_ms.ToStr()))
+  if durMs >= 0 then out.durationMs = durMs
+
+  pct = -1
+  if row.percent <> invalid then pct = Int(Val(row.percent.ToStr()))
+  if pct >= 0 then out.percent = pct
+
+  return out
+end function
+
+function _findProgressForItem(rows as Object, targetId as String) as Object
+  if type(rows) <> "roArray" then return {}
+  tid = targetId
+  if tid = invalid then tid = ""
+  tid = tid.ToStr().Trim()
+  if tid = "" then return {}
+
+  for each row in rows
+    rid = _progressRowItemId(row)
+    if rid = tid then
+      return _progressRowToSummary(row)
+    end if
+  end for
+
+  return {}
+end function
+
 sub doWork()
   kind = m.top.kind
 
@@ -62,6 +109,20 @@ sub doWork()
     return
   end if
 
+  if kind = "shelf_series" then
+    lim = m.top.limit
+    if lim = invalid then lim = 0
+    if lim <= 0 then lim = 12
+    resp = gatewayJellyfinSeriesShelfItems(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.parentId, lim)
+    if resp.ok = true then
+      m.top.ok = true
+      m.top.resultJson = FormatJson(resp.items)
+    else
+      m.top.error = resp.error
+    end if
+    return
+  end if
+
   if kind = "continue" then
     lim = m.top.limit
     if lim = invalid then lim = 0
@@ -72,6 +133,50 @@ sub doWork()
       m.top.resultJson = FormatJson(resp.items)
     else
       m.top.error = resp.error
+    end if
+    return
+  end if
+
+  if kind = "progress_item" then
+    lim = m.top.limit
+    if lim = invalid then lim = 0
+    if lim <= 0 then lim = 240
+
+    targetId = m.top.itemId
+    if targetId = invalid then targetId = ""
+    targetId = targetId.ToStr().Trim()
+    if targetId = "" then
+      m.top.ok = true
+      m.top.resultJson = FormatJson({})
+      return
+    end if
+
+    rows = []
+    batchResp = gatewayProgressBatch(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, [targetId])
+    if batchResp.ok = true then
+      rows = batchResp.items
+      if type(rows) <> "roArray" then rows = []
+    else
+      errBatch = batchResp.error
+      if errBatch = invalid then errBatch = ""
+      errBatch = errBatch.ToStr().Trim()
+      print "progress_item batch failed id=" + targetId + " err=" + errBatch + "; fallback continue"
+      resp = gatewayProgressContinue(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, lim)
+      if resp.ok <> true then
+        m.top.error = resp.error
+        return
+      end if
+      rows = resp.items
+      if type(rows) <> "roArray" then rows = []
+    end if
+
+    found = _findProgressForItem(rows, targetId)
+    if type(found) = "roAssociativeArray" then
+      m.top.ok = true
+      m.top.resultJson = FormatJson(found)
+    else
+      m.top.ok = true
+      m.top.resultJson = FormatJson({})
     end if
     return
   end if
@@ -95,6 +200,26 @@ sub doWork()
     if resp.ok = true then
       m.top.ok = true
       m.top.resultJson = FormatJson(resp.items)
+    else
+      m.top.error = resp.error
+    end if
+    return
+  end if
+
+  if kind = "series_detail" then
+    lim = m.top.limit
+    if lim = invalid then lim = 0
+    if lim <= 0 then lim = 24
+    resp = gatewayJellyfinSeriesDetails(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.itemId, lim)
+    if resp.ok = true then
+      m.top.ok = true
+      m.top.resultJson = FormatJson({
+        series: resp.series
+        seasons: resp.seasons
+        episodes: resp.episodes
+        firstEpisodeId: resp.firstEpisodeId
+        firstEpisodeTitle: resp.firstEpisodeTitle
+      })
     else
       m.top.error = resp.error
     end if

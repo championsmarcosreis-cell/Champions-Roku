@@ -8,52 +8,61 @@
   <children>
     <Poster
       id="cardBg"
-      translation="[6, 3]"
-      width="324"
-      height="204"
+      translation="[16, 7]"
+      width="568"
+      height="326"
       uri="pkg:/images/card.png"
     />
 
     <Poster
       id="focusRing"
-      translation="[6, 3]"
-      width="324"
-      height="204"
+      translation="[10, 1]"
+      width="580"
+      height="338"
       uri="pkg:/images/field_focus.png"
       visible="false"
     />
 
     <Poster
       id="cover"
-      translation="[14, 14]"
-      width="308"
-      height="166"
+      translation="[22, 14]"
+      width="556"
+      height="298"
       loadDisplayMode="zoomToFill"
       uri=""
     />
 
     <Rectangle
       id="textOverlay"
-      translation="[14, 136]"
-      width="308"
-      height="44"
-      color="0x7F0B1220"
+      translation="[22, 198]"
+      width="556"
+      height="108"
+      color="0xB00A111D"
     />
 
-    <Poster
+    <Rectangle
+      id="rankBadgeBorder"
+      translation="[32, 21]"
+      width="106"
+      height="36"
+      color="0x2D3A4E"
+      visible="false"
+    />
+
+    <Rectangle
       id="rankBadgeBg"
-      translation="[20, 20]"
-      width="94"
+      translation="[35, 24]"
+      width="100"
       height="30"
-      uri="pkg:/images/button_normal.png"
+      color="0xD7B25C"
       visible="false"
     />
 
     <Label
       id="rankBadgeText"
-      translation="[20, 25]"
-      width="94"
-      height="20"
+      translation="[35, 30]"
+      width="100"
+      height="18"
       font="font:SmallSystemFont"
       horizAlign="center"
       color="0x0B0F16"
@@ -63,37 +72,39 @@
 
     <Rectangle
       id="progressBg"
-      translation="[14, 177]"
-      width="308"
-      height="3"
+      translation="[22, 308]"
+      width="556"
+      height="4"
       color="0x253247"
       visible="false"
     />
 
     <Rectangle
       id="progressFill"
-      translation="[14, 177]"
+      translation="[22, 308]"
       width="0"
-      height="3"
+      height="4"
       color="0xD8B765"
       visible="false"
     />
 
     <Label
       id="title"
-      translation="[20, 141]"
-      width="292"
-      height="24"
+      translation="[34, 216]"
+      width="528"
+      height="44"
       font="font:MediumSystemFont"
       color="0xE6EBF3"
+      wrap="true"
+      numLines="2"
       text=""
     />
 
     <Label
       id="meta"
-      translation="[20, 160]"
-      width="292"
-      height="20"
+      translation="[34, 264]"
+      width="528"
+      height="22"
       font="font:SmallSystemFont"
       color="0x9FB0C5"
       text=""

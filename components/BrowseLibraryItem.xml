@@ -8,20 +8,28 @@
   <children>
     <Poster
       id="bg"
-      width="180"
-      height="48"
-      translation="[0, 2]"
+      width="196"
+      height="56"
+      translation="[2, 2]"
       uri="pkg:/images/field_normal.png"
+    />
+
+    <Rectangle
+      id="accent"
+      translation="[14, 26]"
+      width="8"
+      height="8"
+      color="0xD7B25C"
     />
 
     <Label
       id="label"
-      translation="[10, 12]"
-      width="160"
-      height="28"
+      translation="[30, 16]"
+      width="152"
+      height="24"
       font="font:MediumSystemFont"
       color="0xD0D6E0"
-      horizAlign="center"
+      horizAlign="left"
       text=""
     />
   </children>

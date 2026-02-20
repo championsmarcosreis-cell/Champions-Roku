@@ -1,121 +1,256 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component name="BrowseCard" extends="Group">
   <children>
-    <Poster
-      id="heroPromptBg"
-      translation="[30, 22]"
-      width="1120"
-      height="56"
-      uri="pkg:/images/field_normal.png"
-    />
+    <Group id="browseHomeGroup">
+      <children>
+        <Poster
+          id="heroPromptBg"
+          translation="[20, 16]"
+          width="1240"
+          height="80"
+          uri="pkg:/images/field_normal.png"
+        />
 
-    <Poster
-      id="heroAvatarBg"
-      translation="[40, 24]"
-      width="40"
-      height="40"
-      uri="pkg:/images/overlay_circle.png"
-    />
+        <Poster
+          id="heroAvatarBg"
+          translation="[30, 26]"
+          width="60"
+          height="60"
+          uri="pkg:/images/overlay_circle.png"
+        />
 
-    <Poster
-      id="heroAvatarPhoto"
-      translation="[47, 31]"
-      width="26"
-      height="26"
-      uri=""
+        <Poster
+          id="heroAvatarPhoto"
+          translation="[40, 36]"
+          width="40"
+          height="40"
+          uri=""
+          visible="false"
+        />
+
+        <Label
+          id="heroAvatarText"
+          translation="[30, 44]"
+          width="60"
+          height="24"
+          font="font:MediumSystemFont"
+          horizAlign="center"
+          color="0xD0D6E0"
+          text=""
+        />
+
+        <Label
+          id="heroPromptText"
+          translation="[102, 44]"
+          width="930"
+          height="28"
+          font="font:MediumSystemFont"
+          color="0xE6EBF3"
+          text="Quer continuar?"
+        />
+
+        <Poster
+          id="heroPromptBtnBg"
+          translation="[1086, 30]"
+          width="162"
+          height="52"
+          uri="pkg:/images/button_focus.png"
+        />
+
+        <Label
+          id="heroPromptBtnText"
+          translation="[1086, 44]"
+          width="162"
+          height="24"
+          font="font:MediumSystemFont"
+          horizAlign="center"
+          color="0x0B0F16"
+          text="Continuar"
+        />
+
+        <Label
+          id="viewsTitle"
+          translation="[20, 110]"
+          width="540"
+          height="32"
+          font="font:MediumSystemFont"
+          color="0xE6EBF3"
+          text="Bibliotecas"
+        />
+
+        <MarkupGrid
+          id="viewsList"
+          translation="[20, 146]"
+          itemSize="[200, 60]"
+          numColumns="3"
+          numRows="1"
+          drawFocusFeedback="false"
+          itemComponentName="BrowseLibraryItem"
+        />
+
+        <Group
+          id="shelvesViewport"
+          translation="[20, 264]"
+        >
+          <children>
+            <Group
+              id="shelvesGroup"
+              translation="[0, 0]"
+            >
+              <children>
+                <Label
+                  id="itemsTitle"
+                  translation="[0, 0]"
+                  width="620"
+                  height="34"
+                  font="font:MediumSystemFont"
+                  color="0xE6EBF3"
+                  text="Destaques"
+                />
+
+                <MarkupGrid
+                  id="itemsList"
+                  translation="[0, 38]"
+                  itemSize="[600, 340]"
+                  numColumns="2"
+                  numRows="1"
+                  drawFocusFeedback="false"
+                  itemComponentName="BrowsePosterItem"
+                />
+
+                <Label
+                  id="continueTitle"
+                  translation="[0, 390]"
+                  width="620"
+                  height="34"
+                  font="font:MediumSystemFont"
+                  color="0xE6EBF3"
+                  text="Continuar assistindo"
+                />
+
+                <MarkupGrid
+                  id="continueList"
+                  translation="[0, 426]"
+                  itemSize="[208, 236]"
+                  numColumns="3"
+                  numRows="1"
+                  drawFocusFeedback="false"
+                  itemComponentName="BrowseRailItem"
+                />
+
+                <Label
+                  id="recentMoviesTitle"
+                  translation="[0, 676]"
+                  width="620"
+                  height="34"
+                  font="font:MediumSystemFont"
+                  color="0xE6EBF3"
+                  text="Filmes recentes"
+                />
+
+                <MarkupGrid
+                  id="recentMoviesList"
+                  translation="[0, 712]"
+                  itemSize="[208, 236]"
+                  numColumns="3"
+                  numRows="1"
+                  drawFocusFeedback="false"
+                  itemComponentName="BrowseRailItem"
+                />
+
+                <Label
+                  id="recentSeriesTitle"
+                  translation="[0, 962]"
+                  width="620"
+                  height="34"
+                  font="font:MediumSystemFont"
+                  color="0xE6EBF3"
+                  text="Series recentes"
+                />
+
+                <MarkupGrid
+                  id="recentSeriesList"
+                  translation="[0, 998]"
+                  itemSize="[208, 236]"
+                  numColumns="3"
+                  numRows="1"
+                  drawFocusFeedback="false"
+                  itemComponentName="BrowseRailItem"
+                />
+              </children>
+            </Group>
+          </children>
+        </Group>
+
+        <Label
+          id="browseEmptyLabel"
+          translation="[20, 674]"
+          width="1240"
+          height="34"
+          font="font:SmallSystemFont"
+          horizAlign="center"
+          color="0xAAB4C2"
+          visible="false"
+          text="Sem itens"
+        />
+      </children>
+    </Group>
+
+    <Group
+      id="libraryGroup"
       visible="false"
-    />
+    >
+      <children>
+        <Label
+          id="libraryTitle"
+          translation="[20, 110]"
+          width="860"
+          height="34"
+          font="font:MediumSystemFont"
+          color="0xE6EBF3"
+          text="Filmes"
+        />
 
-    <Label
-      id="heroAvatarText"
-      translation="[40, 34]"
-      width="40"
-      height="22"
-      font="font:SmallSystemFont"
-      horizAlign="center"
-      color="0xD0D6E0"
-      text=""
-    />
+        <Poster
+          id="librarySearchBg"
+          translation="[20, 148]"
+          width="1240"
+          height="56"
+          uri="pkg:/images/field_normal.png"
+        />
 
-    <Label
-      id="heroPromptText"
-      translation="[94, 36]"
-      width="860"
-      height="28"
-      font="font:MediumSystemFont"
-      color="0xD0D6E0"
-      text="Quer continuar?"
-    />
+        <Label
+          id="librarySearchText"
+          translation="[42, 164]"
+          width="1188"
+          height="24"
+          font="font:MediumSystemFont"
+          color="0xAAB4C2"
+          text="Buscar"
+        />
 
-    <Poster
-      id="heroPromptBtnBg"
-      translation="[980, 30]"
-      width="170"
-      height="40"
-      uri="pkg:/images/field_normal.png"
-    />
+        <MarkupGrid
+          id="libraryItemsList"
+          translation="[20, 220]"
+          itemSize="[400, 120]"
+          numColumns="3"
+          numRows="4"
+          drawFocusFeedback="false"
+          itemComponentName="BrowseLibraryRowItem"
+        />
 
-    <Label
-      id="heroPromptBtnText"
-      translation="[980, 40]"
-      width="170"
-      height="22"
-      font="font:SmallSystemFont"
-      horizAlign="center"
-      color="0xD0D6E0"
-      text="Continuar"
-    />
-
-    <Label
-      id="viewsTitle"
-      translation="[30, 98]"
-      width="540"
-      height="32"
-      font="font:MediumSystemFont"
-      color="0xD8B765"
-      text="Bibliotecas"
-    />
-
-    <Label
-      id="itemsTitle"
-      translation="[30, 184]"
-      width="540"
-      height="34"
-      font="font:MediumSystemFont"
-      color="0xD8B765"
-      text="Recentes"
-    />
-
-    <MarkupGrid
-      id="viewsList"
-      translation="[30, 130]"
-      itemSize="[180, 52]"
-      numColumns="3"
-      numRows="1"
-      drawFocusFeedback="false"
-      itemComponentName="BrowseLibraryItem"
-    />
-
-    <MarkupGrid
-      id="itemsList"
-      translation="[30, 224]"
-      itemSize="[336, 210]"
-      numColumns="3"
-      numRows="2"
-      drawFocusFeedback="false"
-      itemComponentName="BrowsePosterItem"
-    />
-
-    <Label
-      id="browseEmptyLabel"
-      translation="[30, 502]"
-      width="1120"
-      height="34"
-      font="font:SmallSystemFont"
-      horizAlign="center"
-      color="0xAAB4C2"
-      visible="false"
-      text="Sem itens"
-    />
+        <Label
+          id="libraryEmptyLabel"
+          translation="[20, 710]"
+          width="1240"
+          height="30"
+          font="font:SmallSystemFont"
+          horizAlign="center"
+          color="0xAAB4C2"
+          visible="false"
+          text="Sem itens"
+        />
+      </children>
+    </Group>
   </children>
 </component>

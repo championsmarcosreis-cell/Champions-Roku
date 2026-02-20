@@ -222,6 +222,266 @@ function gatewayJellyfinShelfItems(apiBase as String, appToken as String, jellyf
   return { ok: true, items: out }
 end function
 
+function gatewayJellyfinSeriesShelfItems(apiBase as String, appToken as String, jellyfinToken as String, userId as String, parentId as String, limit as Integer) as Object
+  base = _trimSlash(apiBase)
+
+  uid = userId
+  if uid = invalid then uid = ""
+  uid = uid.Trim()
+  if uid = "" then
+    return { ok: false, error: "missing_user_id" }
+  end if
+
+  pid = parentId
+  if pid = invalid then pid = ""
+  pid = pid.Trim()
+  if pid = "" then
+    return { ok: false, error: "missing_parent_id" }
+  end if
+
+  lim = limit
+  if lim <= 0 then lim = 12
+
+  url = base + "/jellyfin/Users/" + uid + "/Items"
+  url = _urlWithQuery(url, {
+    ParentId: pid
+    Recursive: true
+    Limit: lim
+    SortBy: "DateCreated"
+    SortOrder: "Descending"
+    IncludeItemTypes: "Series"
+    ExcludeItemTypes: "Folder,CollectionFolder"
+    IsMissing: false
+    Fields: "Path,MediaSources"
+  })
+
+  headers = {
+    "X-Emby-Authorization": _jellyfinClientHeader()
+    "X-Emby-Token": jellyfinToken
+  }
+  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+
+  resp = httpJson("GET", url, headers)
+  if resp.ok <> true then
+    return { ok: false, error: resp.error }
+  end if
+
+  data = resp.data
+  items = invalid
+  if data <> invalid then items = data.Items
+  if type(items) <> "roArray" then items = []
+
+  out = []
+  for each it in items
+    id = ""
+    name = ""
+    typ = "Series"
+    path = ""
+
+    if it <> invalid then
+      if it.Id <> invalid then id = it.Id
+      if it.Name <> invalid then name = it.Name
+      if it.Type <> invalid and it.Type.ToStr().Trim() <> "" then typ = it.Type
+      path = _jellyfinExtractPath(it)
+    end if
+
+    out.Push({ id: id, name: name, type: typ, path: path })
+  end for
+
+  return { ok: true, items: out }
+end function
+
+function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jellyfinToken as String, userId as String, seriesId as String, episodeLimit as Integer) as Object
+  base = _trimSlash(apiBase)
+
+  uid = userId
+  if uid = invalid then uid = ""
+  uid = uid.Trim()
+  if uid = "" then
+    return { ok: false, error: "missing_user_id" }
+  end if
+
+  sid = seriesId
+  if sid = invalid then sid = ""
+  sid = sid.Trim()
+  if sid = "" then
+    return { ok: false, error: "missing_series_id" }
+  end if
+
+  lim = episodeLimit
+  if lim <= 0 then lim = 24
+
+  headers = {
+    "X-Emby-Authorization": _jellyfinClientHeader()
+    "X-Emby-Token": jellyfinToken
+  }
+  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+
+  seriesUrl = base + "/jellyfin/Users/" + uid + "/Items/" + sid
+  seriesUrl = _urlWithQuery(seriesUrl, {
+    Fields: "Overview,Genres,CommunityRating,ProductionYear,OfficialRating,RunTimeTicks,BackdropImageTags,Path,MediaSources"
+  })
+  seriesResp = httpJson("GET", seriesUrl, headers)
+  if seriesResp.ok <> true then
+    return { ok: false, error: seriesResp.error }
+  end if
+
+  seriesData = seriesResp.data
+  if type(seriesData) <> "roAssociativeArray" then seriesData = {}
+
+  seriesName = ""
+  seriesType = "Series"
+  seriesOverview = ""
+  seriesPath = ""
+  seriesYear = 0
+  seriesRating = ""
+  seriesOfficialRating = ""
+  seriesRuntimeTicks = ""
+  seriesGenres = []
+  seriesBackdropTags = []
+  if seriesData.Name <> invalid then seriesName = seriesData.Name
+  if seriesData.Type <> invalid and seriesData.Type.ToStr().Trim() <> "" then seriesType = seriesData.Type
+  if seriesData.Overview <> invalid then seriesOverview = seriesData.Overview
+  seriesPath = _jellyfinExtractPath(seriesData)
+  if seriesData.ProductionYear <> invalid then seriesYear = Int(Val(seriesData.ProductionYear.ToStr()))
+  if seriesData.CommunityRating <> invalid then seriesRating = seriesData.CommunityRating.ToStr()
+  if seriesData.OfficialRating <> invalid then seriesOfficialRating = seriesData.OfficialRating
+  if seriesData.RunTimeTicks <> invalid then seriesRuntimeTicks = seriesData.RunTimeTicks.ToStr()
+  if seriesData.Genres <> invalid then seriesGenres = seriesData.Genres
+  if type(seriesGenres) <> "roArray" then seriesGenres = []
+  if seriesData.BackdropImageTags <> invalid then seriesBackdropTags = seriesData.BackdropImageTags
+  if type(seriesBackdropTags) <> "roArray" then seriesBackdropTags = []
+
+  seasons = []
+  seasonsUrl = base + "/jellyfin/Shows/" + sid + "/Seasons"
+  seasonsUrl = _urlWithQuery(seasonsUrl, {
+    UserId: uid
+    Fields: "Overview,Path,MediaSources"
+    SortBy: "SortName"
+    SortOrder: "Ascending"
+  })
+  seasonsResp = httpJson("GET", seasonsUrl, headers)
+  if seasonsResp.ok = true then
+    seasonsData = seasonsResp.data
+    seasonItems = invalid
+    if type(seasonsData) = "roAssociativeArray" then seasonItems = seasonsData.Items
+    if type(seasonItems) <> "roArray" then seasonItems = []
+
+    for each s in seasonItems
+      sid0 = ""
+      sname = ""
+      sover = ""
+      sidx = -1
+      if s <> invalid then
+        if s.Id <> invalid then sid0 = s.Id
+        if s.Name <> invalid then sname = s.Name
+        if s.Overview <> invalid then sover = s.Overview
+        if s.IndexNumber <> invalid then sidx = Int(Val(s.IndexNumber.ToStr()))
+      end if
+      seasons.Push({
+        id: sid0
+        name: sname
+        overview: sover
+        indexNumber: sidx
+      })
+    end for
+  end if
+
+  episodes = []
+  firstEpisodeId = ""
+  firstEpisodeTitle = ""
+  epsUrl = base + "/jellyfin/Shows/" + sid + "/Episodes"
+  epsUrl = _urlWithQuery(epsUrl, {
+    UserId: uid
+    Limit: lim
+    Fields: "Overview,Path,MediaSources"
+    SortBy: "ParentIndexNumber,IndexNumber,SortName"
+    SortOrder: "Ascending"
+  })
+  epsResp = httpJson("GET", epsUrl, headers)
+
+  episodeItems = []
+  if epsResp.ok = true then
+    epsData = epsResp.data
+    if type(epsData) = "roAssociativeArray" and type(epsData.Items) = "roArray" then
+      episodeItems = epsData.Items
+    end if
+  end if
+
+  if type(episodeItems) <> "roArray" or episodeItems.Count() <= 0 then
+    fallbackUrl = base + "/jellyfin/Users/" + uid + "/Items"
+    fallbackUrl = _urlWithQuery(fallbackUrl, {
+      ParentId: sid
+      Recursive: true
+      IncludeItemTypes: "Episode"
+      Limit: lim
+      Fields: "Overview,Path,MediaSources"
+      SortBy: "ParentIndexNumber,IndexNumber,SortName"
+      SortOrder: "Ascending"
+    })
+    fallbackResp = httpJson("GET", fallbackUrl, headers)
+    if fallbackResp.ok = true then
+      fdata = fallbackResp.data
+      if type(fdata) = "roAssociativeArray" and type(fdata.Items) = "roArray" then
+        episodeItems = fdata.Items
+      end if
+    end if
+  end if
+  if type(episodeItems) <> "roArray" then episodeItems = []
+
+  for each ep in episodeItems
+    eid = ""
+    ename = ""
+    eover = ""
+    epath = ""
+    pidx = -1
+    eidx = -1
+    if ep <> invalid then
+      if ep.Id <> invalid then eid = ep.Id
+      if ep.Name <> invalid then ename = ep.Name
+      if ep.Overview <> invalid then eover = ep.Overview
+      if ep.ParentIndexNumber <> invalid then pidx = Int(Val(ep.ParentIndexNumber.ToStr()))
+      if ep.IndexNumber <> invalid then eidx = Int(Val(ep.IndexNumber.ToStr()))
+      epath = _jellyfinExtractPath(ep)
+    end if
+
+    if firstEpisodeId = "" and eid <> invalid and eid.Trim() <> "" then
+      firstEpisodeId = eid.Trim()
+      firstEpisodeTitle = ename
+    end if
+
+    episodes.Push({
+      id: eid
+      name: ename
+      overview: eover
+      path: epath
+      parentIndexNumber: pidx
+      indexNumber: eidx
+    })
+  end for
+
+  return {
+    ok: true
+    series: {
+      id: sid
+      name: seriesName
+      type: seriesType
+      overview: seriesOverview
+      path: seriesPath
+      productionYear: seriesYear
+      communityRating: seriesRating
+      officialRating: seriesOfficialRating
+      runTimeTicks: seriesRuntimeTicks
+      genres: seriesGenres
+      backdropTags: seriesBackdropTags
+    }
+    seasons: seasons
+    episodes: episodes
+    firstEpisodeId: firstEpisodeId
+    firstEpisodeTitle: firstEpisodeTitle
+  }
+end function
+
 function gatewayJellyfinLiveChannels(apiBase as String, appToken as String, jellyfinToken as String) as Object
   base = _trimSlash(apiBase)
   url = base + "/jellyfin/LiveTv/Channels"
@@ -248,25 +508,59 @@ function gatewayJellyfinLiveChannels(apiBase as String, appToken as String, jell
     name = ""
     path = ""
     logoPath = ""
+    logoFallbackPath = ""
     logoTag = ""
+    logoType = "Primary"
+    primaryTag = ""
+    logoTagCandidate = ""
+    thumbTag = ""
 
     if it <> invalid then
       if it.Id <> invalid then id = it.Id
       if it.Name <> invalid then name = it.Name
       path = _jellyfinExtractPath(it)
-      if it.ImageTags <> invalid and it.ImageTags.Primary <> invalid then
-        logoTag = it.ImageTags.Primary
+      if it.ImageTags <> invalid then
+        tags = it.ImageTags
+        if tags.Primary <> invalid then primaryTag = tags.Primary.ToStr().Trim()
+        if tags.Logo <> invalid then logoTagCandidate = tags.Logo.ToStr().Trim()
+        if tags.Thumb <> invalid then thumbTag = tags.Thumb.ToStr().Trim()
+      end if
+
+      if logoTagCandidate <> "" then
+        logoType = "Logo"
+        logoTag = logoTagCandidate
+      else if primaryTag <> "" then
+        logoType = "Primary"
+        logoTag = primaryTag
+      else if thumbTag <> "" then
+        logoType = "Thumb"
+        logoTag = thumbTag
       end if
     end if
 
     if id <> invalid and id.Trim() <> "" then
-      logoPath = "/jellyfin/Items/" + id.Trim() + "/Images/Primary"
-      if logoTag <> invalid and logoTag.Trim() <> "" then
-        logoPath = _urlWithQuery(logoPath, { tag: logoTag.Trim() })
+      cid = id.Trim()
+      logoPath = "/jellyfin/LiveTv/Channels/" + cid + "/Images/" + logoType
+      if logoTag <> "" then
+        logoPath = _urlWithQuery(logoPath, { tag: logoTag })
+      end if
+
+      logoFallbackPath = "/jellyfin/Items/" + cid + "/Images/Primary"
+      if primaryTag <> "" then
+        logoFallbackPath = _urlWithQuery(logoFallbackPath, { tag: primaryTag })
       end if
     end if
 
-    out.Push({ id: id, name: name, path: path, logoPath: logoPath, logoTag: logoTag })
+    out.Push({
+      id: id
+      name: name
+      path: path
+      logoPath: logoPath
+      logoFallbackPath: logoFallbackPath
+      logoTag: logoTag
+      logoType: logoType
+      primaryTag: primaryTag
+    })
   end for
 
   return { ok: true, items: out }
@@ -1069,6 +1363,68 @@ function gatewayProgressContinue(apiBase as String, appToken as String, jellyfin
     if data.items <> invalid then items = data.items
     if type(items) <> "roArray" then
       if data.Items <> invalid then items = data.Items
+    end if
+  else if type(data) = "roArray" then
+    items = data
+  end if
+  if type(items) <> "roArray" then items = []
+
+  return { ok: true, items: items }
+end function
+
+function _csvFromArray(values as Object) as String
+  if type(values) <> "roArray" then return ""
+  out = ""
+  for each v in values
+    if v = invalid then
+      continue for
+    end if
+    s = v.ToStr().Trim()
+    if s = "" then
+      continue for
+    end if
+    if out <> "" then out = out + ","
+    out = out + s
+  end for
+  return out
+end function
+
+function gatewayProgressBatch(apiBase as String, appToken as String, jellyfinToken as String, userId as String, itemIds as Object) as Object
+  base = _trimSlash(apiBase)
+  uid = userId
+  if uid = invalid then uid = ""
+  uid = uid.Trim()
+  if uid = "" then
+    return { ok: false, error: "missing_user_id" }
+  end if
+
+  idsCsv = _csvFromArray(itemIds)
+  if idsCsv = "" then return { ok: true, items: [] }
+
+  url = base + "/progress/batch"
+  url = _urlWithQuery(url, {
+    userId: uid
+    ids: idsCsv
+  })
+
+  headers = {}
+  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+  if jellyfinToken <> invalid and jellyfinToken.Trim() <> "" then
+    headers["X-Emby-Token"] = jellyfinToken
+    headers["X-Jellyfin-Token"] = jellyfinToken
+  end if
+
+  resp = httpJson("GET", url, headers)
+  if resp.ok <> true then
+    return { ok: false, error: resp.error }
+  end if
+
+  data = resp.data
+  items = []
+  if type(data) = "roAssociativeArray" then
+    if data.items <> invalid then items = data.items
+    if type(items) <> "roArray" and data.Items <> invalid then
+      items = data.Items
     end if
   else if type(data) = "roArray" then
     items = data

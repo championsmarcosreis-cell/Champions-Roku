@@ -56,6 +56,241 @@
       visible="false"
     />
 
+    <Group
+      id="seriesDetailGroup"
+      visible="false"
+    >
+      <Rectangle
+        id="seriesDetailScrim"
+        translation="[0, 0]"
+        width="1280"
+        height="720"
+        color="0xCC000000"
+      />
+
+      <Label
+        id="seriesDetailBack"
+        translation="[40, 18]"
+        width="240"
+        height="24"
+        font="font:SmallSystemFont"
+        color="0xD0D6E0"
+        text="< Detalhe"
+      />
+
+      <Poster
+        id="seriesDetailHero"
+        translation="[260, 40]"
+        width="980"
+        height="200"
+        loadDisplayMode="zoomToFill"
+        uri=""
+      />
+
+      <Poster
+        id="seriesDetailPoster"
+        translation="[60, 60]"
+        width="200"
+        height="260"
+        loadDisplayMode="zoomToFill"
+        uri=""
+      />
+
+      <Label
+        id="seriesDetailTitle"
+        translation="[60, 300]"
+        width="1160"
+        height="34"
+        font="font:MediumSystemFont"
+        color="0xFFFFFF"
+        text=""
+      />
+
+      <Label
+        id="seriesDetailType"
+        translation="[60, 330]"
+        width="360"
+        height="20"
+        font="font:SmallSystemFont"
+        color="0xAAB4C2"
+        text=""
+      />
+
+      <Group
+        id="seriesDetailChips"
+        translation="[60, 354]"
+      >
+        <Group id="seriesDetailChipYear">
+          <Rectangle id="seriesDetailChipYearBg" width="80" height="24" color="0x2D3A4E" />
+          <Label
+            id="seriesDetailChipYearText"
+            translation="[0, 2]"
+            width="80"
+            height="20"
+            font="font:SmallSystemFont"
+            horizAlign="center"
+            color="0xE6EBF3"
+            text=""
+          />
+        </Group>
+        <Group id="seriesDetailChipAge">
+          <Rectangle id="seriesDetailChipAgeBg" width="80" height="24" color="0x2D3A4E" />
+          <Label
+            id="seriesDetailChipAgeText"
+            translation="[0, 2]"
+            width="80"
+            height="20"
+            font="font:SmallSystemFont"
+            horizAlign="center"
+            color="0xE6EBF3"
+            text=""
+          />
+        </Group>
+        <Group id="seriesDetailChipRating">
+          <Rectangle id="seriesDetailChipRatingBg" width="80" height="24" color="0x2D3A4E" />
+          <Label
+            id="seriesDetailChipRatingText"
+            translation="[0, 2]"
+            width="80"
+            height="20"
+            font="font:SmallSystemFont"
+            horizAlign="center"
+            color="0xE6EBF3"
+            text=""
+          />
+        </Group>
+        <Group id="seriesDetailChipStatus">
+          <Rectangle id="seriesDetailChipStatusBg" width="120" height="24" color="0x2D3A4E" />
+          <Label
+            id="seriesDetailChipStatusText"
+            translation="[0, 2]"
+            width="120"
+            height="20"
+            font="font:SmallSystemFont"
+            horizAlign="center"
+            color="0xE6EBF3"
+            text=""
+          />
+        </Group>
+      </Group>
+
+      <Label
+        id="seriesDetailGenres"
+        translation="[60, 378]"
+        width="880"
+        height="20"
+        font="font:SmallSystemFont"
+        color="0xC5D0E0"
+        text=""
+      />
+
+      <Poster
+        id="seriesDetailActionStatusBg"
+        translation="[60, 402]"
+        width="200"
+        height="38"
+        uri="pkg:/images/button_normal.png"
+      />
+      <Label
+        id="seriesDetailActionStatusText"
+        translation="[60, 412]"
+        width="200"
+        height="20"
+        font="font:SmallSystemFont"
+        horizAlign="center"
+        color="0xE6EBF3"
+        text=""
+      />
+
+      <Poster
+        id="seriesDetailActionTrailerBg"
+        translation="[270, 402]"
+        width="200"
+        height="38"
+        uri="pkg:/images/button_normal.png"
+      />
+      <Label
+        id="seriesDetailActionTrailerText"
+        translation="[270, 412]"
+        width="200"
+        height="20"
+        font="font:SmallSystemFont"
+        horizAlign="center"
+        color="0xE6EBF3"
+        text="Trailer"
+      />
+
+      <Label
+        id="seriesDetailOverview"
+        translation="[60, 444]"
+        width="1140"
+        height="36"
+        font="font:SmallSystemFont"
+        color="0xE6EBF3"
+        wrap="true"
+        numLines="2"
+        text=""
+      />
+
+      <Label
+        id="seriesDetailRuntime"
+        translation="[60, 476]"
+        width="640"
+        height="18"
+        font="font:SmallSystemFont"
+        color="0xAAB4C2"
+        text=""
+      />
+
+      <Label
+        id="seriesDetailSeasonsTitle"
+        translation="[60, 498]"
+        width="240"
+        height="20"
+        font="font:SmallSystemFont"
+        color="0xD8B765"
+        text="Temporadas"
+      />
+      <MarkupGrid
+        id="seriesDetailSeasonsList"
+        translation="[60, 520]"
+        itemSize="[220, 70]"
+        numColumns="5"
+        numRows="1"
+        drawFocusFeedback="false"
+        itemComponentName="SeriesDetailRowItem"
+      />
+
+      <Label
+        id="seriesDetailEpisodesTitle"
+        translation="[60, 604]"
+        width="240"
+        height="20"
+        font="font:SmallSystemFont"
+        color="0xD8B765"
+        text="Episodios"
+      />
+      <MarkupGrid
+        id="seriesDetailEpisodesList"
+        translation="[60, 626]"
+        itemSize="[220, 70]"
+        numColumns="5"
+        numRows="1"
+        drawFocusFeedback="false"
+        itemComponentName="SeriesDetailRowItem"
+      />
+
+      <Label
+        id="seriesDetailHint"
+        translation="[60, 702]"
+        width="1140"
+        height="16"
+        font="font:SmallSystemFont"
+        color="0xAAB4C2"
+        text="UP/DOWN: trocar linha    OK: reproduzir    BACK: voltar"
+      />
+    </Group>
+
     <ChampionsVideo
       id="player"
       translation="[0, 0]"

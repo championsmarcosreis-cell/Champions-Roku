@@ -40,11 +40,46 @@ sub init()
   m.lastPlayerState = ""
   m.devAutoplay = ""
   m.devAutoplayDone = false
-  m.browseFocus = "views" ' views | items | hero_logout | hero_continue
+  m.browseFocus = "views" ' views | items | continue | movies | series | library_search | library_items | hero_logout | hero_continue
   m.viewsGridCols = 3
   m.itemsGridCols = 3
+  m.itemsGridRows = 2
+  m.libraryGridCols = 3
+  m.homeShelfQueue = []
+  m.pendingHomeShelfSection = ""
+  m.browseMoviesViewId = ""
+  m.browseSeriesViewId = ""
+  m.browseLibraryOpen = false
+  m.browseLibraryCollection = ""
+  m.browseLibraryViewId = ""
+  m.browseLibraryTitle = ""
+  m.browseLibrarySearch = ""
+  m.browseLibraryRawItems = []
+  m.pendingLibraryViewId = ""
+  m.pendingLibraryLoad = false
+  m.browseLibraryAutoFocusPending = false
   m.activeViewId = ""
   m.activeViewCollection = ""
+  m.pendingSeriesDetailItemId = ""
+  m.pendingSeriesDetailTitle = ""
+  m.pendingSeriesDetailQueued = false
+  m.pendingSeriesDetailQueuedItemId = ""
+  m.pendingSeriesDetailQueuedTitle = ""
+  m.seriesDetailPlayEpisodeId = ""
+  m.seriesDetailPlayEpisodeTitle = ""
+  m.seriesDetailOpen = false
+  m.seriesDetailFocus = "episodes" ' episodes | seasons
+  m.seriesDetailSeasonIndex = -1
+  m.seriesDetailData = {}
+  m.seriesDetailSeasons = []
+  m.seriesDetailEpisodes = []
+  m.seriesDetailStatus = ""
+  m.seriesDetailStatusItemId = ""
+  m.pendingResumeProbeItemId = ""
+  m.pendingResumeProbeTitle = ""
+  m.pendingResumeProbeQueued = false
+  m.pendingResumeProbeQueuedItemId = ""
+  m.pendingResumeProbeQueuedTitle = ""
   m.pendingShelfViewId = ""
   m.queuedShelfViewId = ""
   m.shelfCache = {}
@@ -134,7 +169,7 @@ sub init()
   if cfg0.appToken <> invalid then appTokenLen = Len(cfg0.appToken)
   jellyfinLen = 0
   if cfg0.jellyfinToken <> invalid then jellyfinLen = Len(cfg0.jellyfinToken)
-  print "MainScene init apiBase=" + m.apiBase + " appTokenLen=" + appTokenLen.ToStr() + " jellyfinTokenLen=" + jellyfinLen.ToStr() + " devAutoplay=" + m.devAutoplay + " uiLang=" + m.uiLang + " metaLang=" + m.metaLang + " build=2026-02-19a"
+  print "MainScene init apiBase=" + m.apiBase + " appTokenLen=" + appTokenLen.ToStr() + " jellyfinTokenLen=" + jellyfinLen.ToStr() + " devAutoplay=" + m.devAutoplay + " uiLang=" + m.uiLang + " metaLang=" + m.metaLang + " build=2026-02-20b"
 
   if cfg0.jellyfinToken <> invalid and cfg0.jellyfinToken <> "" then
     m.startupMode = "browse"
@@ -196,6 +231,14 @@ sub init()
     m.top.appendChild(m.progressTimer)
   end if
 
+  m.deferredBrowseTimer = CreateObject("roSGNode", "Timer")
+  if m.deferredBrowseTimer <> invalid then
+    m.deferredBrowseTimer.duration = 0.2
+    m.deferredBrowseTimer.repeat = false
+    m.deferredBrowseTimer.observeField("fire", "onDeferredBrowseTimerFire")
+    m.top.appendChild(m.deferredBrowseTimer)
+  end if
+
   ' Simple VOD scrubbing driven by LEFT/RIGHT events from ChampionsVideo.
   m.clock = CreateObject("roTimespan")
   if m.clock <> invalid then m.clock.Mark()
@@ -241,22 +284,80 @@ sub bindUiNodes()
   m.loginCard = m.top.findNode("loginCard")
   m.homeCard = m.top.findNode("homeCard")
   m.browseCard = m.top.findNode("browseCard")
+  m.browseHomeGroup = m.top.findNode("browseHomeGroup")
+  m.libraryGroup = m.top.findNode("libraryGroup")
+  m.shelvesViewport = m.top.findNode("shelvesViewport")
+  m.shelvesGroup = m.top.findNode("shelvesGroup")
   m.viewsList = m.top.findNode("viewsList")
   m.itemsList = m.top.findNode("itemsList")
+  m.continueList = m.top.findNode("continueList")
+  m.recentMoviesList = m.top.findNode("recentMoviesList")
+  m.recentSeriesList = m.top.findNode("recentSeriesList")
+  m.libraryTitle = m.top.findNode("libraryTitle")
+  m.librarySearchBg = m.top.findNode("librarySearchBg")
+  m.librarySearchText = m.top.findNode("librarySearchText")
+  m.libraryItemsList = m.top.findNode("libraryItemsList")
+  m.libraryEmptyLabel = m.top.findNode("libraryEmptyLabel")
   m.browseEmptyLabel = m.top.findNode("browseEmptyLabel")
   m.viewsTitle = m.top.findNode("viewsTitle")
   m.itemsTitle = m.top.findNode("itemsTitle")
+  m.continueTitle = m.top.findNode("continueTitle")
+  m.recentMoviesTitle = m.top.findNode("recentMoviesTitle")
+  m.recentSeriesTitle = m.top.findNode("recentSeriesTitle")
+  m.heroPromptBg = m.top.findNode("heroPromptBg")
   m.heroPromptText = m.top.findNode("heroPromptText")
   m.heroPromptBtnBg = m.top.findNode("heroPromptBtnBg")
   m.heroPromptBtnText = m.top.findNode("heroPromptBtnText")
   m.heroAvatarBg = m.top.findNode("heroAvatarBg")
   m.heroAvatarPhoto = m.top.findNode("heroAvatarPhoto")
   m.heroAvatarText = m.top.findNode("heroAvatarText")
+  m.seriesDetailGroup = m.top.findNode("seriesDetailGroup")
+  m.seriesDetailBack = m.top.findNode("seriesDetailBack")
+  m.seriesDetailHero = m.top.findNode("seriesDetailHero")
+  m.seriesDetailPoster = m.top.findNode("seriesDetailPoster")
+  m.seriesDetailTitle = m.top.findNode("seriesDetailTitle")
+  m.seriesDetailType = m.top.findNode("seriesDetailType")
+  m.seriesDetailGenres = m.top.findNode("seriesDetailGenres")
+  m.seriesDetailOverview = m.top.findNode("seriesDetailOverview")
+  m.seriesDetailRuntime = m.top.findNode("seriesDetailRuntime")
+  m.seriesDetailChipsGroup = m.top.findNode("seriesDetailChips")
+  m.seriesDetailChipYear = m.top.findNode("seriesDetailChipYear")
+  m.seriesDetailChipYearBg = m.top.findNode("seriesDetailChipYearBg")
+  m.seriesDetailChipYearText = m.top.findNode("seriesDetailChipYearText")
+  m.seriesDetailChipAge = m.top.findNode("seriesDetailChipAge")
+  m.seriesDetailChipAgeBg = m.top.findNode("seriesDetailChipAgeBg")
+  m.seriesDetailChipAgeText = m.top.findNode("seriesDetailChipAgeText")
+  m.seriesDetailChipRating = m.top.findNode("seriesDetailChipRating")
+  m.seriesDetailChipRatingBg = m.top.findNode("seriesDetailChipRatingBg")
+  m.seriesDetailChipRatingText = m.top.findNode("seriesDetailChipRatingText")
+  m.seriesDetailChipStatus = m.top.findNode("seriesDetailChipStatus")
+  m.seriesDetailChipStatusBg = m.top.findNode("seriesDetailChipStatusBg")
+  m.seriesDetailChipStatusText = m.top.findNode("seriesDetailChipStatusText")
+  m.seriesDetailActionStatusBg = m.top.findNode("seriesDetailActionStatusBg")
+  m.seriesDetailActionStatusText = m.top.findNode("seriesDetailActionStatusText")
+  m.seriesDetailActionTrailerBg = m.top.findNode("seriesDetailActionTrailerBg")
+  m.seriesDetailActionTrailerText = m.top.findNode("seriesDetailActionTrailerText")
+  m.seriesDetailSeasonsTitle = m.top.findNode("seriesDetailSeasonsTitle")
+  m.seriesDetailSeasonsList = m.top.findNode("seriesDetailSeasonsList")
+  m.seriesDetailEpisodesTitle = m.top.findNode("seriesDetailEpisodesTitle")
+  m.seriesDetailEpisodesList = m.top.findNode("seriesDetailEpisodesList")
+  m.seriesDetailHint = m.top.findNode("seriesDetailHint")
   if m.viewsList <> invalid and m.viewsList.hasField("numColumns") then
     m.viewsGridCols = _gridCols(m.viewsList.numColumns, m.viewsGridCols)
   end if
   if m.itemsList <> invalid and m.itemsList.hasField("numColumns") then
     m.itemsGridCols = _gridCols(m.itemsList.numColumns, m.itemsGridCols)
+  end if
+  if m.itemsList <> invalid and m.itemsList.hasField("numRows") then
+    m.itemsGridRows = _gridCols(m.itemsList.numRows, m.itemsGridRows)
+  end if
+  if m.libraryItemsList <> invalid and m.libraryItemsList.hasField("numColumns") then
+    m.libraryGridCols = _gridCols(m.libraryItemsList.numColumns, m.libraryGridCols)
+  end if
+  if m.shelvesViewport <> invalid then
+    if m.shelvesViewport.hasField("clippingRect") then m.shelvesViewport.clippingRect = [0, 0, 1240, 452]
+    if m.shelvesViewport.hasField("clipRect") then m.shelvesViewport.clipRect = [0, 0, 1240, 452]
+    if m.shelvesViewport.hasField("clipChildren") then m.shelvesViewport.clipChildren = true
   end if
   m.liveCard = m.top.findNode("liveCard")
   m.channelsList = m.top.findNode("channelsList")
@@ -353,10 +454,40 @@ sub bindUiNodes()
     m.itemsList.observeField("itemSelected", "onItemSelected")
     m.itemsObsSetup = true
   end if
+
+  if m.continueList <> invalid and (m.continueObsSetup <> true) then
+    m.continueList.observeField("itemSelected", "onContinueItemSelected")
+    m.continueObsSetup = true
+  end if
+
+  if m.recentMoviesList <> invalid and (m.recentMoviesObsSetup <> true) then
+    m.recentMoviesList.observeField("itemSelected", "onRecentMoviesItemSelected")
+    m.recentMoviesObsSetup = true
+  end if
+
+  if m.recentSeriesList <> invalid and (m.recentSeriesObsSetup <> true) then
+    m.recentSeriesList.observeField("itemSelected", "onRecentSeriesItemSelected")
+    m.recentSeriesObsSetup = true
+  end if
+
+  if m.libraryItemsList <> invalid and (m.libraryItemsObsSetup <> true) then
+    m.libraryItemsList.observeField("itemSelected", "onLibraryItemSelected")
+    m.libraryItemsObsSetup = true
+  end if
+
+  if m.seriesDetailSeasonsList <> invalid and (m.seriesDetailSeasonsObsSetup <> true) then
+    m.seriesDetailSeasonsList.observeField("itemSelected", "onSeriesSeasonSelected")
+    m.seriesDetailSeasonsObsSetup = true
+  end if
+
+  if m.seriesDetailEpisodesList <> invalid and (m.seriesDetailEpisodesObsSetup <> true) then
+    m.seriesDetailEpisodesList.observeField("itemSelected", "onSeriesEpisodeSelected")
+    m.seriesDetailEpisodesObsSetup = true
+  end if
 end sub
 
 function uiReady() as Boolean
-  return (m.loginCard <> invalid and m.homeCard <> invalid and m.browseCard <> invalid and m.viewsList <> invalid and m.itemsList <> invalid and m.liveCard <> invalid and m.channelsList <> invalid and m.hintLabel <> invalid)
+  return (m.loginCard <> invalid and m.homeCard <> invalid and m.browseCard <> invalid and m.viewsList <> invalid and m.itemsList <> invalid and m.continueList <> invalid and m.recentMoviesList <> invalid and m.recentSeriesList <> invalid and m.libraryItemsList <> invalid and m.liveCard <> invalid and m.channelsList <> invalid and m.hintLabel <> invalid)
 end function
 
 function _isPlaybackVisible() as Boolean
@@ -417,7 +548,8 @@ sub onBindTimerFire()
   ' Give the user something usable even if late binding failed.
   renderForm()
   enterLogin()
-  setStatus("ui init failed")
+  print "UI bind fallback: continuing with login mode"
+  setStatus("ready")
 end sub
 
 sub onDevAutoplayFire()
@@ -1059,6 +1191,10 @@ function _t(key as String) as String
         library_movies: "Movies"
         library_live: "Live TV"
         library_series: "Series"
+        library_search_hint: "Search"
+        library_search_prefix: "Search: "
+        library_search_title: "Search library"
+        library_no_results: "No results"
         recent: "Recent"
         recent_prefix: "Recent: "
         continue: "Continue Watching"
@@ -1099,6 +1235,18 @@ function _t(key as String) as String
         resume_cancel: "Cancel"
         resume_restart: "Play from start"
         resume_continue: "Continue"
+        loading_details: "loading details..."
+        details_failed: "Failed to load details"
+        play_first_episode: "Play first episode"
+        close: "Close"
+        series_no_overview: "No synopsis available."
+        series_seasons: "Seasons"
+        series_episodes: "Episodes"
+        detail_back: "Detail"
+        detail_trailer: "Trailer"
+        detail_processing: "Processing"
+        detail_play: "Play"
+        detail_runtime: "Runtime:"
       }
       pt: {
         home_live: "Live TV"
@@ -1111,6 +1259,10 @@ function _t(key as String) as String
         library_movies: "Filmes"
         library_live: "Live TV"
         library_series: "Series"
+        library_search_hint: "Buscar"
+        library_search_prefix: "Buscar: "
+        library_search_title: "Buscar na biblioteca"
+        library_no_results: "Sem resultados"
         recent: "Recentes"
         recent_prefix: "Recentes: "
         continue: "Continuar Assistindo"
@@ -1151,6 +1303,18 @@ function _t(key as String) as String
         resume_cancel: "Cancelar"
         resume_restart: "Assistir do inicio"
         resume_continue: "Continuar"
+        loading_details: "carregando detalhes..."
+        details_failed: "Falhou ao carregar detalhes"
+        play_first_episode: "Assistir primeiro episodio"
+        close: "Fechar"
+        series_no_overview: "Sem sinopse disponivel."
+        series_seasons: "Temporadas"
+        series_episodes: "Episodios"
+        detail_back: "Detalhe"
+        detail_trailer: "Trailer"
+        detail_processing: "Processando"
+        detail_play: "Assistir"
+        detail_runtime: "Runtime:"
       }
       es: {
         home_live: "En vivo"
@@ -1163,6 +1327,10 @@ function _t(key as String) as String
         library_movies: "Peliculas"
         library_live: "En vivo"
         library_series: "Series"
+        library_search_hint: "Buscar"
+        library_search_prefix: "Buscar: "
+        library_search_title: "Buscar en biblioteca"
+        library_no_results: "Sin resultados"
         recent: "Recientes"
         recent_prefix: "Recientes: "
         continue: "Seguir viendo"
@@ -1203,6 +1371,18 @@ function _t(key as String) as String
         resume_cancel: "Cancelar"
         resume_restart: "Ver desde el inicio"
         resume_continue: "Continuar"
+        loading_details: "cargando detalles..."
+        details_failed: "Fallo al cargar detalles"
+        play_first_episode: "Ver primer episodio"
+        close: "Cerrar"
+        series_no_overview: "Sin sinopsis disponible."
+        series_seasons: "Temporadas"
+        series_episodes: "Episodios"
+        detail_back: "Detalle"
+        detail_trailer: "Trailer"
+        detail_processing: "Procesando"
+        detail_play: "Reproducir"
+        detail_runtime: "Runtime:"
       }
       it: {
         home_live: "Diretta"
@@ -1215,6 +1395,10 @@ function _t(key as String) as String
         library_movies: "Film"
         library_live: "Diretta"
         library_series: "Serie"
+        library_search_hint: "Cerca"
+        library_search_prefix: "Cerca: "
+        library_search_title: "Cerca nella libreria"
+        library_no_results: "Nessun risultato"
         recent: "Recenti"
         recent_prefix: "Recenti: "
         continue: "Continua a guardare"
@@ -1255,6 +1439,18 @@ function _t(key as String) as String
         resume_cancel: "Annulla"
         resume_restart: "Guarda dall'inizio"
         resume_continue: "Continua"
+        loading_details: "caricamento dettagli..."
+        details_failed: "Caricamento dettagli fallito"
+        play_first_episode: "Guarda primo episodio"
+        close: "Chiudi"
+        series_no_overview: "Sinossi non disponibile."
+        series_seasons: "Stagioni"
+        series_episodes: "Episodi"
+        detail_back: "Dettaglio"
+        detail_trailer: "Trailer"
+        detail_processing: "In elaborazione"
+        detail_play: "Guarda"
+        detail_runtime: "Runtime:"
       }
     }
   end if
@@ -1279,8 +1475,20 @@ sub applyLocalization()
   if m.homeTokensText <> invalid then m.homeTokensText.text = _t("home_tokens")
   if m.homeLogoutText <> invalid then m.homeLogoutText.text = _t("home_logout")
   if m.viewsTitle <> invalid then m.viewsTitle.text = _t("libraries")
+  if m.itemsTitle <> invalid then m.itemsTitle.text = _t("top10")
+  if m.continueTitle <> invalid then m.continueTitle.text = _t("resume_title")
+  if m.recentMoviesTitle <> invalid then m.recentMoviesTitle.text = _t("recent_movies")
+  if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.text = _t("recent_series")
+  if m.seriesDetailBack <> invalid then m.seriesDetailBack.text = "< " + _t("detail_back")
+  if m.seriesDetailSeasonsTitle <> invalid then m.seriesDetailSeasonsTitle.text = _t("series_seasons")
+  if m.seriesDetailEpisodesTitle <> invalid then m.seriesDetailEpisodesTitle.text = _t("series_episodes")
+  if m.seriesDetailActionTrailerText <> invalid then m.seriesDetailActionTrailerText.text = _t("detail_trailer")
   if m.heroPromptText <> invalid then m.heroPromptText.text = _t("hero_continue_text")
   if m.heroPromptBtnText <> invalid then m.heroPromptBtnText.text = _t("hero_continue_cta")
+  _refreshBrowseLibraryHeader()
+  if m.libraryEmptyLabel <> invalid and m.libraryEmptyLabel.visible <> true then
+    m.libraryEmptyLabel.text = _t("no_items")
+  end if
   _syncHeroAvatarVisual()
   if m.hintLabel <> invalid then m.hintLabel.text = _t("hint_app_token")
 end sub
@@ -1323,9 +1531,225 @@ function _browseItemCols() as Integer
   return _gridCols(m.itemsGridCols, 3)
 end function
 
+function _browseItemRows() as Integer
+  return _gridCols(m.itemsGridRows, 1)
+end function
+
+function _browseLibraryCols() as Integer
+  return _gridCols(m.libraryGridCols, 3)
+end function
+
+function _browseSectionHasItems(section as String) as Boolean
+  s = section
+  if s = invalid then s = ""
+  s = LCase(s.Trim())
+  if s = "items" then return (_browseListCount(m.itemsList) > 0)
+  if s = "continue" then return (_browseListCount(m.continueList) > 0)
+  if s = "movies" then return (_browseListCount(m.recentMoviesList) > 0)
+  if s = "series" then return (_browseListCount(m.recentSeriesList) > 0)
+  return false
+end function
+
+function _browseNextShelfSection(cur as String) as String
+  if cur = "items" then
+    if _browseSectionHasItems("continue") then return "continue"
+    if _browseSectionHasItems("movies") then return "movies"
+    if _browseSectionHasItems("series") then return "series"
+    return ""
+  end if
+  if cur = "continue" then
+    if _browseSectionHasItems("movies") then return "movies"
+    if _browseSectionHasItems("series") then return "series"
+    return ""
+  end if
+  if cur = "movies" then
+    if _browseSectionHasItems("series") then return "series"
+    return ""
+  end if
+  return ""
+end function
+
+function _browsePrevShelfSection(cur as String) as String
+  if cur = "continue" then
+    if _browseSectionHasItems("items") then return "items"
+    return ""
+  end if
+  if cur = "movies" then
+    if _browseSectionHasItems("continue") then return "continue"
+    if _browseSectionHasItems("items") then return "items"
+    return ""
+  end if
+  if cur = "series" then
+    if _browseSectionHasItems("movies") then return "movies"
+    if _browseSectionHasItems("continue") then return "continue"
+    if _browseSectionHasItems("items") then return "items"
+    return ""
+  end if
+  return ""
+end function
+
+function _browseSectionForCollection(collectionType as String) as String
+  ct = collectionType
+  if ct = invalid then ct = ""
+  ct = LCase(ct.Trim())
+  if ct = "movies" then return "movies"
+  if ct = "tvshows" then return "series"
+  if ct = "top10" then return "items"
+  if ct = "continue" then return "continue"
+  return "items"
+end function
+
+function _browseListNodeForFocus(focusName as String) as Object
+  f = focusName
+  if f = invalid then f = ""
+  f = LCase(f.Trim())
+  if f = "items" then return m.itemsList
+  if f = "continue" then return m.continueList
+  if f = "movies" then return m.recentMoviesList
+  if f = "series" then return m.recentSeriesList
+  if f = "library_items" then return m.libraryItemsList
+  return invalid
+end function
+
+sub _setBrowseLibraryVisible(open as Boolean)
+  showLibrary = (open = true)
+  if m.browseHomeGroup <> invalid then m.browseHomeGroup.visible = (showLibrary <> true)
+  if m.libraryGroup <> invalid then m.libraryGroup.visible = showLibrary
+  if showLibrary then
+    if m.browseEmptyLabel <> invalid then m.browseEmptyLabel.visible = false
+  else
+    if m.libraryEmptyLabel <> invalid then m.libraryEmptyLabel.visible = false
+  end if
+end sub
+
+sub _refreshBrowseLibraryHeader()
+  titleTxt = m.browseLibraryTitle
+  if titleTxt = invalid then titleTxt = ""
+  titleTxt = titleTxt.ToStr().Trim()
+  if titleTxt = "" then
+    c = m.browseLibraryCollection
+    if c = invalid then c = ""
+    c = LCase(c.ToStr().Trim())
+    if c = "tvshows" then
+      titleTxt = _t("library_series")
+    else if c = "movies" then
+      titleTxt = _t("library_movies")
+    else
+      titleTxt = _t("libraries")
+    end if
+  end if
+  if m.libraryTitle <> invalid then m.libraryTitle.text = titleTxt
+
+  q = m.browseLibrarySearch
+  if q = invalid then q = ""
+  q = q.ToStr().Trim()
+  if m.librarySearchText <> invalid then
+    if q = "" then
+      m.librarySearchText.text = _t("library_search_hint")
+      m.librarySearchText.color = "0xAAB4C2"
+    else
+      m.librarySearchText.text = _t("library_search_prefix") + q
+      m.librarySearchText.color = "0xE6EBF3"
+    end if
+  end if
+end sub
+
+function _hasDeferredBrowseActions() as Boolean
+  if m.pendingLibraryLoad = true then return true
+  if m.pendingSeriesDetailQueued = true then return true
+  if m.pendingResumeProbeQueued = true then return true
+  return false
+end function
+
+sub _scheduleDeferredBrowseActions()
+  if _hasDeferredBrowseActions() <> true then return
+  if m.deferredBrowseTimer <> invalid then
+    m.deferredBrowseTimer.control = "start"
+  else
+    _runDeferredBrowseActions()
+  end if
+end sub
+
+sub _runDeferredBrowseActions()
+  if _hasDeferredBrowseActions() <> true then return
+
+  if m.pendingJob <> "" then
+    if m.deferredBrowseTimer <> invalid then m.deferredBrowseTimer.control = "start"
+    return
+  end if
+
+  if m.pendingLibraryLoad = true then
+    m.pendingLibraryLoad = false
+    _loadBrowseLibraryItems()
+    if m.pendingJob <> "" then return
+  end if
+
+  if m.pendingSeriesDetailQueued = true then
+    qId = m.pendingSeriesDetailQueuedItemId
+    qTitle = m.pendingSeriesDetailQueuedTitle
+    m.pendingSeriesDetailQueued = false
+    m.pendingSeriesDetailQueuedItemId = ""
+    m.pendingSeriesDetailQueuedTitle = ""
+    requestSeriesDetails(qId, qTitle)
+    if m.pendingJob <> "" then return
+  end if
+
+  if m.pendingResumeProbeQueued = true then
+    rId = m.pendingResumeProbeQueuedItemId
+    rTitle = m.pendingResumeProbeQueuedTitle
+    m.pendingResumeProbeQueued = false
+    m.pendingResumeProbeQueuedItemId = ""
+    m.pendingResumeProbeQueuedTitle = ""
+    requestResumeProbe(rId, rTitle)
+  end if
+end sub
+
+sub onDeferredBrowseTimerFire()
+  _runDeferredBrowseActions()
+end sub
+
+function _nodeTranslationY(node as Object, fallback as Integer) as Integer
+  if node = invalid then return fallback
+  tr = node.translation
+  if type(tr) = "roArray" and tr.Count() >= 2 then
+    return _sceneIntFromAny(tr[1])
+  end if
+  return fallback
+end function
+
+sub _applyBrowseShelfScroll()
+  if m.shelvesGroup = invalid then return
+
+  anchorY = _nodeTranslationY(m.itemsList, 38)
+  focusKey = m.browseFocus
+  if focusKey = invalid then focusKey = ""
+  focusKey = LCase(focusKey.ToStr().Trim())
+
+  targetNode = m.itemsList
+  if focusKey = "continue" and _browseSectionHasItems("continue") then
+    targetNode = m.continueList
+  else if focusKey = "movies" and _browseSectionHasItems("movies") then
+    targetNode = m.recentMoviesList
+  else if focusKey = "series" and _browseSectionHasItems("series") then
+    targetNode = m.recentSeriesList
+  end if
+
+  targetY = _nodeTranslationY(targetNode, anchorY)
+  if targetY < anchorY then targetY = anchorY
+  m.shelvesGroup.translation = [0, anchorY - targetY]
+end sub
+
 sub _syncHeroAvatarVisual()
   if m.heroAvatarText = invalid then return
-  m.heroAvatarText.text = ">"
+  label = "A"
+  txt = ""
+  if m.form <> invalid and m.form.username <> invalid then txt = m.form.username.ToStr()
+  txt = txt.Trim()
+  if txt <> "" then
+    ch = UCase(Left(txt, 1))
+    if Asc(ch) >= 65 and Asc(ch) <= 90 then label = ch
+  end if
+  m.heroAvatarText.text = label
   m.heroAvatarText.visible = true
   if m.heroAvatarPhoto <> invalid then
     m.heroAvatarPhoto.visible = false
@@ -1335,12 +1759,51 @@ end sub
 
 sub _triggerHeroContinue()
   if m.mode <> "browse" then return
+  if m.pendingJob <> "" and m.pendingJob <> "home_shelf" then
+    print "hero continue pending job=" + m.pendingJob
+    return
+  end if
+  if m.pendingJob = "home_shelf" then
+    if m.continueList = invalid then
+      print "hero continue waiting shelves"
+      return
+    end if
+    rootWait = m.continueList.content
+    if rootWait = invalid or rootWait.getChildCount() <= 0 then
+      print "hero continue waiting shelves"
+      return
+    end if
+  end if
+  if m.heroContinueAutoplayPending = true then
+    print "hero continue pending"
+    return
+  end if
+  if m.pendingJob = "shelf" and m.pendingShelfViewId = "__continue" then
+    print "hero continue pending"
+    return
+  end if
+  if m.queuedShelfViewId = "__continue" then
+    print "hero continue queued"
+    return
+  end if
   nowMs = _nowMs()
-  if nowMs - Int(m.lastHeroContinueMs) < 700 then
+  if nowMs - Int(m.lastHeroContinueMs) < 1200 then
     print "hero continue debounce"
     return
   end if
   m.lastHeroContinueMs = nowMs
+
+  if m.continueList <> invalid then
+    root = m.continueList.content
+    if root <> invalid and root.getChildCount() > 0 then
+      first = root.getChild(0)
+      if first <> invalid then
+        _playBrowseItemNode(first)
+        return
+      end if
+    end if
+  end if
+
   m.activeViewId = "__continue"
   m.activeViewCollection = "continue"
   if m.itemsTitle <> invalid then m.itemsTitle.text = _t("continue")
@@ -1377,7 +1840,155 @@ function _browsePosterUri(itemId as String, apiBase as String, jellyfinToken as 
   return appendQuery(u, q)
 end function
 
+function _browseBackdropUri(itemId as String, apiBase as String, jellyfinToken as String, tag as String) as String
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return ""
+
+  base = apiBase
+  if base = invalid then base = ""
+  base = base.ToStr().Trim()
+  if base = "" then return ""
+  if Right(base, 1) = "/" then base = Left(base, Len(base) - 1)
+
+  u = base + "/jellyfin/Items/" + id + "/Images/Backdrop/0"
+  q = {
+    maxWidth: "1280"
+    quality: "85"
+  }
+  tg = tag
+  if tg = invalid then tg = ""
+  tg = tg.ToStr().Trim()
+  if tg <> "" then q["tag"] = tg
+
+  tok = jellyfinToken
+  if tok = invalid then tok = ""
+  tok = tok.ToStr().Trim()
+  if tok <> "" then
+    q["X-Emby-Token"] = tok
+    q["X-Jellyfin-Token"] = tok
+  end if
+  return appendQuery(u, q)
+end function
+
+function _minutesFromTicks(raw as Dynamic) as Integer
+  if raw = invalid then return 0
+  s = raw.ToStr().Trim()
+  if s = "" then return 0
+  t = Val(s)
+  if t <= 0 then return 0
+  mins = Int(t / 600000000)
+  if mins < 0 then mins = 0
+  return mins
+end function
+
+function _formatRating(raw as Dynamic) as String
+  if raw = invalid then return ""
+  s = raw.ToStr().Trim()
+  if s = "" then return ""
+  v = Val(s)
+  if v <= 0 then return ""
+  scaled = Int((v * 10) + 0.5)
+  whole = Int(scaled / 10)
+  frac = scaled - (whole * 10)
+  if frac < 0 then frac = 0
+  return whole.ToStr() + "." + frac.ToStr()
+end function
+
+function _seriesGenresText(raw as Dynamic) as String
+  if raw = invalid then return ""
+  if type(raw) = "roArray" then
+    parts = []
+    for each g in raw
+      if g = invalid then
+        continue for
+      end if
+      t = g.ToStr().Trim()
+      if t <> "" then parts.Push(t)
+    end for
+    return _seriesJoin(parts, " • ")
+  end if
+  return raw.ToStr().Trim()
+end function
+
+sub _setDetailChip(chip as Object, bg as Object, label as Object, text as String)
+  if chip = invalid then return
+  t = text
+  if t = invalid then t = ""
+  t = t.ToStr().Trim()
+  if t = "" then
+    chip.visible = false
+    return
+  end if
+
+  chip.visible = true
+  if label <> invalid then label.text = t
+
+  w = 24 + (Len(t) * 10)
+  if w < 60 then w = 60
+  if w > 180 then w = 180
+  if bg <> invalid then bg.width = w
+  if label <> invalid then label.width = w
+end sub
+
+sub _layoutDetailChips()
+  if m.seriesDetailChipsGroup = invalid then return
+
+  chips = [
+    { g: m.seriesDetailChipYear, bg: m.seriesDetailChipYearBg },
+    { g: m.seriesDetailChipAge, bg: m.seriesDetailChipAgeBg },
+    { g: m.seriesDetailChipRating, bg: m.seriesDetailChipRatingBg },
+    { g: m.seriesDetailChipStatus, bg: m.seriesDetailChipStatusBg }
+  ]
+
+  x = 0
+  pad = 10
+  hasAny = false
+  for each c in chips
+    g = c.g
+    if g = invalid or g.visible <> true then
+      continue for
+    end if
+    hasAny = true
+    w = 0
+    if c.bg <> invalid and c.bg.width <> invalid then w = Int(c.bg.width)
+    g.translation = [x, 0]
+    x = x + w + pad
+  end for
+
+  m.seriesDetailChipsGroup.visible = hasAny
+end sub
+
+sub _applySeriesDetailStatus(status as String)
+  s = status
+  if s = invalid then s = ""
+  s = UCase(s.Trim())
+  m.seriesDetailStatus = s
+
+  isProcessing = (s = "PROCESSING")
+  txt = ""
+  if isProcessing then txt = _t("detail_processing")
+
+  _setDetailChip(m.seriesDetailChipStatus, m.seriesDetailChipStatusBg, m.seriesDetailChipStatusText, txt)
+  _layoutDetailChips()
+
+  if m.seriesDetailActionStatusBg <> invalid then m.seriesDetailActionStatusBg.visible = isProcessing
+  if m.seriesDetailActionStatusText <> invalid then
+    m.seriesDetailActionStatusText.visible = isProcessing
+    if isProcessing then
+      m.seriesDetailActionStatusText.text = txt
+    else
+      m.seriesDetailActionStatusText.text = ""
+    end if
+  end if
+end sub
+
 function _browseChannelPosterUri(channelId as String, apiBase as String, jellyfinToken as String) as String
+  return _browseChannelImageUri(channelId, apiBase, jellyfinToken, "Primary")
+end function
+
+function _browseChannelImageUri(channelId as String, apiBase as String, jellyfinToken as String, imageType as String) as String
   id = channelId
   if id = invalid then id = ""
   id = id.ToStr().Trim()
@@ -1389,7 +2000,12 @@ function _browseChannelPosterUri(channelId as String, apiBase as String, jellyfi
   if base = "" then return ""
   if Right(base, 1) = "/" then base = Left(base, Len(base) - 1)
 
-  u = base + "/jellyfin/LiveTv/Channels/" + id + "/Images/Primary"
+  imgType = imageType
+  if imgType = invalid then imgType = ""
+  imgType = imgType.ToStr().Trim()
+  if imgType = "" then imgType = "Primary"
+
+  u = base + "/jellyfin/LiveTv/Channels/" + id + "/Images/" + imgType
   q = {
     maxWidth: "600"
     quality: "90"
@@ -3246,20 +3862,44 @@ sub _settingsSelectFocused()
   lst.itemSelected = i
 end sub
 
-sub signAndPlay(rawPath as String, title as String)
-  target = parseTarget(rawPath, "/hls/master.m3u8")
-
-  ' Live must always go through the LIVE gateway/worker routes (/hls/* or /live/*).
-  ' Some Jellyfin LiveTv channel payloads can contain other paths/URLs (including legacy R2/VOD),
-  ' which would cause the Roku to sign/play an invalid route.
-  p = target.path
+function _isLiveRoutePath(path as String) as Boolean
+  p = path
   if p = invalid then p = ""
-  p = p.Trim()
-  if Instr(1, p, "/hls/") <> 1 and Instr(1, p, "/live/") <> 1 then
-    print "signAndPlay: invalid live path; forcing /hls/master.m3u8 (path=" + p + ")"
-    target = { path: "/hls/master.m3u8", query: {} }
+  p = p.ToStr().Trim()
+  if p = "" then return false
+  if Instr(1, p, "/hls/") = 1 then return true
+  if Instr(1, p, "/live/") = 1 then return true
+  return false
+end function
+
+function _resolveLivePathFromItem(it as Object) as String
+  if it = invalid then return "/hls/master.m3u8"
+
+  p = ""
+  if it.hasField("path") then p = it.path
+  if p <> invalid then p = p.ToStr().Trim()
+  if p <> "" then
+    tgt = parseTarget(p, "/hls/master.m3u8")
+    if _isLiveRoutePath(tgt.path) then return p
   end if
 
+  id = ""
+  if it.hasField("id") then id = it.id
+  if id <> invalid then id = id.ToStr().Trim()
+  if id <> "" then return "/hls/channel/" + id + "/master.m3u8"
+
+  return "/hls/master.m3u8"
+end function
+
+sub signAndPlay(rawPath as String, title as String)
+  target = parseTarget(rawPath, "/hls/master.m3u8")
+  p = target.path
+  if p = invalid then p = ""
+  p = p.ToStr().Trim()
+  if p = "" then
+    print "signAndPlay: empty path; fallback to /hls/master.m3u8"
+    target = { path: "/hls/master.m3u8", query: {} }
+  end if
   beginSign(target.path, target.query, title, "hls", true, "live", "")
 end sub
 
@@ -3274,6 +3914,7 @@ function _nodeResumePositionMs(n as Object) as Integer
 end function
 
 sub showResumeDialog(itemId as String, title as String, resumeMs as Integer)
+  if m.pendingDialog <> invalid and m.top.dialog = invalid then m.pendingDialog = invalid
   if m.pendingDialog <> invalid then return
 
   id = itemId
@@ -3416,6 +4057,39 @@ sub requestVodStatus(vodKey as String)
   m.gatewayTask.control = "run"
 end sub
 
+sub requestSeriesStatus(itemId as String)
+  if m.gatewayTask = invalid then return
+  if m.pendingJob <> "" then return
+
+  id = itemId
+  if id = invalid then id = ""
+  id = id.Trim()
+  if id = "" then return
+
+  cfg = loadConfig()
+  if cfg.apiBase = "" or cfg.appToken = "" then return
+
+  m.pendingJob = "series_status"
+  m.gatewayTask.kind = "vod_status"
+  m.gatewayTask.apiBase = cfg.apiBase
+  m.gatewayTask.appToken = cfg.appToken
+  m.gatewayTask.itemId = id
+  m.gatewayTask.control = "run"
+end sub
+
+function _parseVodStatus(raw as String) as String
+  st = ""
+  data = ParseJson(raw)
+  if type(data) = "roAssociativeArray" then
+    if data.status <> invalid then st = data.status
+    if (st = invalid or st = "") and data.Status <> invalid then st = data.Status
+  end if
+  if st = invalid then st = ""
+  st = UCase(st.Trim())
+  if st = "" then st = "ERROR"
+  return st
+end function
+
 sub playVodR2Now(itemId as String, title as String)
   id = itemId
   if id = invalid then id = ""
@@ -3548,6 +4222,12 @@ sub onGatewayTaskStateChanged()
     return
   end if
 
+  if job = "series_status" then
+    st = _parseVodStatus(m.gatewayTask.resultJson)
+    if m.seriesDetailOpen = true then _applySeriesDetailStatus(st)
+    return
+  end if
+
   if job = "vod_status" then
     id = m.pendingVodStatusItemId
     t = m.pendingVodStatusTitle
@@ -3561,16 +4241,7 @@ sub onGatewayTaskStateChanged()
     if t = "" then t = "Video"
 
     if m.gatewayTask.ok = true then
-      raw = m.gatewayTask.resultJson
-      data = ParseJson(raw)
-      st = ""
-      if type(data) = "roAssociativeArray" then
-        if data.status <> invalid then st = data.status
-        if (st = invalid or st = "") and data.Status <> invalid then st = data.Status
-      end if
-      if st = invalid then st = ""
-      st = UCase(st.Trim())
-      if st = "" then st = "ERROR"
+      st = _parseVodStatus(m.gatewayTask.resultJson)
 
       print "vod status id=" + id + " status=" + st
 
@@ -3657,22 +4328,31 @@ sub onGatewayTaskStateChanged()
       end for
 
       if m.viewsList <> invalid then m.viewsList.content = root
+      m.browseMoviesViewId = ""
+      m.browseSeriesViewId = ""
+      mv = byType["movies"]
+      if mv <> invalid and mv.id <> invalid then m.browseMoviesViewId = mv.id.ToStr().Trim()
+      sv = byType["tvshows"]
+      if sv <> invalid and sv.id <> invalid then m.browseSeriesViewId = sv.id.ToStr().Trim()
 
-      ' Reset items list until a view is focused.
       if m.itemsList <> invalid then m.itemsList.content = CreateObject("roSGNode", "ContentNode")
+      if m.continueList <> invalid then m.continueList.content = CreateObject("roSGNode", "ContentNode")
+      if m.recentMoviesList <> invalid then m.recentMoviesList.content = CreateObject("roSGNode", "ContentNode")
+      if m.recentSeriesList <> invalid then m.recentSeriesList.content = CreateObject("roSGNode", "ContentNode")
+      if m.continueTitle <> invalid then m.continueTitle.visible = false
+      if m.recentMoviesTitle <> invalid then m.recentMoviesTitle.visible = false
+      if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.visible = false
       if m.browseEmptyLabel <> invalid then
         m.browseEmptyLabel.text = _t("no_items")
         m.browseEmptyLabel.visible = true
       end if
 
       setStatus("ready")
-
-      ' Keep hero "Continuar" as primary action, but load a rich shelf by default.
       m.activeViewId = "__top10"
       m.activeViewCollection = "top10"
       if m.itemsTitle <> invalid then m.itemsTitle.text = _t("top10")
       m.heroContinueAutoplayPending = false
-      loadShelfForView("__top10")
+      _loadBrowseHomeShelves()
 
       if root.getChildCount() <= 0 then
         if m.browseEmptyLabel <> invalid then
@@ -3697,14 +4377,48 @@ sub onGatewayTaskStateChanged()
     return
   end if
 
+  if job = "home_shelf" then
+    sec = m.pendingHomeShelfSection
+    if sec = invalid then sec = ""
+    sec = sec.ToStr().Trim()
+    m.pendingHomeShelfSection = ""
+
+    if m.gatewayTask.ok = true then
+      raw = m.gatewayTask.resultJson
+      _renderHomeShelf(sec, raw)
+    else
+      err = m.gatewayTask.error
+      if err = invalid or err = "" then err = "unknown"
+      print "home shelf failed section=" + sec + " err=" + err
+      _renderHomeShelf(sec, "[]")
+    end if
+
+    _startNextHomeShelfRequest()
+    if m.pendingLibraryLoad = true and m.pendingJob = "" then
+      m.pendingLibraryLoad = false
+      _loadBrowseLibraryItems()
+    end if
+    if m.pendingSeriesDetailQueued = true and m.pendingJob = "" then
+      qId = m.pendingSeriesDetailQueuedItemId
+      qTitle = m.pendingSeriesDetailQueuedTitle
+      m.pendingSeriesDetailQueued = false
+      m.pendingSeriesDetailQueuedItemId = ""
+      m.pendingSeriesDetailQueuedTitle = ""
+      requestSeriesDetails(qId, qTitle)
+    end if
+    return
+  end if
+
   if job = "shelf" then
     viewId = m.pendingShelfViewId
     m.pendingShelfViewId = ""
     if viewId = invalid then viewId = ""
     viewId = viewId.ToStr().Trim()
 
-    if viewId = "__continue" and m.activeViewId <> "__continue" then
-      m.heroContinueAutoplayPending = false
+    if viewId = "__continue" then
+      if m.activeViewId <> "__continue" or m.gatewayTask.ok <> true then
+        m.heroContinueAutoplayPending = false
+      end if
     end if
 
     if m.gatewayTask.ok = true then
@@ -3731,6 +4445,110 @@ sub onGatewayTaskStateChanged()
       nextId = m.queuedShelfViewId
       m.queuedShelfViewId = ""
       loadShelfForView(nextId)
+    end if
+    return
+  end if
+
+  if job = "library_shelf" then
+    reqViewId = m.pendingLibraryViewId
+    if reqViewId = invalid then reqViewId = ""
+    reqViewId = reqViewId.ToStr().Trim()
+    m.pendingLibraryViewId = ""
+
+    if m.gatewayTask.ok = true then
+      raw = m.gatewayTask.resultJson
+      parsed = ParseJson(raw)
+      if type(parsed) <> "roArray" then parsed = []
+      print "library response viewId=" + reqViewId + " count=" + parsed.Count().ToStr()
+
+      currentViewId = m.browseLibraryViewId
+      if currentViewId = invalid then currentViewId = ""
+      currentViewId = currentViewId.ToStr().Trim()
+
+      if m.browseLibraryOpen = true and reqViewId = currentViewId then
+        m.browseLibraryRawItems = parsed
+        _renderBrowseLibraryItems()
+      end if
+      setStatus("ready")
+    else
+      errLib = m.gatewayTask.error
+      if errLib = invalid or errLib = "" then errLib = "unknown"
+      setStatus("library failed: " + errLib)
+      if m.browseLibraryOpen = true then
+        m.browseLibraryRawItems = []
+        _renderBrowseLibraryItems()
+      end if
+    end if
+    return
+  end if
+
+  if job = "series_detail" then
+    reqSeriesId = m.pendingSeriesDetailItemId
+    if reqSeriesId = invalid then reqSeriesId = ""
+    reqSeriesId = reqSeriesId.ToStr().Trim()
+
+    if m.gatewayTask.ok = true then
+      raw = m.gatewayTask.resultJson
+      data = ParseJson(raw)
+      if type(data) <> "roAssociativeArray" then data = {}
+      _showSeriesDetailScreen(data)
+      setStatus("ready")
+    else
+      errDet = m.gatewayTask.error
+      if errDet = invalid or errDet = "" then errDet = "unknown"
+      setStatus(_t("details_failed") + ": " + errDet)
+      if m.pendingDialog = invalid then
+        dlgDetErr = CreateObject("roSGNode", "Dialog")
+        t0 = m.pendingSeriesDetailTitle
+        if t0 = invalid then t0 = ""
+        t0 = t0.ToStr().Trim()
+        if t0 = "" then t0 = "Series"
+        dlgDetErr.title = t0
+        dlgDetErr.message = _t("details_failed")
+        dlgDetErr.buttons = [_t("close")]
+        dlgDetErr.observeField("buttonSelected", "onSeriesDetailDone")
+        m.seriesDetailPlayEpisodeId = ""
+        m.seriesDetailPlayEpisodeTitle = ""
+        m.pendingDialog = dlgDetErr
+        m.top.dialog = dlgDetErr
+        dlgDetErr.setFocus(true)
+      end if
+    end if
+    m.pendingSeriesDetailItemId = ""
+    m.pendingSeriesDetailTitle = ""
+    return
+  end if
+
+  if job = "resume_probe" then
+    probeId = m.pendingResumeProbeItemId
+    probeTitle = m.pendingResumeProbeTitle
+    m.pendingResumeProbeItemId = ""
+    m.pendingResumeProbeTitle = ""
+
+    if probeId = invalid then probeId = ""
+    probeId = probeId.ToStr().Trim()
+    if probeTitle = invalid then probeTitle = ""
+    probeTitle = probeTitle.ToStr().Trim()
+    if probeTitle = "" then probeTitle = "Video"
+    if probeId = "" then
+      setStatus("ready")
+      return
+    end if
+
+    resumeMsProbe = -1
+    if m.gatewayTask.ok = true then
+      pdata = ParseJson(m.gatewayTask.resultJson)
+      if type(pdata) = "roAssociativeArray" then
+        if pdata.positionMs <> invalid then resumeMsProbe = _sceneIntFromAny(pdata.positionMs)
+        if resumeMsProbe < 0 and pdata.position_ms <> invalid then resumeMsProbe = _sceneIntFromAny(pdata.position_ms)
+      end if
+    end if
+
+    print "resume probe result id=" + probeId + " resumeMs=" + resumeMsProbe.ToStr()
+    if resumeMsProbe > 5000 then
+      showResumeDialog(probeId, probeTitle, resumeMsProbe)
+    else
+      playVodById(probeId, probeTitle)
     end if
     return
   end if
@@ -3774,8 +4592,22 @@ sub onGatewayTaskStateChanged()
               end if
             end if
           end if
-          if poster = "" then poster = _browsePosterUri(c.id, basePrev, tokenPrev)
+          if poster = "" and ch.logoFallbackPath <> invalid then
+            lpf = ch.logoFallbackPath.ToStr().Trim()
+            if lpf <> "" then
+              if Left(lpf, 1) = "/" and baseNoSlash <> "" then
+                poster = baseNoSlash + lpf
+              else
+                poster = lpf
+              end if
+            end if
+          end if
+          logoType = ""
+          if ch.logoType <> invalid then logoType = ch.logoType.ToStr().Trim()
+          if poster = "" and logoType <> "" then poster = _browseChannelImageUri(c.id, basePrev, tokenPrev, logoType)
+          if poster = "" then poster = _browseChannelImageUri(c.id, basePrev, tokenPrev, "Logo")
           if poster = "" then poster = _browseChannelPosterUri(c.id, basePrev, tokenPrev)
+          if poster = "" then poster = _browsePosterUri(c.id, basePrev, tokenPrev)
           if poster <> "" and tokenPrev <> invalid and tokenPrev.ToStr().Trim() <> "" and Instr(1, poster, "X-Emby-Token=") = 0 then
             poster = appendQuery(poster, { "X-Emby-Token": tokenPrev, "X-Jellyfin-Token": tokenPrev })
           end if
@@ -3825,6 +4657,12 @@ sub onGatewayTaskStateChanged()
 
       root = CreateObject("roSGNode", "ContentNode")
       for each ch in items
+        if ch <> invalid and ch.name <> invalid then
+          chNameLow = LCase(ch.name.ToStr().Trim())
+          if Instr(1, chNameLow, "hdmi") > 0 then
+            continue for
+          end if
+        end if
         c = CreateObject("roSGNode", "ContentNode")
         if ch <> invalid then
           if ch.id <> invalid then c.id = ch.id
@@ -3854,17 +4692,26 @@ sub onGatewayTaskStateChanged()
         if root.getChildCount() > 0 then
           first = root.getChild(0)
           if first <> invalid then
-            p = ""
-            if first.hasField("path") then p = first.path
-            if p <> invalid then p = p.Trim()
-            if p <> "" then
+            firstId = ""
+            if first.hasField("id") then firstId = first.id
+            if firstId <> invalid then firstId = firstId.ToStr().Trim()
+            if firstId <> "" then
               m.devAutoplayDone = true
-              print "DEV autoplay LIVE path: " + p
-              signAndPlay(p, first.title)
+              print "DEV autoplay LIVE channel id: " + firstId
+              signAndPlay("/hls/channel/" + firstId + "/master.m3u8", first.title)
             else
-              m.devAutoplayDone = true
-              print "DEV autoplay LIVE: missing channel path; fallback to /hls/master.m3u8"
-              signAndPlay("/hls/master.m3u8", first.title)
+              p = ""
+              if first.hasField("path") then p = first.path
+              if p <> invalid then p = p.Trim()
+              if p <> "" then
+                m.devAutoplayDone = true
+                print "DEV autoplay LIVE path: " + p
+                signAndPlay(p, first.title)
+              else
+                m.devAutoplayDone = true
+                print "DEV autoplay LIVE: missing channel path; fallback to /hls/master.m3u8"
+                signAndPlay("/hls/master.m3u8", first.title)
+              end if
             end if
           end if
         end if
@@ -4896,6 +5743,31 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     return handlePlaybackKey(kl)
   end if
 
+  if m.seriesDetailOpen = true then
+    if kl = "back" then
+      _closeSeriesDetail()
+      return true
+    end if
+    if kl = "up" then
+      if m.seriesDetailFocus = "episodes" then
+        m.seriesDetailFocus = "seasons"
+        applyFocus()
+      end if
+      return true
+    end if
+    if kl = "down" then
+      if m.seriesDetailFocus = "seasons" then
+        m.seriesDetailFocus = "episodes"
+        applyFocus()
+      end if
+      return true
+    end if
+    if kl = "options" or kl = "info" then
+      return true
+    end if
+    return false
+  end if
+
   ' Always allow BACK to exit playback, regardless of the current mode.
   if m.player <> invalid and m.player.visible = true and kl = "back" then
     setStatus("stopped")
@@ -4909,14 +5781,67 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
   if m.mode = "browse" then
     if m.player <> invalid and m.player.visible = true then return false
 
-    if kl = "left" then
-      if m.browseFocus = "items" then
-        iIdx = _browseListFocusedIndex(m.itemsList)
-        iCols = _browseItemCols()
-        if iIdx > 0 and (iIdx mod iCols) > 0 then
-          ' Let MarkupGrid move inside the row.
-          return false
+    if m.browseLibraryOpen = true then
+      if kl = "left" then
+        if m.browseFocus = "library_items" then
+          idxLib = _browseListFocusedIndex(m.libraryItemsList)
+          if idxLib > 0 then return false
         end if
+        return true
+      end if
+
+      if kl = "right" then
+        if m.browseFocus = "library_items" then return false
+        return true
+      end if
+
+      if kl = "up" then
+        if m.browseFocus = "library_items" then
+          idxLib2 = _browseListFocusedIndex(m.libraryItemsList)
+          if idxLib2 >= _browseLibraryCols() then return false
+          m.browseFocus = "library_search"
+          applyFocus()
+        end if
+        return true
+      end if
+
+      if kl = "down" then
+        if m.browseFocus = "library_search" then
+          if _browseListCount(m.libraryItemsList) > 0 then
+            m.browseFocus = "library_items"
+            applyFocus()
+          end if
+          return true
+        end if
+        return false
+      end if
+
+      if kl = "ok" then
+        if m.browseFocus = "library_search" then
+          _promptBrowseLibrarySearch()
+          return true
+        else if m.browseFocus = "library_items" then
+          onLibraryItemSelected()
+          return true
+        end if
+      end if
+
+      if kl = "options" then
+        _promptBrowseLibrarySearch()
+        return true
+      end if
+
+      if kl = "back" then
+        _closeBrowseLibrary()
+        return true
+      end if
+    end if
+
+    if kl = "left" then
+      if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
+        lst = _browseListNodeForFocus(m.browseFocus)
+        idx = _browseListFocusedIndex(lst)
+        if idx > 0 then return false
         m.browseFocus = "views"
         applyFocus()
         return true
@@ -4949,14 +5874,21 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return false
           end if
         end if
-        if _browseListCount(m.itemsList) <= 0 then return true
-        m.browseFocus = "items"
+        if _browseSectionHasItems("items") then
+          m.browseFocus = "items"
+        else
+          nxt = _browseNextShelfSection("items")
+          if nxt = "" then return true
+          m.browseFocus = nxt
+        end if
         applyFocus()
         return true
       else if m.browseFocus = "hero_logout" then
         m.browseFocus = "hero_continue"
         applyFocus()
         return true
+      else if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
+        return false
       end if
     end if
 
@@ -4968,13 +5900,15 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
           applyFocus()
           return true
         end if
-      else if m.browseFocus = "items" then
-        iIdx = _browseListFocusedIndex(m.itemsList)
-        if iIdx < _browseItemCols() then
-          m.browseFocus = "hero_continue"
-          applyFocus()
-          return true
+      else if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
+        prevShelf = _browsePrevShelfSection(m.browseFocus)
+        if prevShelf <> "" then
+          m.browseFocus = prevShelf
+        else
+          m.browseFocus = "views"
         end if
+        applyFocus()
+        return true
       else if m.browseFocus = "hero_logout" or m.browseFocus = "hero_continue" then
         return true
       end if
@@ -4998,8 +5932,21 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
           ' Let MarkupGrid move down if there are multiple view rows in the future.
           return false
         end if
-        if _browseListCount(m.itemsList) > 0 then
+        if _browseSectionHasItems("items") then
           m.browseFocus = "items"
+          applyFocus()
+          return true
+        end if
+        n2 = _browseNextShelfSection("items")
+        if n2 <> "" then
+          m.browseFocus = n2
+          applyFocus()
+          return true
+        end if
+      else if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
+        nextShelf = _browseNextShelfSection(m.browseFocus)
+        if nextShelf <> "" then
+          m.browseFocus = nextShelf
           applyFocus()
           return true
         end if
@@ -5017,7 +5964,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
 
     if kl = "back" then
-      if m.browseFocus = "items" then
+      if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
         m.browseFocus = "views"
         applyFocus()
         return true
@@ -5091,7 +6038,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
 
     if m.mode = "browse" then
-      if m.browseFocus = "items" then
+      if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
         m.browseFocus = "views"
         applyFocus()
         return true
@@ -5137,24 +6084,60 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
 end function
 
 sub applyFocus()
+  if m.seriesDetailOpen = true then
+    if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = true
+    focusTarget = m.seriesDetailFocus
+    if focusTarget = invalid then focusTarget = ""
+    focusTarget = LCase(focusTarget.ToStr().Trim())
+    if focusTarget = "seasons" then
+      if m.seriesDetailSeasonsList <> invalid then m.seriesDetailSeasonsList.setFocus(true)
+    else
+      if m.seriesDetailEpisodesList <> invalid then m.seriesDetailEpisodesList.setFocus(true)
+    end if
+    return
+  end if
+
   if m.mode = "live" then
     if m.channelsList <> invalid then m.channelsList.setFocus(true)
     return
   end if
 
   if m.mode = "browse" then
+    if m.browseLibraryOpen = true then
+      _setBrowseLibraryVisible(true)
+      _refreshBrowseLibraryHeader()
+      searchFocused = (m.browseFocus = "library_search")
+      if m.librarySearchBg <> invalid then
+        if searchFocused then
+          m.librarySearchBg.uri = "pkg:/images/field_focus.png"
+        else
+          m.librarySearchBg.uri = "pkg:/images/field_normal.png"
+        end if
+      end if
+      if m.browseFocus = "library_items" then
+        if m.libraryItemsList <> invalid then m.libraryItemsList.setFocus(true)
+      else
+        if m.top <> invalid then m.top.setFocus(true)
+      end if
+      return
+    end if
+
+    _setBrowseLibraryVisible(false)
     profileFocused = (m.browseFocus = "hero_logout")
     continueFocused = (m.browseFocus = "hero_continue")
     _syncHeroAvatarVisual()
 
+    if m.heroPromptBg <> invalid then
+      m.heroPromptBg.uri = "pkg:/images/field_normal.png"
+    end if
     if m.heroAvatarBg <> invalid then
       m.heroAvatarBg.uri = "pkg:/images/overlay_circle.png"
     end if
     if m.heroAvatarText <> invalid then
       if profileFocused then
-        m.heroAvatarText.color = "0xD8B765"
+        m.heroAvatarText.color = "0xD7B25C"
       else
-        m.heroAvatarText.color = "0xD0D6E0"
+        m.heroAvatarText.color = "0xE6EBF3"
       end if
     end if
     if m.heroPromptBtnBg <> invalid then
@@ -5172,14 +6155,20 @@ sub applyFocus()
       end if
     end if
 
+    _applyBrowseShelfScroll()
+
     if profileFocused or continueFocused then
       if m.top <> invalid then m.top.setFocus(true)
     else if m.browseFocus = "items" then
       if m.itemsList <> invalid then
         m.itemsList.setFocus(true)
-      else if m.viewsList <> invalid then
-        m.viewsList.setFocus(true)
       end if
+    else if m.browseFocus = "continue" then
+      if m.continueList <> invalid then m.continueList.setFocus(true)
+    else if m.browseFocus = "movies" then
+      if m.recentMoviesList <> invalid then m.recentMoviesList.setFocus(true)
+    else if m.browseFocus = "series" then
+      if m.recentSeriesList <> invalid then m.recentSeriesList.setFocus(true)
     else
       if m.viewsList <> invalid then m.viewsList.setFocus(true)
     end if
@@ -5373,23 +6362,27 @@ sub onPlayerError()
     setStatus(_t("vod_unavailable"))
   end if
 
-  ' If multi-channel LIVE path fails, fallback to the single-channel route.
+  ' Fallback to /hls/master only when the signed LIVE path is absent/invalid.
+  ' If a specific channel path failed, keep the error instead of forcing another channel.
   if m.playbackIsLive = true and m.liveFallbackAttempted <> true then
     p2 = m.playbackSignPath
     if p2 = invalid then p2 = ""
     p2 = p2.ToStr().Trim()
-    if Instr(1, p2, "/hls/channel/") = 1 then
+    isRoutableLivePath = (Instr(1, p2, "/hls/") = 1 or Instr(1, p2, "/live/") = 1)
+    if isRoutableLivePath <> true then
       m.liveFallbackAttempted = true
       t2 = m.playbackTitle
       if t2 = invalid then t2 = ""
       t2 = t2.Trim()
-      print "live error; fallback to /hls/master.m3u8 (path=" + p2 + ")"
+      print "live error; invalid path fallback to /hls/master.m3u8 (path=" + p2 + ")"
       ' Stop without leaving UI: we're switching source.
       m.ignoreNextStopped = true
       if m.player <> invalid then m.player.control = "stop"
       if m.player <> invalid then m.player.visible = false
       signAndPlay("/hls/master.m3u8", t2)
       return
+    else
+      print "live error; keeping explicit path (no master fallback): " + p2
     end if
   end if
 
@@ -5453,25 +6446,43 @@ sub onKeyboardDone()
 
   idx = dlg.buttonSelected
   txt = dlg.text
+  promptKind = m.pendingPrompt
 
   m.top.dialog = invalid
   m.pendingDialog = invalid
 
   if idx <> 0 then
     setStatus(_t("cancelled"))
+    if promptKind = "librarySearch" then
+      m.browseLibraryAutoFocusPending = true
+      if _browseListCount(m.libraryItemsList) > 0 then
+        m.browseFocus = "library_items"
+      end if
+    end if
     m.pendingPrompt = ""
+    applyFocus()
     return
   end if
 
-  if m.pendingPrompt = "username" then
+  if promptKind = "username" then
     m.form.username = txt.Trim()
-  else if m.pendingPrompt = "password" then
+  else if promptKind = "password" then
     m.form.password = txt
-  else if m.pendingPrompt = "appToken" then
+  else if promptKind = "appToken" then
     token = txt.Trim()
     cfg = loadConfig()
     saveConfig(m.apiBase, token, cfg.jellyfinToken, cfg.userId)
     setStatus("APP_TOKEN ok")
+  else if promptKind = "librarySearch" then
+    m.browseLibrarySearch = txt.Trim()
+    m.browseLibraryAutoFocusPending = true
+    _refreshBrowseLibraryHeader()
+    _renderBrowseLibraryItems()
+    if _browseListCount(m.libraryItemsList) > 0 then
+      m.browseFocus = "library_items"
+    else
+      m.browseFocus = "library_search"
+    end if
   end if
 
   m.pendingPrompt = ""
@@ -5495,6 +6506,15 @@ sub enterLogin()
   m.pendingJob = ""
   m.pendingShelfViewId = ""
   m.queuedShelfViewId = ""
+  m.pendingLibraryLoad = false
+  m.pendingSeriesDetailQueued = false
+  m.pendingSeriesDetailQueuedItemId = ""
+  m.pendingSeriesDetailQueuedTitle = ""
+  m.pendingResumeProbeQueued = false
+  m.pendingResumeProbeQueuedItemId = ""
+  m.pendingResumeProbeQueuedTitle = ""
+  m.seriesDetailOpen = false
+  if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = false
   m.pendingDialog = invalid
   if m.top <> invalid then m.top.dialog = invalid
   m.settingsOpen = false
@@ -5541,6 +6561,22 @@ sub enterBrowse()
   m.mode = "browse"
   m.browseFocus = "hero_continue"
   m.heroContinueAutoplayPending = false
+  m.browseLibraryOpen = false
+  m.browseLibraryCollection = ""
+  m.browseLibraryViewId = ""
+  m.browseLibraryTitle = ""
+  m.browseLibrarySearch = ""
+  m.browseLibraryRawItems = []
+  m.pendingLibraryViewId = ""
+  m.pendingLibraryLoad = false
+  m.pendingSeriesDetailQueued = false
+  m.pendingSeriesDetailQueuedItemId = ""
+  m.pendingSeriesDetailQueuedTitle = ""
+  m.pendingResumeProbeQueued = false
+  m.pendingResumeProbeQueuedItemId = ""
+  m.pendingResumeProbeQueuedTitle = ""
+  m.seriesDetailOpen = false
+  if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = false
   _syncHeroAvatarVisual()
 
   if m.logoPoster <> invalid then m.logoPoster.visible = false
@@ -5558,10 +6594,24 @@ sub enterBrowse()
   m.activeViewCollection = ""
   m.pendingShelfViewId = ""
   m.queuedShelfViewId = ""
+  m.pendingHomeShelfSection = ""
+  m.homeShelfQueue = []
+  m.browseMoviesViewId = ""
+  m.browseSeriesViewId = ""
   m.shelfCache = {}
 
   if m.viewsList <> invalid then m.viewsList.content = CreateObject("roSGNode", "ContentNode")
   if m.itemsList <> invalid then m.itemsList.content = CreateObject("roSGNode", "ContentNode")
+  if m.continueList <> invalid then m.continueList.content = CreateObject("roSGNode", "ContentNode")
+  if m.recentMoviesList <> invalid then m.recentMoviesList.content = CreateObject("roSGNode", "ContentNode")
+  if m.recentSeriesList <> invalid then m.recentSeriesList.content = CreateObject("roSGNode", "ContentNode")
+  if m.libraryItemsList <> invalid then m.libraryItemsList.content = CreateObject("roSGNode", "ContentNode")
+  if m.libraryEmptyLabel <> invalid then m.libraryEmptyLabel.visible = false
+  if m.continueTitle <> invalid then m.continueTitle.visible = false
+  if m.recentMoviesTitle <> invalid then m.recentMoviesTitle.visible = false
+  if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.visible = false
+  _setBrowseLibraryVisible(false)
+  _refreshBrowseLibraryHeader()
   if m.browseEmptyLabel <> invalid then
     m.browseEmptyLabel.text = _t("no_items")
     m.browseEmptyLabel.visible = true
@@ -5632,37 +6682,6 @@ sub onViewFocused()
 
   m.activeViewId = viewId
   m.activeViewCollection = ctype
-
-  if m.itemsTitle <> invalid then
-    t = v.title
-    if t = invalid then t = ""
-    t = t.Trim()
-    ct = ctype
-    if ct = invalid then ct = ""
-    ct = LCase(ct.Trim())
-    if ct = "continue" then
-      m.itemsTitle.text = _t("continue")
-    else if ct = "top10" then
-      m.itemsTitle.text = _t("top10")
-    else if ct = "movies" then
-      m.itemsTitle.text = _t("recent_movies")
-    else if ct = "tvshows" then
-      m.itemsTitle.text = _t("recent_series")
-    else if ct = "livetv" then
-      m.itemsTitle.text = _t("recent_live")
-    else if t = "" then
-      m.itemsTitle.text = _t("recent")
-    else
-      m.itemsTitle.text = _t("recent_prefix") + t
-    end if
-  end if
-
-  if ctype = "livetv" then
-    loadLivePreview()
-    return
-  end if
-
-  loadShelfForView(viewId)
 end sub
 
 sub onViewSelected()
@@ -5686,14 +6705,47 @@ sub onViewSelected()
   ctype = ""
   if v.hasField("collectionType") then ctype = v.collectionType
   if ctype = invalid then ctype = ""
+  viewId = ""
+  if v.id <> invalid then viewId = v.id
+  if viewId = invalid then viewId = ""
+  viewId = viewId.ToStr().Trim()
+  viewTitle = ""
+  if v.title <> invalid then viewTitle = v.title
+  if viewTitle = invalid then viewTitle = ""
+  viewTitle = viewTitle.ToStr().Trim()
 
-  if ctype = "livetv" then
-    m.browseFocus = "items"
-    applyFocus()
+  ct = LCase(ctype.Trim())
+  if ct = "livetv" then
+    enterLive()
     return
   end if
 
-  m.browseFocus = "items"
+  if ct = "movies" or ct = "tvshows" then
+    if viewId = "" then return
+    m.activeViewId = viewId
+    m.activeViewCollection = ct
+    _openBrowseLibrary(viewId, ct, viewTitle)
+    return
+  end if
+
+  m.browseFocus = _browseSectionForCollection(ct)
+  if m.browseFocus = "movies" and _browseSectionHasItems("movies") <> true then m.browseFocus = "items"
+  if m.browseFocus = "series" and _browseSectionHasItems("series") <> true then
+    if _browseSectionHasItems("movies") then
+      m.browseFocus = "movies"
+    else
+      m.browseFocus = "items"
+    end if
+  end if
+  if m.browseFocus = "items" and _browseSectionHasItems("items") <> true then
+    if _browseSectionHasItems("continue") then
+      m.browseFocus = "continue"
+    else if _browseSectionHasItems("movies") then
+      m.browseFocus = "movies"
+    else if _browseSectionHasItems("series") then
+      m.browseFocus = "series"
+    end if
+  end if
   applyFocus()
 end sub
 
@@ -5792,10 +6844,17 @@ sub loadShelfForView(viewId as String)
   setStatus(_t("loading_items"))
   m.pendingJob = "shelf"
   m.pendingShelfViewId = id
+  isSeriesView = false
+  sv = m.browseSeriesViewId
+  if sv = invalid then sv = ""
+  sv = sv.ToStr().Trim()
+  if sv <> "" and id = sv then isSeriesView = true
   if id = "__continue" then
     m.gatewayTask.kind = "continue"
   else if id = "__top10" then
     m.gatewayTask.kind = "top10"
+  else if isSeriesView then
+    m.gatewayTask.kind = "shelf_series"
   else
     m.gatewayTask.kind = "shelf"
   end if
@@ -5846,6 +6905,505 @@ sub loadLivePreview()
   m.gatewayTask.jellyfinToken = cfg.jellyfinToken
   m.gatewayTask.userId = cfg.userId
   m.gatewayTask.control = "run"
+end sub
+
+function _buildShelfContent(raw as String, rankEnabled as Boolean, section as String) as Object
+  items = ParseJson(raw)
+  if type(items) <> "roArray" then items = []
+
+  cfg = loadConfig()
+  posterBase = cfg.apiBase
+  posterToken = cfg.jellyfinToken
+  sec = section
+  if sec = invalid then sec = ""
+  sec = LCase(sec.Trim())
+
+  root = CreateObject("roSGNode", "ContentNode")
+  rank = 0
+  for each it in items
+    name0 = ""
+    typ0 = ""
+    path0 = ""
+    if it <> invalid then
+      if it.name <> invalid then name0 = it.name else name0 = ""
+      if it.type <> invalid then typ0 = it.type else typ0 = ""
+      if it.path <> invalid then path0 = it.path else path0 = ""
+    end if
+    if name0 = invalid then name0 = ""
+    if typ0 = invalid then typ0 = ""
+    if path0 = invalid then path0 = ""
+
+    if sec = "series" then
+      typeL = LCase(typ0.ToStr().Trim())
+      if typeL <> "series" then continue for
+    end if
+
+    if rankEnabled then
+      tl = LCase(typ0.ToStr().Trim())
+      nl = LCase(name0.ToStr().Trim())
+      if tl = "livetvchannel" or tl = "livetv" then continue for
+      if Instr(1, nl, "hdmi") > 0 then continue for
+    end if
+
+    c = CreateObject("roSGNode", "ContentNode")
+    c.addField("itemType", "string", false)
+    c.addField("path", "string", false)
+    c.addField("resumePositionMs", "integer", false)
+    c.addField("resumeDurationMs", "integer", false)
+    c.addField("resumePercent", "integer", false)
+    c.addField("rank", "integer", false)
+    c.addField("posterMode", "string", false)
+    c.addField("hdPosterUrl", "string", false)
+    c.addField("posterUrl", "string", false)
+
+    if it <> invalid then
+      if it.id <> invalid then c.id = it.id
+      c.title = name0
+      c.itemType = typ0
+      c.path = path0
+      posterUri = _browsePosterUri(c.id, posterBase, posterToken)
+      if posterUri = "" then posterUri = _browseChannelPosterUri(c.id, posterBase, posterToken)
+      c.hdPosterUrl = posterUri
+      c.posterUrl = posterUri
+      c.posterMode = "zoomToFill"
+
+      rPos = -1
+      if it.positionMs <> invalid then rPos = _sceneIntFromAny(it.positionMs)
+      if rPos < 0 and it.position_ms <> invalid then rPos = _sceneIntFromAny(it.position_ms)
+      if rPos < 0 then rPos = 0
+      c.resumePositionMs = rPos
+
+      rDur = -1
+      if it.durationMs <> invalid then rDur = _sceneIntFromAny(it.durationMs)
+      if rDur < 0 and it.duration_ms <> invalid then rDur = _sceneIntFromAny(it.duration_ms)
+      if rDur < 0 then rDur = 0
+      c.resumeDurationMs = rDur
+
+      rPct = -1
+      if it.percent <> invalid then rPct = _sceneIntFromAny(it.percent)
+      if rPct < 0 then rPct = 0
+      c.resumePercent = rPct
+
+      if rankEnabled then
+        rank = rank + 1
+        c.rank = rank
+      else
+        c.rank = 0
+      end if
+    else
+      c.title = ""
+      c.itemType = ""
+      c.path = ""
+      c.resumePositionMs = 0
+      c.resumeDurationMs = 0
+      c.resumePercent = 0
+      c.rank = 0
+      c.posterMode = "zoomToFill"
+      c.hdPosterUrl = ""
+      c.posterUrl = ""
+    end if
+    root.appendChild(c)
+  end for
+  return root
+end function
+
+function _browseAnyShelfItems() as Boolean
+  if _browseSectionHasItems("items") then return true
+  if _browseSectionHasItems("continue") then return true
+  if _browseSectionHasItems("movies") then return true
+  if _browseSectionHasItems("series") then return true
+  return false
+end function
+
+sub _updateBrowseEmptyState()
+  if m.browseEmptyLabel = invalid then return
+  if m.browseLibraryOpen = true then
+    m.browseEmptyLabel.visible = false
+    return
+  end if
+  m.browseEmptyLabel.text = _t("no_items")
+  m.browseEmptyLabel.visible = (_browseAnyShelfItems() <> true)
+end sub
+
+sub _renderHomeShelf(section as String, raw as String)
+  sec = section
+  if sec = invalid then sec = ""
+  sec = LCase(sec.Trim())
+
+  rankEnabled = (sec = "items")
+  root = _buildShelfContent(raw, rankEnabled, sec)
+
+  if sec = "items" then
+    if m.itemsList <> invalid then m.itemsList.content = root
+    if m.itemsTitle <> invalid then m.itemsTitle.visible = true
+  else if sec = "continue" then
+    if m.continueList <> invalid then m.continueList.content = root
+    if m.continueTitle <> invalid then m.continueTitle.visible = (root.getChildCount() > 0)
+  else if sec = "movies" then
+    if m.recentMoviesList <> invalid then m.recentMoviesList.content = root
+    if m.recentMoviesTitle <> invalid then m.recentMoviesTitle.visible = (root.getChildCount() > 0)
+  else if sec = "series" then
+    if m.recentSeriesList <> invalid then m.recentSeriesList.content = root
+    if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.visible = (root.getChildCount() > 0)
+  end if
+
+  _updateBrowseEmptyState()
+end sub
+
+sub _queueHomeShelf(section as String, kind as String, parentId as String, limit as Integer)
+  if m.homeShelfQueue = invalid then m.homeShelfQueue = []
+  req = {
+    section: section
+    kind: kind
+    parentId: parentId
+    limit: limit
+  }
+  m.homeShelfQueue.Push(req)
+end sub
+
+sub _startNextHomeShelfRequest()
+  if m.gatewayTask = invalid then return
+  if m.pendingJob <> "" then return
+  if m.homeShelfQueue = invalid then return
+  if m.homeShelfQueue.Count() <= 0 then
+    setStatus("ready")
+    return
+  end if
+
+  req = m.homeShelfQueue[0]
+  m.homeShelfQueue.Delete(0)
+  if type(req) <> "roAssociativeArray" then
+    _startNextHomeShelfRequest()
+    return
+  end if
+
+  cfg = loadConfig()
+  if cfg.apiBase = "" or cfg.appToken = "" or cfg.jellyfinToken = "" or cfg.userId = "" then
+    setStatus("shelf: missing config")
+    return
+  end if
+
+  section = req.section
+  if section = invalid then section = ""
+  section = section.ToStr().Trim()
+  if section = "" then
+    _startNextHomeShelfRequest()
+    return
+  end if
+
+  m.pendingHomeShelfSection = section
+  m.pendingJob = "home_shelf"
+  m.gatewayTask.kind = req.kind
+  m.gatewayTask.apiBase = cfg.apiBase
+  m.gatewayTask.appToken = cfg.appToken
+  m.gatewayTask.jellyfinToken = cfg.jellyfinToken
+  m.gatewayTask.userId = cfg.userId
+  m.gatewayTask.parentId = req.parentId
+  m.gatewayTask.limit = req.limit
+  m.gatewayTask.control = "run"
+end sub
+
+sub _loadBrowseHomeShelves()
+  m.homeShelfQueue = []
+  _queueHomeShelf("items", "top10", "", 10)
+  _queueHomeShelf("continue", "continue", "", 12)
+  mv = m.browseMoviesViewId
+  if mv = invalid then mv = ""
+  mv = mv.ToStr().Trim()
+  if mv <> "" then
+    _queueHomeShelf("movies", "shelf", mv, 12)
+  end if
+  sv = m.browseSeriesViewId
+  if sv = invalid then sv = ""
+  sv = sv.ToStr().Trim()
+  if sv <> "" then
+    _queueHomeShelf("series", "shelf_series", sv, 12)
+  end if
+  _startNextHomeShelfRequest()
+end sub
+
+function _browseLibraryItemMatches(name as String, queryLower as String) as Boolean
+  q = queryLower
+  if q = invalid then q = ""
+  q = LCase(q.ToStr().Trim())
+  if q = "" then return true
+  n = name
+  if n = invalid then n = ""
+  n = LCase(n.ToStr().Trim())
+  if n = "" then return false
+  return (Instr(1, n, q) > 0)
+end function
+
+sub _renderBrowseLibraryItems()
+  if m.libraryItemsList = invalid then return
+
+  src = m.browseLibraryRawItems
+  if type(src) <> "roArray" then src = []
+
+  cfg = loadConfig()
+  posterBase = cfg.apiBase
+  posterToken = cfg.jellyfinToken
+
+  coll = m.browseLibraryCollection
+  if coll = invalid then coll = ""
+  coll = LCase(coll.ToStr().Trim())
+
+  query = m.browseLibrarySearch
+  if query = invalid then query = ""
+  query = query.ToStr().Trim()
+  queryLower = LCase(query)
+
+  root = CreateObject("roSGNode", "ContentNode")
+
+  for each it in src
+    name0 = ""
+    typ0 = ""
+    path0 = ""
+    if it <> invalid then
+      if it.name <> invalid then
+        name0 = it.name
+      else if it.Name <> invalid then
+        name0 = it.Name
+      end if
+      if it.type <> invalid then
+        typ0 = it.type
+      else if it.Type <> invalid then
+        typ0 = it.Type
+      end if
+      if it.path <> invalid then
+        path0 = it.path
+      else if it.Path <> invalid then
+        path0 = it.Path
+      end if
+    end if
+    if name0 = invalid then name0 = ""
+    if typ0 = invalid then typ0 = ""
+    if path0 = invalid then path0 = ""
+
+    typeL = LCase(typ0.ToStr().Trim())
+    if coll = "tvshows" and typeL <> "series" then continue for
+    if coll = "movies" then
+      if typeL = "series" or typeL = "season" or typeL = "episode" then continue for
+    end if
+
+    if _browseLibraryItemMatches(name0, queryLower) <> true then continue for
+
+    c = CreateObject("roSGNode", "ContentNode")
+    c.addField("itemType", "string", false)
+    c.addField("path", "string", false)
+    c.addField("resumePositionMs", "integer", false)
+    c.addField("resumeDurationMs", "integer", false)
+    c.addField("resumePercent", "integer", false)
+    c.addField("rank", "integer", false)
+    c.addField("posterMode", "string", false)
+    c.addField("hdPosterUrl", "string", false)
+    c.addField("posterUrl", "string", false)
+    if it <> invalid then
+      if it.id <> invalid then
+        c.id = it.id
+      else if it.Id <> invalid then
+        c.id = it.Id
+      end if
+      c.title = name0
+      c.itemType = typ0
+      c.path = path0
+      posterUri = _browsePosterUri(c.id, posterBase, posterToken)
+      if posterUri = "" then posterUri = _browseChannelPosterUri(c.id, posterBase, posterToken)
+      c.hdPosterUrl = posterUri
+      c.posterUrl = posterUri
+      c.posterMode = "zoomToFill"
+
+      rPos = -1
+      if it.positionMs <> invalid then rPos = _sceneIntFromAny(it.positionMs)
+      if rPos < 0 and it.position_ms <> invalid then rPos = _sceneIntFromAny(it.position_ms)
+      if rPos < 0 then rPos = 0
+      c.resumePositionMs = rPos
+
+      rDur = -1
+      if it.durationMs <> invalid then rDur = _sceneIntFromAny(it.durationMs)
+      if rDur < 0 and it.duration_ms <> invalid then rDur = _sceneIntFromAny(it.duration_ms)
+      if rDur < 0 then rDur = 0
+      c.resumeDurationMs = rDur
+
+      rPct = -1
+      if it.percent <> invalid then rPct = _sceneIntFromAny(it.percent)
+      if rPct < 0 then rPct = 0
+      c.resumePercent = rPct
+      c.rank = 0
+    else
+      c.title = ""
+      c.itemType = ""
+      c.path = ""
+      c.resumePositionMs = 0
+      c.resumeDurationMs = 0
+      c.resumePercent = 0
+      c.rank = 0
+      c.posterMode = "zoomToFill"
+      c.hdPosterUrl = ""
+      c.posterUrl = ""
+    end if
+    root.appendChild(c)
+  end for
+
+  m.libraryItemsList.content = root
+
+  if m.libraryEmptyLabel <> invalid then
+    if queryLower <> "" then
+      m.libraryEmptyLabel.text = _t("library_no_results")
+    else
+      m.libraryEmptyLabel.text = _t("no_items")
+    end if
+    m.libraryEmptyLabel.visible = (root.getChildCount() = 0)
+  end if
+
+  if root.getChildCount() > 0 and m.browseLibraryAutoFocusPending = true and m.pendingDialog = invalid then
+    m.browseLibraryAutoFocusPending = false
+    m.browseFocus = "library_items"
+    applyFocus()
+  end if
+
+  if root.getChildCount() <= 0 and m.browseFocus = "library_items" then
+    m.browseFocus = "library_search"
+  end if
+end sub
+
+sub _loadBrowseLibraryItems()
+  if m.browseLibraryOpen <> true then return
+  if m.gatewayTask = invalid then return
+
+  id = m.browseLibraryViewId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return
+
+  if m.pendingJob <> "" then
+    if m.pendingJob = "home_shelf" then m.homeShelfQueue = []
+    m.pendingLibraryLoad = true
+    _scheduleDeferredBrowseActions()
+    setStatus(_t("please_wait"))
+    return
+  end if
+
+  cfg = loadConfig()
+  if cfg.apiBase = "" or cfg.appToken = "" or cfg.jellyfinToken = "" or cfg.userId = "" then
+    if m.libraryEmptyLabel <> invalid then
+      m.libraryEmptyLabel.text = _t("missing_config")
+      m.libraryEmptyLabel.visible = true
+    end if
+    return
+  end if
+
+  if m.libraryEmptyLabel <> invalid then
+    m.libraryEmptyLabel.text = _t("loading")
+    m.libraryEmptyLabel.visible = true
+  end if
+
+  coll = m.browseLibraryCollection
+  if coll = invalid then coll = ""
+  coll = LCase(coll.ToStr().Trim())
+
+  print "library request viewId=" + id + " coll=" + coll
+  m.pendingLibraryLoad = false
+  setStatus(_t("loading_items"))
+  m.pendingLibraryViewId = id
+  m.pendingJob = "library_shelf"
+  if coll = "tvshows" then
+    m.gatewayTask.kind = "shelf_series"
+  else
+    m.gatewayTask.kind = "shelf"
+  end if
+  m.gatewayTask.apiBase = cfg.apiBase
+  m.gatewayTask.appToken = cfg.appToken
+  m.gatewayTask.jellyfinToken = cfg.jellyfinToken
+  m.gatewayTask.userId = cfg.userId
+  m.gatewayTask.parentId = id
+  m.gatewayTask.limit = 240
+  m.gatewayTask.control = "run"
+end sub
+
+sub _promptBrowseLibrarySearch()
+  if m.browseLibraryOpen <> true then return
+  title = _t("library_search_title")
+  t = m.browseLibraryTitle
+  if t = invalid then t = ""
+  t = t.ToStr().Trim()
+  if t <> "" then title = title + ": " + t
+  promptKeyboard("librarySearch", title, m.browseLibrarySearch, false)
+end sub
+
+sub _openBrowseLibrary(viewId as String, collectionType as String, title as String)
+  id = viewId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return
+
+  ct = collectionType
+  if ct = invalid then ct = ""
+  ct = LCase(ct.ToStr().Trim())
+  if ct <> "movies" and ct <> "tvshows" then return
+
+  m.browseLibraryOpen = true
+  m.pendingLibraryLoad = false
+  m.browseLibraryViewId = id
+  m.browseLibraryCollection = ct
+
+  ttl = title
+  if ttl = invalid then ttl = ""
+  ttl = ttl.ToStr().Trim()
+  if ttl = "" then
+    if ct = "tvshows" then
+      ttl = _t("library_series")
+    else
+      ttl = _t("library_movies")
+    end if
+  end if
+  m.browseLibraryTitle = ttl
+  m.browseLibrarySearch = ""
+  m.browseLibraryRawItems = []
+  m.browseLibraryAutoFocusPending = false
+  m.pendingLibraryViewId = ""
+  if m.libraryItemsList <> invalid then m.libraryItemsList.content = CreateObject("roSGNode", "ContentNode")
+  if m.libraryEmptyLabel <> invalid then
+    m.libraryEmptyLabel.text = _t("loading")
+    m.libraryEmptyLabel.visible = true
+  end if
+
+  _setBrowseLibraryVisible(true)
+  _refreshBrowseLibraryHeader()
+  m.browseFocus = "library_search"
+  applyFocus()
+
+  if m.pendingJob = "home_shelf" then m.homeShelfQueue = []
+  _loadBrowseLibraryItems()
+end sub
+
+sub _closeBrowseLibrary()
+  if m.browseLibraryOpen <> true then return
+
+  m.browseLibraryOpen = false
+  m.browseLibraryCollection = ""
+  m.browseLibraryViewId = ""
+  m.browseLibraryTitle = ""
+  m.browseLibrarySearch = ""
+  m.browseLibraryRawItems = []
+  m.browseLibraryAutoFocusPending = false
+  m.pendingLibraryViewId = ""
+  m.pendingLibraryLoad = false
+  m.pendingSeriesDetailQueued = false
+  m.pendingSeriesDetailQueuedItemId = ""
+  m.pendingSeriesDetailQueuedTitle = ""
+  m.pendingSeriesDetailItemId = ""
+  m.pendingSeriesDetailTitle = ""
+  m.seriesDetailPlayEpisodeId = ""
+  m.seriesDetailPlayEpisodeTitle = ""
+
+  if m.libraryItemsList <> invalid then m.libraryItemsList.content = CreateObject("roSGNode", "ContentNode")
+  if m.libraryEmptyLabel <> invalid then m.libraryEmptyLabel.visible = false
+
+  _setBrowseLibraryVisible(false)
+  m.browseFocus = "views"
+  _updateBrowseEmptyState()
+  applyFocus()
 end sub
 
 sub renderShelfItems(raw as String)
@@ -5908,6 +7466,9 @@ sub renderShelfItems(raw as String)
       c.itemType = typ0
       c.path = path0
       posterUri = _browsePosterUri(c.id, posterBase, posterToken)
+      if posterUri = "" then posterUri = _browseChannelPosterUri(c.id, posterBase, posterToken)
+      if posterUri = "" then posterUri = _browseChannelImageUri(c.id, posterBase, posterToken, "Logo")
+      if posterUri = "" then posterUri = "pkg:/images/logo.png"
       c.hdPosterUrl = posterUri
       c.posterUrl = posterUri
       c.posterMode = "zoomToFill"
@@ -5981,6 +7542,534 @@ sub renderShelfItems(raw as String)
   end if
 end sub
 
+sub requestSeriesDetails(itemId as String, title as String)
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return
+
+  if m.gatewayTask = invalid then
+    setStatus("gateway: missing task")
+    return
+  end if
+  if m.pendingJob <> "" then
+    if m.pendingJob = "home_shelf" then m.homeShelfQueue = []
+    m.pendingSeriesDetailQueued = true
+    m.pendingSeriesDetailQueuedItemId = id
+    m.pendingSeriesDetailQueuedTitle = title
+    print "series detail queued id=" + id + " pendingJob=" + m.pendingJob
+    setStatus(_t("loading_details"))
+    _scheduleDeferredBrowseActions()
+    return
+  end if
+
+  cfg = loadConfig()
+  if cfg.apiBase = "" or cfg.appToken = "" or cfg.jellyfinToken = "" or cfg.userId = "" then
+    setStatus(_t("missing_config"))
+    return
+  end if
+
+  t = title
+  if t = invalid then t = ""
+  t = t.ToStr().Trim()
+  if t = "" then t = "Series"
+
+  m.pendingSeriesDetailItemId = id
+  m.pendingSeriesDetailTitle = t
+  m.seriesDetailPlayEpisodeId = ""
+  m.seriesDetailPlayEpisodeTitle = ""
+
+  print "series detail request id=" + id + " title=" + t
+  setStatus(_t("loading_details"))
+  m.pendingJob = "series_detail"
+  m.gatewayTask.kind = "series_detail"
+  m.gatewayTask.apiBase = cfg.apiBase
+  m.gatewayTask.appToken = cfg.appToken
+  m.gatewayTask.jellyfinToken = cfg.jellyfinToken
+  m.gatewayTask.userId = cfg.userId
+  m.gatewayTask.itemId = id
+  m.gatewayTask.limit = 24
+  m.gatewayTask.control = "run"
+end sub
+
+sub requestResumeProbe(itemId as String, title as String)
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then
+    playVodById(itemId, title)
+    return
+  end if
+
+  t = title
+  if t = invalid then t = ""
+  t = t.ToStr().Trim()
+  if t = "" then t = "Video"
+
+  if m.gatewayTask = invalid then
+    playVodById(id, t)
+    return
+  end if
+
+  if m.pendingJob <> "" then
+    m.pendingResumeProbeQueued = true
+    m.pendingResumeProbeQueuedItemId = id
+    m.pendingResumeProbeQueuedTitle = t
+    print "resume probe queued id=" + id + " pendingJob=" + m.pendingJob
+    _scheduleDeferredBrowseActions()
+    return
+  end if
+
+  cfg = loadConfig()
+  if cfg.apiBase = "" or cfg.appToken = "" or cfg.jellyfinToken = "" or cfg.userId = "" then
+    playVodById(id, t)
+    return
+  end if
+
+  m.pendingResumeProbeItemId = id
+  m.pendingResumeProbeTitle = t
+  print "resume probe request id=" + id + " title=" + t
+  m.pendingJob = "resume_probe"
+  m.gatewayTask.kind = "progress_item"
+  m.gatewayTask.apiBase = cfg.apiBase
+  m.gatewayTask.appToken = cfg.appToken
+  m.gatewayTask.jellyfinToken = cfg.jellyfinToken
+  m.gatewayTask.userId = cfg.userId
+  m.gatewayTask.itemId = id
+  m.gatewayTask.limit = 180
+  m.gatewayTask.control = "run"
+end sub
+
+function _seriesIntText(v as Dynamic) as String
+  if v = invalid then return ""
+  n = _sceneIntFromAny(v)
+  if n < 0 then return ""
+  return n.ToStr()
+end function
+
+function _compactDialogText(raw as Dynamic, maxChars as Integer) as String
+  s = raw
+  if s = invalid then s = ""
+  s = s.ToStr().Trim()
+  if s = "" then return ""
+
+  lim = maxChars
+  if lim <= 0 then lim = 240
+  if Len(s) <= lim then return s
+  if lim <= 3 then return Left(s, lim)
+  return Left(s, lim - 3).Trim() + "..."
+end function
+
+function _buildSeriesDetailsMessage(payload as Object) as String
+  data = payload
+  if type(data) <> "roAssociativeArray" then data = {}
+
+  series = data.series
+  if type(series) <> "roAssociativeArray" then series = {}
+
+  overview = ""
+  if series.overview <> invalid then overview = series.overview.ToStr().Trim()
+  overview = _compactDialogText(overview, 420)
+  if overview = "" then overview = _t("series_no_overview")
+
+  seasons = data.seasons
+  if type(seasons) <> "roArray" then seasons = []
+  eps = data.episodes
+  if type(eps) <> "roArray" then eps = []
+
+  msg = overview + Chr(10) + Chr(10)
+  msg = msg + _t("series_seasons") + ": " + seasons.Count().ToStr() + Chr(10)
+  msg = msg + _t("series_episodes") + ": " + eps.Count().ToStr()
+
+  if eps.Count() > 0 then
+    msg = msg + Chr(10) + Chr(10)
+    maxEps = eps.Count()
+    if maxEps > 12 then maxEps = 12
+    j = 0
+    while j < maxEps
+      e = eps[j]
+      eName = ""
+      seasonNum = ""
+      episodeNum = ""
+      if e <> invalid then
+        if e.name <> invalid then eName = e.name.ToStr().Trim()
+        if e.parentIndexNumber <> invalid then seasonNum = _seriesIntText(e.parentIndexNumber)
+        if e.indexNumber <> invalid then episodeNum = _seriesIntText(e.indexNumber)
+      end if
+      if eName = "" then eName = "Episode " + (j + 1).ToStr()
+      eName = _compactDialogText(eName, 68)
+      prefix = ""
+      if seasonNum <> "" or episodeNum <> "" then
+        prefix = "S"
+        if seasonNum <> "" then prefix = prefix + seasonNum else prefix = prefix + "?"
+        prefix = prefix + "E"
+        if episodeNum <> "" then prefix = prefix + episodeNum else prefix = prefix + "?"
+        prefix = " - " + prefix + " "
+      else
+        prefix = " - "
+      end if
+      msg = msg + prefix + eName + Chr(10)
+      j = j + 1
+    end while
+    if eps.Count() > maxEps then
+      msg = msg + " - ..." + Chr(10)
+    end if
+  end if
+
+  return msg.Trim()
+end function
+
+function _seriesSeasonIndexFromObj(s as Object, fallbackIdx as Integer) as Integer
+  idx = -1
+  if s <> invalid and s.indexNumber <> invalid then
+    idx = _sceneIntFromAny(s.indexNumber)
+  end if
+  if idx < 0 then idx = fallbackIdx
+  return idx
+end function
+
+function _seriesEpisodeSeasonIndex(ep as Object) as Integer
+  if ep = invalid then return -1
+  if ep.parentIndexNumber <> invalid then return _sceneIntFromAny(ep.parentIndexNumber)
+  return -1
+end function
+
+function _seriesEpisodeIndex(ep as Object) as Integer
+  if ep = invalid then return -1
+  if ep.indexNumber <> invalid then return _sceneIntFromAny(ep.indexNumber)
+  return -1
+end function
+
+function _seriesJoin(parts as Object, sep as String) as String
+  if type(parts) <> "roArray" then return ""
+  s = ""
+  for each p in parts
+    if p = invalid then
+      continue for
+    end if
+    v = p.ToStr().Trim()
+    if v = "" then
+      continue for
+    end if
+    if s = "" then
+      s = v
+    else
+      s = s + sep + v
+    end if
+  end for
+  return s
+end function
+
+function _countEpisodesForSeason(seasonIdx as Integer, episodes as Object) as Integer
+  if seasonIdx <= 0 then return 0
+  if type(episodes) <> "roArray" then return 0
+  cnt = 0
+  for each ep in episodes
+    if _seriesEpisodeSeasonIndex(ep) = seasonIdx then cnt = cnt + 1
+  end for
+  return cnt
+end function
+
+sub _renderSeriesDetailEpisodes(seasonIdx as Integer)
+  if m.seriesDetailEpisodesList = invalid then return
+
+  eps = m.seriesDetailEpisodes
+  if type(eps) <> "roArray" then eps = []
+
+  cfg = loadConfig()
+  posterBase = cfg.apiBase
+  posterToken = cfg.jellyfinToken
+  fallbackPoster = ""
+  if m.seriesDetailPoster <> invalid and m.seriesDetailPoster.uri <> invalid then
+    fallbackPoster = m.seriesDetailPoster.uri.ToStr().Trim()
+  end if
+
+  root = CreateObject("roSGNode", "ContentNode")
+  for each ep in eps
+    if seasonIdx > 0 then
+      sIdx = _seriesEpisodeSeasonIndex(ep)
+      if sIdx <> seasonIdx then
+        continue for
+      end if
+    end if
+
+    eid = ""
+    ename = ""
+    eover = ""
+    pidx = _seriesEpisodeSeasonIndex(ep)
+    eidx = _seriesEpisodeIndex(ep)
+    if ep <> invalid then
+      if ep.id <> invalid then eid = ep.id
+      if ep.name <> invalid then ename = ep.name.ToStr().Trim()
+      if ep.overview <> invalid then eover = ep.overview.ToStr().Trim()
+    end if
+    if ename = "" then ename = "Episode"
+
+    c = CreateObject("roSGNode", "ContentNode")
+    c.addField("itemType", "string", false)
+    c.addField("meta", "string", false)
+    if eid <> invalid and eid.Trim() <> "" then c.id = eid.Trim()
+    c.title = ename
+    c.itemType = "episode"
+    c.meta = _compactDialogText(eover, 140)
+
+    posterUri = ""
+    if eid <> "" then posterUri = _browsePosterUri(eid, posterBase, posterToken)
+    if posterUri = "" then posterUri = fallbackPoster
+    if posterUri <> "" then c.hdPosterUrl = posterUri
+
+    root.appendChild(c)
+  end for
+
+  m.seriesDetailEpisodesList.content = root
+  if root.getChildCount() > 0 then
+    m.seriesDetailEpisodesList.itemFocused = 0
+  end if
+end sub
+
+sub _renderSeriesDetail(payload as Object)
+  data = payload
+  if type(data) <> "roAssociativeArray" then data = {}
+  series = data.series
+  if type(series) <> "roAssociativeArray" then series = {}
+  seasons = data.seasons
+  if type(seasons) <> "roArray" then seasons = []
+  eps = data.episodes
+  if type(eps) <> "roArray" then eps = []
+
+  m.seriesDetailData = data
+  m.seriesDetailSeasons = seasons
+  m.seriesDetailEpisodes = eps
+
+  title = ""
+  if series.name <> invalid then title = series.name.ToStr().Trim()
+  if title = "" and m.pendingSeriesDetailTitle <> invalid then title = m.pendingSeriesDetailTitle.ToStr().Trim()
+  if title = "" then title = "Series"
+  if m.seriesDetailTitle <> invalid then m.seriesDetailTitle.text = title
+
+  if m.seriesDetailType <> invalid then m.seriesDetailType.text = _t("library_series")
+
+  yr = 0
+  if series.productionYear <> invalid then yr = _sceneIntFromAny(series.productionYear)
+  yrText = ""
+  if yr > 0 then yrText = yr.ToStr()
+
+  ratingText = _formatRating(series.communityRating)
+
+  ageText = ""
+  if series.officialRating <> invalid then ageText = series.officialRating.ToStr().Trim()
+  if ageText = "" and series.OfficialRating <> invalid then ageText = series.OfficialRating.ToStr().Trim()
+
+  _setDetailChip(m.seriesDetailChipYear, m.seriesDetailChipYearBg, m.seriesDetailChipYearText, yrText)
+  _setDetailChip(m.seriesDetailChipAge, m.seriesDetailChipAgeBg, m.seriesDetailChipAgeText, ageText)
+  _setDetailChip(m.seriesDetailChipRating, m.seriesDetailChipRatingBg, m.seriesDetailChipRatingText, ratingText)
+  _layoutDetailChips()
+
+  genresText = _seriesGenresText(series.genres)
+  if genresText = "" and series.Genres <> invalid then genresText = _seriesGenresText(series.Genres)
+  if m.seriesDetailGenres <> invalid then
+    m.seriesDetailGenres.text = genresText
+    m.seriesDetailGenres.visible = (genresText <> "")
+  end if
+
+  overview = ""
+  if series.overview <> invalid then overview = series.overview.ToStr().Trim()
+  if overview = "" then overview = _t("series_no_overview")
+  if m.seriesDetailOverview <> invalid then m.seriesDetailOverview.text = _compactDialogText(overview, 240)
+
+  runtimeMin = _minutesFromTicks(series.runTimeTicks)
+  if runtimeMin <= 0 and series.RunTimeTicks <> invalid then runtimeMin = _minutesFromTicks(series.RunTimeTicks)
+  if runtimeMin < 0 then runtimeMin = 0
+  runtimeText = _t("detail_runtime") + " " + runtimeMin.ToStr() + " min"
+  if m.seriesDetailRuntime <> invalid then
+    m.seriesDetailRuntime.text = runtimeText
+    m.seriesDetailRuntime.visible = true
+  end if
+
+  cfg = loadConfig()
+  posterUri = _browsePosterUri(series.id, cfg.apiBase, cfg.jellyfinToken)
+  if posterUri = "" then posterUri = "pkg:/images/logo.png"
+  if m.seriesDetailPoster <> invalid then m.seriesDetailPoster.uri = posterUri
+
+  backdropTag = ""
+  if series.backdropTags <> invalid and type(series.backdropTags) = "roArray" and series.backdropTags.Count() > 0 then
+    backdropTag = series.backdropTags[0].ToStr().Trim()
+  else if series.BackdropImageTags <> invalid and type(series.BackdropImageTags) = "roArray" and series.BackdropImageTags.Count() > 0 then
+    backdropTag = series.BackdropImageTags[0].ToStr().Trim()
+  end if
+  heroUri = _browseBackdropUri(series.id, cfg.apiBase, cfg.jellyfinToken, backdropTag)
+  if heroUri = "" then heroUri = posterUri
+  if m.seriesDetailHero <> invalid then m.seriesDetailHero.uri = heroUri
+
+  if m.seriesDetailSeasonsList <> invalid then
+    sRoot = CreateObject("roSGNode", "ContentNode")
+    idx = 1
+    for each s in seasons
+      sIdx = _seriesSeasonIndexFromObj(s, idx)
+      sName = ""
+      if s <> invalid and s.name <> invalid then sName = s.name.ToStr().Trim()
+      if sName = "" then sName = _t("series_seasons") + " " + sIdx.ToStr()
+      c = CreateObject("roSGNode", "ContentNode")
+      c.addField("seasonIndex", "integer", false)
+      c.title = sName
+      c.seasonIndex = sIdx
+      seasonPoster = ""
+      if s <> invalid and s.id <> invalid then seasonPoster = _browsePosterUri(s.id, cfg.apiBase, cfg.jellyfinToken)
+      if seasonPoster = "" then seasonPoster = posterUri
+      if seasonPoster <> "" then c.hdPosterUrl = seasonPoster
+      sRoot.appendChild(c)
+      idx = idx + 1
+    end for
+    m.seriesDetailSeasonsList.content = sRoot
+    if sRoot.getChildCount() > 0 then
+      m.seriesDetailSeasonsList.itemFocused = 0
+      first = sRoot.getChild(0)
+      if first <> invalid and first.hasField("seasonIndex") then
+        m.seriesDetailSeasonIndex = _sceneIntFromAny(first.seasonIndex)
+      else
+        m.seriesDetailSeasonIndex = -1
+      end if
+    else
+      m.seriesDetailSeasonIndex = -1
+    end if
+  end if
+
+  _renderSeriesDetailEpisodes(m.seriesDetailSeasonIndex)
+end sub
+
+sub _showSeriesDetailScreen(payload as Object)
+  if m.seriesDetailGroup = invalid then
+    _showSeriesDetailDialog(payload)
+    return
+  end if
+  if m.pendingDialog <> invalid and m.top.dialog = invalid then m.pendingDialog = invalid
+  if m.pendingDialog <> invalid then return
+
+  _renderSeriesDetail(payload)
+  statusId = ""
+  if payload <> invalid and payload.firstEpisodeId <> invalid then statusId = payload.firstEpisodeId.ToStr().Trim()
+  m.seriesDetailStatusItemId = statusId
+  _applySeriesDetailStatus("")
+  m.seriesDetailOpen = true
+  m.seriesDetailFocus = "episodes"
+  if _browseListCount(m.seriesDetailEpisodesList) = 0 and _browseListCount(m.seriesDetailSeasonsList) > 0 then
+    m.seriesDetailFocus = "seasons"
+  end if
+  if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = true
+  if m.browseCard <> invalid then m.browseCard.visible = false
+  applyFocus()
+  if statusId <> "" then requestSeriesStatus(statusId)
+end sub
+
+sub _closeSeriesDetail()
+  if m.seriesDetailOpen <> true then return
+  m.seriesDetailOpen = false
+  m.seriesDetailFocus = "episodes"
+  m.seriesDetailSeasonIndex = -1
+  m.seriesDetailStatus = ""
+  m.seriesDetailStatusItemId = ""
+  _applySeriesDetailStatus("")
+  if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = false
+  if m.mode = "browse" and m.browseCard <> invalid then m.browseCard.visible = true
+  applyFocus()
+end sub
+
+sub onSeriesSeasonSelected()
+  if m.seriesDetailOpen <> true then return
+  if m.seriesDetailSeasonsList = invalid then return
+  idx = m.seriesDetailSeasonsList.itemSelected
+  if idx = invalid or idx < 0 then return
+  root = m.seriesDetailSeasonsList.content
+  if root = invalid then return
+  n = root.getChild(idx)
+  if n = invalid then return
+  sIdx = -1
+  if n.hasField("seasonIndex") then sIdx = _sceneIntFromAny(n.seasonIndex)
+  m.seriesDetailSeasonIndex = sIdx
+  m.seriesDetailFocus = "episodes"
+  _renderSeriesDetailEpisodes(sIdx)
+  applyFocus()
+end sub
+
+sub onSeriesEpisodeSelected()
+  if m.seriesDetailOpen <> true then return
+  if m.seriesDetailEpisodesList = invalid then return
+  idx = m.seriesDetailEpisodesList.itemSelected
+  if idx = invalid or idx < 0 then return
+  root = m.seriesDetailEpisodesList.content
+  if root = invalid then return
+  it = root.getChild(idx)
+  if it = invalid then return
+  _closeSeriesDetail()
+  _playBrowseItemNode(it)
+end sub
+
+sub _showSeriesDetailDialog(payload as Object)
+  if m.pendingDialog <> invalid and m.top.dialog = invalid then m.pendingDialog = invalid
+  if m.pendingDialog <> invalid then return
+
+  data = payload
+  if type(data) <> "roAssociativeArray" then data = {}
+  series = data.series
+  if type(series) <> "roAssociativeArray" then series = {}
+
+  t = ""
+  if series.name <> invalid then t = series.name.ToStr().Trim()
+  if t = "" then
+    if m.pendingSeriesDetailTitle <> invalid then t = m.pendingSeriesDetailTitle.ToStr().Trim()
+  end if
+  if t = "" then t = "Series"
+
+  firstEpId = ""
+  if data.firstEpisodeId <> invalid then firstEpId = data.firstEpisodeId.ToStr().Trim()
+  firstEpTitle = ""
+  if data.firstEpisodeTitle <> invalid then firstEpTitle = data.firstEpisodeTitle.ToStr().Trim()
+  if firstEpTitle = "" then firstEpTitle = t
+
+  dlg = CreateObject("roSGNode", "Dialog")
+  dlg.title = t
+  dlg.message = _buildSeriesDetailsMessage(data)
+  if firstEpId <> "" then
+    dlg.buttons = [_t("play_first_episode"), _t("close")]
+  else
+    dlg.buttons = [_t("close")]
+  end if
+  dlg.observeField("buttonSelected", "onSeriesDetailDone")
+  m.seriesDetailPlayEpisodeId = firstEpId
+  m.seriesDetailPlayEpisodeTitle = firstEpTitle
+  m.pendingDialog = dlg
+  m.top.dialog = dlg
+  dlg.setFocus(true)
+end sub
+
+sub onSeriesDetailDone()
+  dlg = m.pendingDialog
+  if dlg = invalid then return
+
+  idx = dlg.buttonSelected
+  playId = m.seriesDetailPlayEpisodeId
+  playTitle = m.seriesDetailPlayEpisodeTitle
+
+  m.top.dialog = invalid
+  m.pendingDialog = invalid
+  m.seriesDetailPlayEpisodeId = ""
+  m.seriesDetailPlayEpisodeTitle = ""
+
+  if playId = invalid then playId = ""
+  playId = playId.ToStr().Trim()
+  if playTitle = invalid then playTitle = ""
+  playTitle = playTitle.ToStr().Trim()
+  if playTitle = "" then playTitle = "Episode"
+
+  if playId <> "" and idx = 0 then
+    playVodById(playId, playTitle)
+    return
+  end if
+
+  setStatus("ready")
+  applyFocus()
+end sub
+
 sub _playBrowseItemNode(it as Object)
   if it = invalid then return
   itemId = ""
@@ -6005,26 +8094,13 @@ sub _playBrowseItemNode(it as Object)
   typL = LCase(typ)
 
   if typL = "livetvchannel" or typL = "livetv" then
-    p = ""
-    if it.hasField("path") then p = it.path
-    if p = invalid then p = ""
-    p = p.ToStr().Trim()
-    if p = "" then p = "/hls/master.m3u8"
-    signAndPlay(p, it.title)
+    livePath = _resolveLivePathFromItem(it)
+    signAndPlay(livePath, it.title)
     return
   end if
 
-  ' TODO: Implement series -> resolve next episode; for now, show a clear message.
   if typL = "series" then
-    if m.pendingDialog <> invalid then return
-    dlg = CreateObject("roSGNode", "Dialog")
-    dlg.title = it.title
-    dlg.message = "Series ainda nao esta implementado no Roku."
-    dlg.buttons = ["OK"]
-    dlg.observeField("buttonSelected", "onTokensDone")
-    m.pendingDialog = dlg
-    m.top.dialog = dlg
-    dlg.setFocus(true)
+    requestSeriesDetails(it.id, it.title)
     return
   end if
 
@@ -6034,32 +8110,60 @@ sub _playBrowseItemNode(it as Object)
     return
   end if
 
-  playVodById(it.id, it.title)
+  requestResumeProbe(it.id, it.title)
 end sub
 
-sub onItemSelected()
+sub _onBrowseListItemSelected(lst as Object, requiredFocus as String, label as String)
   if _isPlaybackVisible() then
-    print "[guard] ignore onItemSelected while playback visible"
+    print "[guard] ignore " + label + " while playback visible"
     return
   end if
 
   if m.mode <> "browse" then return
-  if m.browseFocus <> "items" then return
-  if m.itemsList = invalid then return
+  if m.browseFocus <> requiredFocus then
+    if requiredFocus = "library_items" and m.browseLibraryOpen = true and lst = m.libraryItemsList then
+      ' Accept delayed focus transitions while library content is loading.
+    else
+      return
+    end if
+  end if
+  if lst = invalid then return
 
-  idx = m.itemsList.itemSelected
+  idx = lst.itemSelected
   if idx = invalid or idx < 0 then return
 
-  root = m.itemsList.content
+  root = lst.content
   if root = invalid then return
   it = root.getChild(idx)
   if it = invalid then return
   _playBrowseItemNode(it)
 end sub
 
+sub onItemSelected()
+  _onBrowseListItemSelected(m.itemsList, "items", "onItemSelected")
+end sub
+
+sub onContinueItemSelected()
+  _onBrowseListItemSelected(m.continueList, "continue", "onContinueItemSelected")
+end sub
+
+sub onRecentMoviesItemSelected()
+  _onBrowseListItemSelected(m.recentMoviesList, "movies", "onRecentMoviesItemSelected")
+end sub
+
+sub onRecentSeriesItemSelected()
+  _onBrowseListItemSelected(m.recentSeriesList, "series", "onRecentSeriesItemSelected")
+end sub
+
+sub onLibraryItemSelected()
+  _onBrowseListItemSelected(m.libraryItemsList, "library_items", "onLibraryItemSelected")
+end sub
+
 sub enterLive()
   print "enterLive()"
   m.mode = "live"
+  m.seriesDetailOpen = false
+  if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = false
   if m.logoPoster <> invalid then m.logoPoster.visible = false
   if m.titleLabel <> invalid then m.titleLabel.visible = false
   if m.loginCard <> invalid then m.loginCard.visible = false
@@ -6125,24 +8229,8 @@ sub onChannelSelected()
 
   item = root.getChild(idx)
   if item = invalid then return
-  p = ""
-  if item.hasField("path") then p = item.path
-  if p <> invalid then p = p.Trim()
-  if p <> "" then
-    signAndPlay(p, item.title)
-    return
-  end if
-
-  ' Some Jellyfin LiveTV channel payloads omit Path; derive our canonical route.
-  chId = ""
-  if item.hasField("id") then chId = item.id
-  if chId <> invalid then chId = chId.ToStr()
-  chId = chId.Trim()
-  ' NOTE: Multi-channel LIVE (/hls/channel/<id>/master.m3u8) is not always enabled
-  ' on the server yet. Avoid hard-failing with 404 by using the single-channel
-  ' master until the backend route is live.
-  if chId <> "" then print "live: missing channel path; using /hls/master.m3u8 (channelId=" + chId + ")"
-  signAndPlay("/hls/master.m3u8", item.title)
+  livePath = _resolveLivePathFromItem(item)
+  signAndPlay(livePath, item.title)
 end sub
 
 sub showTokens()
