@@ -68,11 +68,12 @@ sub init()
   m.seriesDetailPlayEpisodeId = ""
   m.seriesDetailPlayEpisodeTitle = ""
   m.seriesDetailOpen = false
-  m.seriesDetailFocus = "episodes" ' episodes | seasons
+  m.seriesDetailFocus = "episodes" ' episodes | seasons | cast
   m.seriesDetailSeasonIndex = -1
   m.seriesDetailData = {}
   m.seriesDetailSeasons = []
   m.seriesDetailEpisodes = []
+  m.seriesDetailCast = []
   m.seriesDetailStatus = ""
   m.seriesDetailStatusItemId = ""
   m.pendingResumeProbeItemId = ""
@@ -314,6 +315,7 @@ sub bindUiNodes()
   m.seriesDetailGroup = m.top.findNode("seriesDetailGroup")
   m.seriesDetailBack = m.top.findNode("seriesDetailBack")
   m.seriesDetailHero = m.top.findNode("seriesDetailHero")
+  m.seriesDetailPosterGlow = m.top.findNode("seriesDetailPosterGlow")
   m.seriesDetailPoster = m.top.findNode("seriesDetailPoster")
   m.seriesDetailTitle = m.top.findNode("seriesDetailTitle")
   m.seriesDetailType = m.top.findNode("seriesDetailType")
@@ -341,6 +343,8 @@ sub bindUiNodes()
   m.seriesDetailSeasonsList = m.top.findNode("seriesDetailSeasonsList")
   m.seriesDetailEpisodesTitle = m.top.findNode("seriesDetailEpisodesTitle")
   m.seriesDetailEpisodesList = m.top.findNode("seriesDetailEpisodesList")
+  m.seriesDetailCastTitle = m.top.findNode("seriesDetailCastTitle")
+  m.seriesDetailCastList = m.top.findNode("seriesDetailCastList")
   m.seriesDetailHint = m.top.findNode("seriesDetailHint")
   if m.viewsList <> invalid and m.viewsList.hasField("numColumns") then
     m.viewsGridCols = _gridCols(m.viewsList.numColumns, m.viewsGridCols)
@@ -483,6 +487,10 @@ sub bindUiNodes()
   if m.seriesDetailEpisodesList <> invalid and (m.seriesDetailEpisodesObsSetup <> true) then
     m.seriesDetailEpisodesList.observeField("itemSelected", "onSeriesEpisodeSelected")
     m.seriesDetailEpisodesObsSetup = true
+  end if
+  if m.seriesDetailCastList <> invalid and (m.seriesDetailCastObsSetup <> true) then
+    m.seriesDetailCastList.observeField("itemSelected", "onSeriesCastSelected")
+    m.seriesDetailCastObsSetup = true
   end if
 end sub
 
@@ -1242,6 +1250,7 @@ function _t(key as String) as String
         series_no_overview: "No synopsis available."
         series_seasons: "Seasons"
         series_episodes: "Episodes"
+        series_cast: "Cast"
         detail_back: "Detail"
         detail_trailer: "Trailer"
         detail_processing: "Processing"
@@ -1310,6 +1319,7 @@ function _t(key as String) as String
         series_no_overview: "Sem sinopse disponivel."
         series_seasons: "Temporadas"
         series_episodes: "Episodios"
+        series_cast: "Elenco"
         detail_back: "Detalhe"
         detail_trailer: "Trailer"
         detail_processing: "Processando"
@@ -1378,6 +1388,7 @@ function _t(key as String) as String
         series_no_overview: "Sin sinopsis disponible."
         series_seasons: "Temporadas"
         series_episodes: "Episodios"
+        series_cast: "Elenco"
         detail_back: "Detalle"
         detail_trailer: "Trailer"
         detail_processing: "Procesando"
@@ -1446,6 +1457,7 @@ function _t(key as String) as String
         series_no_overview: "Sinossi non disponibile."
         series_seasons: "Stagioni"
         series_episodes: "Episodi"
+        series_cast: "Cast"
         detail_back: "Dettaglio"
         detail_trailer: "Trailer"
         detail_processing: "In elaborazione"
@@ -1482,6 +1494,7 @@ sub applyLocalization()
   if m.seriesDetailBack <> invalid then m.seriesDetailBack.text = "< " + _t("detail_back")
   if m.seriesDetailSeasonsTitle <> invalid then m.seriesDetailSeasonsTitle.text = _t("series_seasons")
   if m.seriesDetailEpisodesTitle <> invalid then m.seriesDetailEpisodesTitle.text = _t("series_episodes")
+  if m.seriesDetailCastTitle <> invalid then m.seriesDetailCastTitle.text = _t("series_cast")
   if m.seriesDetailActionTrailerText <> invalid then m.seriesDetailActionTrailerText.text = _t("detail_trailer")
   if m.heroPromptText <> invalid then m.heroPromptText.text = _t("hero_continue_text")
   if m.heroPromptBtnText <> invalid then m.heroPromptBtnText.text = _t("hero_continue_cta")
@@ -5749,7 +5762,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
       return true
     end if
     if kl = "up" then
-      if m.seriesDetailFocus = "episodes" then
+      if m.seriesDetailFocus = "cast" then
+        m.seriesDetailFocus = "episodes"
+        applyFocus()
+      else if m.seriesDetailFocus = "episodes" then
         m.seriesDetailFocus = "seasons"
         applyFocus()
       end if
@@ -5759,6 +5775,11 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
       if m.seriesDetailFocus = "seasons" then
         m.seriesDetailFocus = "episodes"
         applyFocus()
+      else if m.seriesDetailFocus = "episodes" then
+        if _browseListCount(m.seriesDetailCastList) > 0 then
+          m.seriesDetailFocus = "cast"
+          applyFocus()
+        end if
       end if
       return true
     end if
@@ -6091,6 +6112,8 @@ sub applyFocus()
     focusTarget = LCase(focusTarget.ToStr().Trim())
     if focusTarget = "seasons" then
       if m.seriesDetailSeasonsList <> invalid then m.seriesDetailSeasonsList.setFocus(true)
+    else if focusTarget = "cast" then
+      if m.seriesDetailCastList <> invalid then m.seriesDetailCastList.setFocus(true)
     else
       if m.seriesDetailEpisodesList <> invalid then m.seriesDetailEpisodesList.setFocus(true)
     end if
@@ -7875,7 +7898,7 @@ sub _renderSeriesDetail(payload as Object)
   overview = ""
   if series.overview <> invalid then overview = series.overview.ToStr().Trim()
   if overview = "" then overview = _t("series_no_overview")
-  if m.seriesDetailOverview <> invalid then m.seriesDetailOverview.text = _compactDialogText(overview, 240)
+  if m.seriesDetailOverview <> invalid then m.seriesDetailOverview.text = _compactDialogText(overview, 420)
 
   runtimeMin = _minutesFromTicks(series.runTimeTicks)
   if runtimeMin <= 0 and series.RunTimeTicks <> invalid then runtimeMin = _minutesFromTicks(series.RunTimeTicks)
@@ -7900,6 +7923,43 @@ sub _renderSeriesDetail(payload as Object)
   heroUri = _browseBackdropUri(series.id, cfg.apiBase, cfg.jellyfinToken, backdropTag)
   if heroUri = "" then heroUri = posterUri
   if m.seriesDetailHero <> invalid then m.seriesDetailHero.uri = heroUri
+
+  people = series.people
+  if people = invalid then people = series.People
+  if type(people) <> "roArray" then people = []
+  m.seriesDetailCast = people
+  if m.seriesDetailCastList <> invalid then
+    castRoot = CreateObject("roSGNode", "ContentNode")
+    for each p in people
+      if p = invalid then
+        continue for
+      end if
+      pid = ""
+      pname = ""
+      if p.Id <> invalid then pid = p.Id.ToStr().Trim()
+      if p.Name <> invalid then pname = p.Name.ToStr().Trim()
+      if pname = "" then
+        continue for
+      end if
+      c2 = CreateObject("roSGNode", "ContentNode")
+      c2.addField("itemType", "string", false)
+      c2.itemType = "person"
+      c2.title = pname
+      if pid <> "" then
+        pPoster = _browsePosterUri(pid, cfg.apiBase, cfg.jellyfinToken)
+        if pPoster <> "" then c2.hdPosterUrl = pPoster
+      end if
+      castRoot.appendChild(c2)
+    end for
+    m.seriesDetailCastList.content = castRoot
+    if castRoot.getChildCount() > 0 then
+      m.seriesDetailCastList.itemFocused = 0
+    end if
+    if m.seriesDetailCastTitle <> invalid then
+      m.seriesDetailCastTitle.visible = (castRoot.getChildCount() > 0)
+    end if
+    m.seriesDetailCastList.visible = (castRoot.getChildCount() > 0)
+  end if
 
   if m.seriesDetailSeasonsList <> invalid then
     sRoot = CreateObject("roSGNode", "ContentNode")
@@ -7952,8 +8012,12 @@ sub _showSeriesDetailScreen(payload as Object)
   _applySeriesDetailStatus("")
   m.seriesDetailOpen = true
   m.seriesDetailFocus = "episodes"
-  if _browseListCount(m.seriesDetailEpisodesList) = 0 and _browseListCount(m.seriesDetailSeasonsList) > 0 then
-    m.seriesDetailFocus = "seasons"
+  if _browseListCount(m.seriesDetailEpisodesList) = 0 then
+    if _browseListCount(m.seriesDetailSeasonsList) > 0 then
+      m.seriesDetailFocus = "seasons"
+    else if _browseListCount(m.seriesDetailCastList) > 0 then
+      m.seriesDetailFocus = "cast"
+    end if
   end if
   if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = true
   if m.browseCard <> invalid then m.browseCard.visible = false
@@ -8002,6 +8066,11 @@ sub onSeriesEpisodeSelected()
   if it = invalid then return
   _closeSeriesDetail()
   _playBrowseItemNode(it)
+end sub
+
+sub onSeriesCastSelected()
+  ' Cast items are informational only for now.
+  return
 end sub
 
 sub _showSeriesDetailDialog(payload as Object)

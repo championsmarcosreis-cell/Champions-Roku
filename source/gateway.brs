@@ -319,7 +319,7 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
 
   seriesUrl = base + "/jellyfin/Users/" + uid + "/Items/" + sid
   seriesUrl = _urlWithQuery(seriesUrl, {
-    Fields: "Overview,Genres,CommunityRating,ProductionYear,OfficialRating,RunTimeTicks,BackdropImageTags,Path,MediaSources"
+    Fields: "Overview,Genres,CommunityRating,ProductionYear,OfficialRating,RunTimeTicks,BackdropImageTags,People,Path,MediaSources"
   })
   seriesResp = httpJson("GET", seriesUrl, headers)
   if seriesResp.ok <> true then
@@ -339,6 +339,7 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
   seriesRuntimeTicks = ""
   seriesGenres = []
   seriesBackdropTags = []
+  seriesPeople = []
   if seriesData.Name <> invalid then seriesName = seriesData.Name
   if seriesData.Type <> invalid and seriesData.Type.ToStr().Trim() <> "" then seriesType = seriesData.Type
   if seriesData.Overview <> invalid then seriesOverview = seriesData.Overview
@@ -351,6 +352,8 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
   if type(seriesGenres) <> "roArray" then seriesGenres = []
   if seriesData.BackdropImageTags <> invalid then seriesBackdropTags = seriesData.BackdropImageTags
   if type(seriesBackdropTags) <> "roArray" then seriesBackdropTags = []
+  if seriesData.People <> invalid then seriesPeople = seriesData.People
+  if type(seriesPeople) <> "roArray" then seriesPeople = []
 
   seasons = []
   seasonsUrl = base + "/jellyfin/Shows/" + sid + "/Seasons"
@@ -474,6 +477,7 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
       runTimeTicks: seriesRuntimeTicks
       genres: seriesGenres
       backdropTags: seriesBackdropTags
+      people: seriesPeople
     }
     seasons: seasons
     episodes: episodes
