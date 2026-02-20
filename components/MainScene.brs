@@ -78,6 +78,7 @@ sub init()
   m.seriesDetailCast = []
   m.seriesDetailCastCount = 0
   m.seriesDetailHasTrailer = false
+  m.seriesDetailHeroUri = ""
   m.seriesDetailStatus = ""
   m.seriesDetailStatusItemId = ""
   m.seriesDetailActionFocus = 0
@@ -8008,10 +8009,13 @@ function _hasTrailerFromItem(item as Object) as Boolean
 
   if item.HasLocalTrailer = true then return true
 
+  sawCount = false
   if item.LocalTrailerCount <> invalid then
+    sawCount = true
     if _sceneIntFromAny(item.LocalTrailerCount) > 0 then return true
   end if
   if item.TrailerCount <> invalid then
+    sawCount = true
     if _sceneIntFromAny(item.TrailerCount) > 0 then return true
   end if
 
@@ -8025,7 +8029,8 @@ function _hasTrailerFromItem(item as Object) as Boolean
   arr3 = item.Trailers
   if type(arr3) = "roArray" and arr3.Count() > 0 then return true
 
-  return false
+  if sawCount = true then return false
+  return true
 end function
 
 sub _renderSeriesDetailCast(people as Object)
@@ -8206,6 +8211,7 @@ sub _renderSeriesDetail(payload as Object)
   heroUri = _browseBackdropUri(series.id, cfg.apiBase, cfg.jellyfinToken, backdropTag)
   if heroUri = "" then heroUri = posterUri
   if m.seriesDetailHero <> invalid then m.seriesDetailHero.uri = heroUri
+  m.seriesDetailHeroUri = heroUri
 
   people = series.people
   if people = invalid then people = series.People
@@ -8341,9 +8347,13 @@ sub _renderEpisodeDetail(ep as Object)
     if seriesId <> "" then heroId = seriesId
   end if
 
-  heroUri = ""
-  if heroId <> "" and backdropTag <> "" then
-    heroUri = _browseBackdropUri(heroId, cfg.apiBase, cfg.jellyfinToken, backdropTag)
+  heroUri = m.seriesDetailHeroUri
+  if heroUri = invalid then heroUri = ""
+  heroUri = heroUri.ToStr().Trim()
+  if heroUri = "" then
+    if heroId <> "" and backdropTag <> "" then
+      heroUri = _browseBackdropUri(heroId, cfg.apiBase, cfg.jellyfinToken, backdropTag)
+    end if
   end if
   if heroUri = "" then heroUri = posterUri
   if m.seriesDetailHero <> invalid then m.seriesDetailHero.uri = heroUri
