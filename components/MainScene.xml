@@ -115,6 +115,15 @@
               />
 
               <Poster
+                id="seriesDetailHero"
+                translation="[46, 46]"
+                width="1188"
+                height="468"
+                loadDisplayMode="zoomToFill"
+                uri=""
+              />
+
+              <Poster
                 id="seriesDetailPosterGlow"
                 translation="[60, 70]"
                 width="220"
@@ -128,16 +137,7 @@
                 translation="[70, 80]"
                 width="200"
                 height="300"
-                loadDisplayMode="zoomToFill"
-                uri=""
-              />
-
-              <Poster
-                id="seriesDetailHero"
-                translation="[300, 80]"
-                width="920"
-                height="320"
-                loadDisplayMode="zoomToFill"
+                loadDisplayMode="scaleToFit"
                 uri=""
               />
 
@@ -166,11 +166,11 @@
                 translation="[70, 430]"
               >
                 <Group id="seriesDetailChipYear">
-                  <Rectangle id="seriesDetailChipYearBg" width="76" height="20" color="0x2D3A4E" cornerRadius="10" />
+                  <Poster id="seriesDetailChipYearBg" width="70" height="18" uri="pkg:/images/card.png" />
                   <Label
                     id="seriesDetailChipYearText"
-                    translation="[0, 1]"
-                    width="76"
+                    translation="[0, 0]"
+                    width="70"
                     height="18"
                     font="font:SmallSystemFont"
                     horizAlign="center"
@@ -179,11 +179,11 @@
                   />
                 </Group>
                 <Group id="seriesDetailChipAge">
-                  <Rectangle id="seriesDetailChipAgeBg" width="76" height="20" color="0x2D3A4E" cornerRadius="10" />
+                  <Poster id="seriesDetailChipAgeBg" width="70" height="18" uri="pkg:/images/card.png" />
                   <Label
                     id="seriesDetailChipAgeText"
-                    translation="[0, 1]"
-                    width="76"
+                    translation="[0, 0]"
+                    width="70"
                     height="18"
                     font="font:SmallSystemFont"
                     horizAlign="center"
@@ -192,11 +192,11 @@
                   />
                 </Group>
                 <Group id="seriesDetailChipRating">
-                  <Rectangle id="seriesDetailChipRatingBg" width="76" height="20" color="0x2D3A4E" cornerRadius="10" />
+                  <Poster id="seriesDetailChipRatingBg" width="70" height="18" uri="pkg:/images/card.png" />
                   <Label
                     id="seriesDetailChipRatingText"
-                    translation="[0, 1]"
-                    width="76"
+                    translation="[0, 0]"
+                    width="70"
                     height="18"
                     font="font:SmallSystemFont"
                     horizAlign="center"
@@ -205,11 +205,11 @@
                   />
                 </Group>
                 <Group id="seriesDetailChipStatus">
-                  <Rectangle id="seriesDetailChipStatusBg" width="108" height="20" color="0x2D3A4E" cornerRadius="10" />
+                  <Poster id="seriesDetailChipStatusBg" width="90" height="18" uri="pkg:/images/card.png" />
                   <Label
                     id="seriesDetailChipStatusText"
-                    translation="[0, 1]"
-                    width="108"
+                    translation="[0, 0]"
+                    width="90"
                     height="18"
                     font="font:SmallSystemFont"
                     horizAlign="center"
@@ -234,7 +234,7 @@
                 translation="[66, 472]"
                 width="208"
                 height="44"
-                uri="pkg:/images/button_focus.png"
+                uri="pkg:/images/field_focus.png"
                 visible="false"
               />
               <Poster
@@ -260,7 +260,7 @@
                 translation="[276, 472]"
                 width="208"
                 height="44"
-                uri="pkg:/images/button_focus.png"
+                uri="pkg:/images/field_focus.png"
                 visible="false"
               />
               <Rectangle

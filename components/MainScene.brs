@@ -8378,10 +8378,8 @@ sub _applySeriesDetailModeLayout()
   if m.seriesDetailActionTrailerText <> invalid then m.seriesDetailActionTrailerText.visible = (isEpisodeMode <> true)
   if m.seriesDetailActionTrailerFocus <> invalid then m.seriesDetailActionTrailerFocus.visible = (isEpisodeMode <> true)
   if isEpisodeMode <> true then
-    hasTrailer = (m.seriesDetailHasTrailer = true)
-    if m.seriesDetailStatus = "PROCESSING" then hasTrailer = false
-    if m.seriesDetailActionTrailerBg <> invalid then m.seriesDetailActionTrailerBg.visible = hasTrailer
-    if m.seriesDetailActionTrailerText <> invalid then m.seriesDetailActionTrailerText.visible = hasTrailer
+    if m.seriesDetailActionTrailerBg <> invalid then m.seriesDetailActionTrailerBg.visible = true
+    if m.seriesDetailActionTrailerText <> invalid then m.seriesDetailActionTrailerText.visible = true
     if m.seriesDetailActionTrailerFocus <> invalid then m.seriesDetailActionTrailerFocus.visible = false
   end if
 
