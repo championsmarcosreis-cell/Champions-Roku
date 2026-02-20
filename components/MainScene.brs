@@ -69,17 +69,17 @@ sub init()
   m.seriesDetailPlayEpisodeTitle = ""
   m.seriesDetailOpen = false
   m.seriesDetailFocus = "header" ' back | header | seasons | episodes | cast
+  m.seriesDetailMode = "series" ' series | episode
+  m.seriesDetailEpisode = {}
   m.seriesDetailSeasonIndex = -1
   m.seriesDetailData = {}
   m.seriesDetailSeasons = []
   m.seriesDetailEpisodes = []
   m.seriesDetailCast = []
+  m.seriesDetailCastCount = 0
   m.seriesDetailStatus = ""
   m.seriesDetailStatusItemId = ""
   m.seriesDetailActionFocus = 0
-  m.episodeDialogItemId = ""
-  m.episodeDialogTitle = ""
-  m.episodeDialogPlayable = false
   m.seriesDetailScrollY = 0
   m.seriesDetailContentHeight = 1530
   m.seriesDetailRowHeight = 200
@@ -1288,6 +1288,7 @@ function _t(key as String) as String
         detail_trailer: "Trailer"
         detail_processing: "Processing"
         detail_play: "Play"
+        detail_episode: "Episode"
         detail_runtime: "Runtime:"
         detail_synopsis: "Synopsis"
       }
@@ -1358,6 +1359,7 @@ function _t(key as String) as String
         detail_trailer: "Trailer"
         detail_processing: "Processando"
         detail_play: "Assistir"
+        detail_episode: "Episodio"
         detail_runtime: "Runtime:"
         detail_synopsis: "Sinopse"
       }
@@ -1428,6 +1430,7 @@ function _t(key as String) as String
         detail_trailer: "Trailer"
         detail_processing: "Procesando"
         detail_play: "Reproducir"
+        detail_episode: "Episodio"
         detail_runtime: "Runtime:"
         detail_synopsis: "Sinopsis"
       }
@@ -1498,6 +1501,7 @@ function _t(key as String) as String
         detail_trailer: "Trailer"
         detail_processing: "In elaborazione"
         detail_play: "Guarda"
+        detail_episode: "Episodio"
         detail_runtime: "Runtime:"
         detail_synopsis: "Sinossi"
       }
@@ -5864,17 +5868,26 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
   end if
 
   if m.seriesDetailOpen = true then
+    modeVal = m.seriesDetailMode
+    if modeVal = invalid then modeVal = ""
+    isEpisodeMode = (LCase(modeVal.ToStr().Trim()) = "episode")
     if kl = "back" then
       _closeSeriesDetail()
       return true
     end if
     if kl = "up" then
       if m.seriesDetailFocus = "cast" then
-        m.seriesDetailFocus = "episodes"
+        if isEpisodeMode then
+          m.seriesDetailFocus = "header"
+        else
+          m.seriesDetailFocus = "episodes"
+        end if
         applyFocus()
       else if m.seriesDetailFocus = "episodes" then
-        m.seriesDetailFocus = "seasons"
-        applyFocus()
+        if isEpisodeMode <> true then
+          m.seriesDetailFocus = "seasons"
+          applyFocus()
+        end if
       else if m.seriesDetailFocus = "seasons" then
         m.seriesDetailFocus = "header"
         applyFocus()
@@ -5889,21 +5902,32 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         m.seriesDetailFocus = "header"
         applyFocus()
       else if m.seriesDetailFocus = "header" then
-        if _browseListCount(m.seriesDetailSeasonsList) > 0 then
-          m.seriesDetailFocus = "seasons"
-        else if _browseListCount(m.seriesDetailEpisodesList) > 0 then
-          m.seriesDetailFocus = "episodes"
-        else if _browseListCount(m.seriesDetailCastList) > 0 then
-          m.seriesDetailFocus = "cast"
-        end if
-        applyFocus()
-      else if m.seriesDetailFocus = "seasons" then
-        m.seriesDetailFocus = "episodes"
-        applyFocus()
-      else if m.seriesDetailFocus = "episodes" then
-        if _browseListCount(m.seriesDetailCastList) > 0 then
-          m.seriesDetailFocus = "cast"
+        if isEpisodeMode then
+          if _browseListCount(m.seriesDetailCastList) > 0 then
+            m.seriesDetailFocus = "cast"
+            applyFocus()
+          end if
+        else
+          if _browseListCount(m.seriesDetailSeasonsList) > 0 then
+            m.seriesDetailFocus = "seasons"
+          else if _browseListCount(m.seriesDetailEpisodesList) > 0 then
+            m.seriesDetailFocus = "episodes"
+          else if _browseListCount(m.seriesDetailCastList) > 0 then
+            m.seriesDetailFocus = "cast"
+          end if
           applyFocus()
+        end if
+      else if m.seriesDetailFocus = "seasons" then
+        if isEpisodeMode <> true then
+          m.seriesDetailFocus = "episodes"
+          applyFocus()
+        end if
+      else if m.seriesDetailFocus = "episodes" then
+        if isEpisodeMode <> true then
+          if _browseListCount(m.seriesDetailCastList) > 0 then
+            m.seriesDetailFocus = "cast"
+            applyFocus()
+          end if
         end if
       end if
       return true
@@ -6260,6 +6284,12 @@ sub applyFocus()
     focusTarget = m.seriesDetailFocus
     if focusTarget = invalid then focusTarget = ""
     focusTarget = LCase(focusTarget.ToStr().Trim())
+    modeVal = m.seriesDetailMode
+    if modeVal = invalid then modeVal = ""
+    isEpisodeMode = (LCase(modeVal.ToStr().Trim()) = "episode")
+    if isEpisodeMode and (focusTarget = "seasons" or focusTarget = "episodes") then
+      focusTarget = "header"
+    end if
     if focusTarget = "back" then
       if m.top <> invalid then m.top.setFocus(true)
       _setSeriesDetailScroll(0)
@@ -7952,6 +7982,52 @@ function _countEpisodesForSeason(seasonIdx as Integer, episodes as Object) as In
   return cnt
 end function
 
+sub _renderSeriesDetailCast(people as Object)
+  if m.seriesDetailCastList = invalid then return
+
+  arr = people
+  if type(arr) <> "roArray" then arr = []
+
+  cfg = loadConfig()
+  castRoot = CreateObject("roSGNode", "ContentNode")
+  for each p in arr
+    if p = invalid then
+      continue for
+    end if
+    pid = ""
+    pname = ""
+    if p.Id <> invalid then pid = p.Id.ToStr().Trim()
+    if p.Name <> invalid then pname = p.Name.ToStr().Trim()
+    if pname = "" then
+      continue for
+    end if
+    c2 = CreateObject("roSGNode", "ContentNode")
+    c2.addField("itemType", "string", false)
+    c2.addField("meta", "string", false)
+    c2.itemType = "person"
+    c2.title = pname
+    role = ""
+    if p.Role <> invalid then role = p.Role.ToStr().Trim()
+    if role = "" and p.Character <> invalid then role = p.Character.ToStr().Trim()
+    if role = "" and p.Type <> invalid then role = p.Type.ToStr().Trim()
+    c2.meta = role
+    if pid <> "" then
+      pPoster = _browsePosterUri(pid, cfg.apiBase, cfg.jellyfinToken)
+      if pPoster <> "" then c2.hdPosterUrl = pPoster
+    end if
+    castRoot.appendChild(c2)
+  end for
+  m.seriesDetailCastList.content = castRoot
+  if castRoot.getChildCount() > 0 then
+    m.seriesDetailCastList.itemFocused = 0
+  end if
+  m.seriesDetailCastCount = castRoot.getChildCount()
+  if m.seriesDetailCastTitle <> invalid then
+    m.seriesDetailCastTitle.visible = (m.seriesDetailCastCount > 0)
+  end if
+  m.seriesDetailCastList.visible = (m.seriesDetailCastCount > 0)
+end sub
+
 sub _renderSeriesDetailEpisodes(seasonIdx as Integer)
   if m.seriesDetailEpisodesList = invalid then return
 
@@ -8087,48 +8163,11 @@ sub _renderSeriesDetail(payload as Object)
   if people = invalid then people = series.People
   if type(people) <> "roArray" then people = []
   m.seriesDetailCast = people
-  if m.seriesDetailCastList <> invalid then
-    castRoot = CreateObject("roSGNode", "ContentNode")
-    for each p in people
-      if p = invalid then
-        continue for
-      end if
-      pid = ""
-      pname = ""
-      if p.Id <> invalid then pid = p.Id.ToStr().Trim()
-      if p.Name <> invalid then pname = p.Name.ToStr().Trim()
-      if pname = "" then
-        continue for
-      end if
-      c2 = CreateObject("roSGNode", "ContentNode")
-      c2.addField("itemType", "string", false)
-      c2.addField("meta", "string", false)
-      c2.itemType = "person"
-      c2.title = pname
-      role = ""
-      if p.Role <> invalid then role = p.Role.ToStr().Trim()
-      if role = "" and p.Character <> invalid then role = p.Character.ToStr().Trim()
-      if role = "" and p.Type <> invalid then role = p.Type.ToStr().Trim()
-      c2.meta = role
-      if pid <> "" then
-        pPoster = _browsePosterUri(pid, cfg.apiBase, cfg.jellyfinToken)
-        if pPoster <> "" then c2.hdPosterUrl = pPoster
-      end if
-      castRoot.appendChild(c2)
-    end for
-    m.seriesDetailCastList.content = castRoot
-    if castRoot.getChildCount() > 0 then
-      m.seriesDetailCastList.itemFocused = 0
-    end if
-    if m.seriesDetailCastTitle <> invalid then
-      m.seriesDetailCastTitle.visible = (castRoot.getChildCount() > 0)
-    end if
-    m.seriesDetailCastList.visible = (castRoot.getChildCount() > 0)
-    if castRoot.getChildCount() > 0 then
-      m.seriesDetailContentHeight = 1530
-    else
-      m.seriesDetailContentHeight = 1280
-    end if
+  _renderSeriesDetailCast(people)
+  if m.seriesDetailCastCount > 0 then
+    m.seriesDetailContentHeight = 1530
+  else
+    m.seriesDetailContentHeight = 1280
   end if
 
   if m.seriesDetailSeasonsList <> invalid then
@@ -8167,6 +8206,136 @@ sub _renderSeriesDetail(payload as Object)
   _renderSeriesDetailEpisodes(m.seriesDetailSeasonIndex)
 end sub
 
+sub _renderEpisodeDetail(ep as Object)
+  data = m.seriesDetailData
+  if type(data) <> "roAssociativeArray" then data = {}
+  series = data.series
+  if type(series) <> "roAssociativeArray" then series = {}
+
+  e = ep
+  if type(e) <> "roAssociativeArray" then e = {}
+
+  title = ""
+  if e.name <> invalid then title = e.name.ToStr().Trim()
+  if title = "" and e.Name <> invalid then title = e.Name.ToStr().Trim()
+  if title = "" then title = "Episode"
+  if m.seriesDetailTitle <> invalid then m.seriesDetailTitle.text = title
+
+  if m.seriesDetailType <> invalid then m.seriesDetailType.text = _t("detail_episode")
+
+  yr = 0
+  if e.productionYear <> invalid then yr = _sceneIntFromAny(e.productionYear)
+  if yr <= 0 and e.ProductionYear <> invalid then yr = _sceneIntFromAny(e.ProductionYear)
+  if yr <= 0 and series.productionYear <> invalid then yr = _sceneIntFromAny(series.productionYear)
+  if yr <= 0 and series.ProductionYear <> invalid then yr = _sceneIntFromAny(series.ProductionYear)
+  yrText = ""
+  if yr > 0 then yrText = yr.ToStr()
+
+  ratingText = _formatRating(e.communityRating)
+  if ratingText = "" then ratingText = _formatRating(series.communityRating)
+
+  ageText = ""
+  if e.officialRating <> invalid then ageText = e.officialRating.ToStr().Trim()
+  if ageText = "" and e.OfficialRating <> invalid then ageText = e.OfficialRating.ToStr().Trim()
+  if ageText = "" and series.officialRating <> invalid then ageText = series.officialRating.ToStr().Trim()
+  if ageText = "" and series.OfficialRating <> invalid then ageText = series.OfficialRating.ToStr().Trim()
+
+  _setDetailChip(m.seriesDetailChipYear, m.seriesDetailChipYearBg, m.seriesDetailChipYearText, yrText)
+  _setDetailChip(m.seriesDetailChipAge, m.seriesDetailChipAgeBg, m.seriesDetailChipAgeText, ageText)
+  _setDetailChip(m.seriesDetailChipRating, m.seriesDetailChipRatingBg, m.seriesDetailChipRatingText, ratingText)
+  _layoutDetailChips()
+
+  if m.seriesDetailGenres <> invalid then
+    m.seriesDetailGenres.text = ""
+    m.seriesDetailGenres.visible = false
+  end if
+
+  overview = ""
+  if e.overview <> invalid then overview = e.overview.ToStr().Trim()
+  if overview = "" and e.Overview <> invalid then overview = e.Overview.ToStr().Trim()
+  if overview = "" then overview = _t("series_no_overview")
+  if m.seriesDetailOverview <> invalid then m.seriesDetailOverview.text = _compactDialogText(overview, 700)
+
+  runtimeMin = _minutesFromTicks(e.runTimeTicks)
+  if runtimeMin <= 0 and e.RunTimeTicks <> invalid then runtimeMin = _minutesFromTicks(e.RunTimeTicks)
+  if runtimeMin < 0 then runtimeMin = 0
+  runtimeText = _t("detail_runtime") + " " + runtimeMin.ToStr() + " min"
+  if m.seriesDetailRuntime <> invalid then
+    m.seriesDetailRuntime.text = runtimeText
+    m.seriesDetailRuntime.visible = true
+  end if
+
+  cfg = loadConfig()
+  seriesId = ""
+  if series.id <> invalid then seriesId = series.id.ToStr().Trim()
+  if seriesId = "" and series.Id <> invalid then seriesId = series.Id.ToStr().Trim()
+  posterUri = ""
+  epId = ""
+  if e.id <> invalid then epId = e.id.ToStr().Trim()
+  if epId = "" and e.Id <> invalid then epId = e.Id.ToStr().Trim()
+  if epId <> "" then posterUri = _browsePosterUri(epId, cfg.apiBase, cfg.jellyfinToken)
+  if posterUri = "" and seriesId <> "" then posterUri = _browsePosterUri(seriesId, cfg.apiBase, cfg.jellyfinToken)
+  if posterUri = "" then posterUri = "pkg:/images/logo.png"
+  if m.seriesDetailPoster <> invalid then m.seriesDetailPoster.uri = posterUri
+
+  backdropTag = ""
+  if e.backdropTags <> invalid and type(e.backdropTags) = "roArray" and e.backdropTags.Count() > 0 then
+    backdropTag = e.backdropTags[0].ToStr().Trim()
+  else if e.BackdropImageTags <> invalid and type(e.BackdropImageTags) = "roArray" and e.BackdropImageTags.Count() > 0 then
+    backdropTag = e.BackdropImageTags[0].ToStr().Trim()
+  end if
+
+  heroId = ""
+  if epId <> "" then heroId = epId
+  if backdropTag = "" and e.ParentBackdropImageTags <> invalid and type(e.ParentBackdropImageTags) = "roArray" and e.ParentBackdropImageTags.Count() > 0 then
+    backdropTag = e.ParentBackdropImageTags[0].ToStr().Trim()
+    if seriesId <> "" then heroId = seriesId
+  end if
+
+  heroUri = ""
+  if heroId <> "" and backdropTag <> "" then
+    heroUri = _browseBackdropUri(heroId, cfg.apiBase, cfg.jellyfinToken, backdropTag)
+  end if
+  if heroUri = "" then heroUri = posterUri
+  if m.seriesDetailHero <> invalid then m.seriesDetailHero.uri = heroUri
+
+  people = e.people
+  if people = invalid then people = e.People
+  if type(people) <> "roArray" then people = m.seriesDetailCast
+  _renderSeriesDetailCast(people)
+end sub
+
+sub _applySeriesDetailModeLayout()
+  modeVal = m.seriesDetailMode
+  if modeVal = invalid then modeVal = ""
+  isEpisodeMode = (LCase(modeVal.ToStr().Trim()) = "episode")
+
+  if m.seriesDetailSeasonsTitle <> invalid then m.seriesDetailSeasonsTitle.visible = (isEpisodeMode <> true)
+  if m.seriesDetailSeasonsList <> invalid then m.seriesDetailSeasonsList.visible = (isEpisodeMode <> true)
+  if m.seriesDetailEpisodesTitle <> invalid then m.seriesDetailEpisodesTitle.visible = (isEpisodeMode <> true)
+  if m.seriesDetailEpisodesList <> invalid then m.seriesDetailEpisodesList.visible = (isEpisodeMode <> true)
+
+  if m.seriesDetailActionTrailerBg <> invalid then m.seriesDetailActionTrailerBg.visible = (isEpisodeMode <> true)
+  if m.seriesDetailActionTrailerText <> invalid then m.seriesDetailActionTrailerText.visible = (isEpisodeMode <> true)
+  if m.seriesDetailActionTrailerFocus <> invalid then m.seriesDetailActionTrailerFocus.visible = (isEpisodeMode <> true)
+
+  if isEpisodeMode then
+    if m.seriesDetailCastTitle <> invalid then m.seriesDetailCastTitle.translation = [60, 750]
+    if m.seriesDetailCastList <> invalid then m.seriesDetailCastList.translation = [60, 770]
+    m.seriesDetailYCast = 770
+    if m.seriesDetailCastCount > 0 then
+      m.seriesDetailContentHeight = 1000
+    else
+      m.seriesDetailContentHeight = 840
+    end if
+    m.seriesDetailActionFocus = 0
+  else
+    if m.seriesDetailCastTitle <> invalid then m.seriesDetailCastTitle.translation = [60, 1230]
+    if m.seriesDetailCastList <> invalid then m.seriesDetailCastList.translation = [60, 1250]
+    m.seriesDetailYCast = 1250
+  end if
+end sub
+
 sub _showSeriesDetailScreen(payload as Object)
   if m.seriesDetailGroup = invalid then
     _showSeriesDetailDialog(payload)
@@ -8175,7 +8344,10 @@ sub _showSeriesDetailScreen(payload as Object)
   if m.pendingDialog <> invalid and m.top.dialog = invalid then m.pendingDialog = invalid
   if m.pendingDialog <> invalid then return
 
+  m.seriesDetailMode = "series"
+  m.seriesDetailEpisode = {}
   _renderSeriesDetail(payload)
+  _applySeriesDetailModeLayout()
   statusId = ""
   if payload <> invalid and payload.firstEpisodeId <> invalid then statusId = payload.firstEpisodeId.ToStr().Trim()
   m.seriesDetailStatusItemId = statusId
@@ -8190,10 +8362,57 @@ sub _showSeriesDetailScreen(payload as Object)
   if statusId <> "" then requestSeriesStatus(statusId)
 end sub
 
+sub _showEpisodeDetailScreen(it as Object)
+  if m.seriesDetailOpen <> true then return
+
+  eid = ""
+  if it <> invalid and it.id <> invalid then eid = it.id.ToStr().Trim()
+
+  ep = invalid
+  if eid <> "" and type(m.seriesDetailEpisodes) = "roArray" then
+    for each e in m.seriesDetailEpisodes
+      if e <> invalid then
+        eid2 = ""
+        if e.id <> invalid then eid2 = e.id.ToStr().Trim()
+        if eid2 = "" and e.Id <> invalid then eid2 = e.Id.ToStr().Trim()
+        if eid2 <> "" and eid2 = eid then
+          ep = e
+          exit for
+        end if
+      end if
+    end for
+  end if
+
+  if ep = invalid then
+    ep = {}
+    if eid <> "" then ep.id = eid
+    if it <> invalid and it.title <> invalid then ep.name = it.title
+    if it <> invalid and it.meta <> invalid then ep.overview = it.meta
+  end if
+
+  m.seriesDetailMode = "episode"
+  m.seriesDetailEpisode = ep
+  _renderEpisodeDetail(ep)
+  _applySeriesDetailModeLayout()
+  m.seriesDetailStatusItemId = eid
+  m.seriesDetailActionFocus = 0
+  _applySeriesDetailStatus("")
+  _setSeriesDetailScroll(0)
+  m.seriesDetailFocus = "header"
+  applyFocus()
+  if eid <> "" then requestSeriesStatus(eid)
+end sub
+
 sub _closeSeriesDetail()
   if m.seriesDetailOpen <> true then return
+  if m.seriesDetailMode <> invalid and LCase(m.seriesDetailMode.ToStr().Trim()) = "episode" then
+    _exitEpisodeDetail()
+    return
+  end if
   m.seriesDetailOpen = false
   m.seriesDetailFocus = "header"
+  m.seriesDetailMode = "series"
+  m.seriesDetailEpisode = {}
   m.seriesDetailSeasonIndex = -1
   m.seriesDetailStatus = ""
   m.seriesDetailStatusItemId = ""
@@ -8203,6 +8422,24 @@ sub _closeSeriesDetail()
   if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = false
   if m.mode = "browse" and m.browseCard <> invalid then m.browseCard.visible = true
   applyFocus()
+end sub
+
+sub _exitEpisodeDetail()
+  m.seriesDetailMode = "series"
+  m.seriesDetailEpisode = {}
+  _renderSeriesDetail(m.seriesDetailData)
+  _applySeriesDetailModeLayout()
+  statusId = ""
+  if m.seriesDetailData <> invalid and m.seriesDetailData.firstEpisodeId <> invalid then
+    statusId = m.seriesDetailData.firstEpisodeId.ToStr().Trim()
+  end if
+  m.seriesDetailStatusItemId = statusId
+  m.seriesDetailActionFocus = 0
+  _applySeriesDetailStatus("")
+  _setSeriesDetailScroll(0)
+  m.seriesDetailFocus = "header"
+  applyFocus()
+  if statusId <> "" then requestSeriesStatus(statusId)
 end sub
 
 sub onSeriesSeasonSelected()
@@ -8231,7 +8468,7 @@ sub onSeriesEpisodeSelected()
   if root = invalid then return
   it = root.getChild(idx)
   if it = invalid then return
-  _showEpisodeDetailDialog(it)
+  _showEpisodeDetailScreen(it)
 end sub
 
 sub onSeriesCastSelected()
@@ -8277,64 +8514,6 @@ sub _showSeriesDetailDialog(payload as Object)
   dlg.setFocus(true)
 end sub
 
-sub _showEpisodeDetailDialog(it as Object)
-  if it = invalid then return
-  if m.pendingDialog <> invalid and m.top.dialog = invalid then m.pendingDialog = invalid
-  if m.pendingDialog <> invalid then return
-
-  t = ""
-  if it.title <> invalid then t = it.title.ToStr().Trim()
-  if t = "" then t = "Episode"
-
-  msg = ""
-  if it.meta <> invalid then msg = it.meta.ToStr().Trim()
-  if msg = "" then msg = _t("series_no_overview")
-
-  canPlay = (m.seriesDetailStatus <> "PROCESSING")
-  eid = ""
-  if it.id <> invalid then eid = it.id.ToStr().Trim()
-  if eid = "" then canPlay = false
-
-  dlg = CreateObject("roSGNode", "Dialog")
-  dlg.title = t
-  dlg.message = msg
-  if canPlay then
-    dlg.buttons = [_t("detail_play"), _t("close")]
-  else
-    dlg.buttons = [_t("close")]
-  end if
-  dlg.observeField("buttonSelected", "onEpisodeDetailDone")
-  m.episodeDialogItemId = eid
-  m.episodeDialogTitle = t
-  m.episodeDialogPlayable = canPlay
-  m.pendingDialog = dlg
-  m.top.dialog = dlg
-  dlg.setFocus(true)
-end sub
-
-sub onEpisodeDetailDone()
-  dlg = m.pendingDialog
-  if dlg = invalid then return
-
-  idx = dlg.buttonSelected
-  canPlay = (m.episodeDialogPlayable = true)
-  playId = m.episodeDialogItemId
-  playTitle = m.episodeDialogTitle
-
-  m.top.dialog = invalid
-  m.pendingDialog = invalid
-  m.episodeDialogItemId = ""
-  m.episodeDialogTitle = ""
-  m.episodeDialogPlayable = false
-
-  if canPlay and idx = 0 and playId <> "" then
-    playVodById(playId, playTitle)
-    return
-  end if
-
-  setStatus("ready")
-  applyFocus()
-end sub
 
 sub onSeriesDetailDone()
   dlg = m.pendingDialog
