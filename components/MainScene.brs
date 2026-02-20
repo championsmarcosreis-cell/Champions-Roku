@@ -77,6 +77,7 @@ sub init()
   m.seriesDetailEpisodes = []
   m.seriesDetailCast = []
   m.seriesDetailCastCount = 0
+  m.seriesDetailHasTrailer = false
   m.seriesDetailStatus = ""
   m.seriesDetailStatusItemId = ""
   m.seriesDetailActionFocus = 0
@@ -2025,7 +2026,11 @@ sub _applySeriesDetailStatus(status as String)
   txt = ""
   if isProcessing then txt = _t("detail_processing")
 
-  _setDetailChip(m.seriesDetailChipStatus, m.seriesDetailChipStatusBg, m.seriesDetailChipStatusText, txt)
+  if m.seriesDetailChipStatus <> invalid then
+    m.seriesDetailChipStatus.visible = false
+  end if
+  if m.seriesDetailChipStatusBg <> invalid then m.seriesDetailChipStatusBg.visible = false
+  if m.seriesDetailChipStatusText <> invalid then m.seriesDetailChipStatusText.text = ""
   _layoutDetailChips()
 
   if m.seriesDetailActionStatusBg <> invalid then m.seriesDetailActionStatusBg.visible = isProcessing
@@ -2038,11 +2043,7 @@ sub _applySeriesDetailStatus(status as String)
     end if
   end if
 
-  if isProcessing <> true then
-    m.seriesDetailActionFocus = 1
-  else if m.seriesDetailActionFocus <> 0 and m.seriesDetailActionFocus <> 1 then
-    m.seriesDetailActionFocus = 0
-  end if
+  if isProcessing = true then m.seriesDetailActionFocus = 0
   _applySeriesDetailActionFocus()
 end sub
 
@@ -2054,16 +2055,26 @@ sub _applySeriesDetailActionFocus()
   if m.seriesDetailActionStatusBg <> invalid and m.seriesDetailActionStatusBg.visible = true then
     statusVisible = true
   end if
+  trailerVisible = false
+  if m.seriesDetailActionTrailerBg <> invalid and m.seriesDetailActionTrailerBg.visible = true then
+    trailerVisible = true
+  end if
 
-  if headerFocused and statusVisible <> true then
-    m.seriesDetailActionFocus = 1
+  if headerFocused then
+    if statusVisible = true then
+      m.seriesDetailActionFocus = 0
+    else if trailerVisible = true then
+      m.seriesDetailActionFocus = 1
+    else
+      m.seriesDetailActionFocus = 0
+    end if
   end if
 
   if m.seriesDetailActionStatusFocus <> invalid then
     m.seriesDetailActionStatusFocus.visible = (headerFocused and statusVisible and m.seriesDetailActionFocus = 0)
   end if
   if m.seriesDetailActionTrailerFocus <> invalid then
-    m.seriesDetailActionTrailerFocus.visible = (headerFocused and m.seriesDetailActionFocus = 1)
+    m.seriesDetailActionTrailerFocus.visible = (headerFocused and trailerVisible and m.seriesDetailActionFocus = 1)
   end if
 end sub
 
@@ -5934,14 +5945,24 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
     if kl = "left" or kl = "right" then
       if m.seriesDetailFocus = "header" then
+        trailerVisible = false
+        if m.seriesDetailActionTrailerBg <> invalid and m.seriesDetailActionTrailerBg.visible = true then
+          trailerVisible = true
+        end if
         if kl = "left" then
           if m.seriesDetailActionStatusBg <> invalid and m.seriesDetailActionStatusBg.visible = true then
             m.seriesDetailActionFocus = 0
-          else
+          else if trailerVisible then
             m.seriesDetailActionFocus = 1
+          else
+            m.seriesDetailActionFocus = 0
           end if
         else
-          m.seriesDetailActionFocus = 1
+          if trailerVisible then
+            m.seriesDetailActionFocus = 1
+          else
+            m.seriesDetailActionFocus = 0
+          end if
         end if
         _applySeriesDetailActionFocus()
         return true
@@ -7982,6 +8003,31 @@ function _countEpisodesForSeason(seasonIdx as Integer, episodes as Object) as In
   return cnt
 end function
 
+function _hasTrailerFromItem(item as Object) as Boolean
+  if type(item) <> "roAssociativeArray" then return false
+
+  if item.HasLocalTrailer = true then return true
+
+  if item.LocalTrailerCount <> invalid then
+    if _sceneIntFromAny(item.LocalTrailerCount) > 0 then return true
+  end if
+  if item.TrailerCount <> invalid then
+    if _sceneIntFromAny(item.TrailerCount) > 0 then return true
+  end if
+
+  if item.TrailerUrl <> invalid and item.TrailerUrl.ToStr().Trim() <> "" then return true
+  if item.trailerUrl <> invalid and item.trailerUrl.ToStr().Trim() <> "" then return true
+
+  arr = item.RemoteTrailers
+  if type(arr) = "roArray" and arr.Count() > 0 then return true
+  arr2 = item.remoteTrailers
+  if type(arr2) = "roArray" and arr2.Count() > 0 then return true
+  arr3 = item.Trailers
+  if type(arr3) = "roArray" and arr3.Count() > 0 then return true
+
+  return false
+end function
+
 sub _renderSeriesDetailCast(people as Object)
   if m.seriesDetailCastList = invalid then return
 
@@ -8107,6 +8153,8 @@ sub _renderSeriesDetail(payload as Object)
 
   if m.seriesDetailType <> invalid then m.seriesDetailType.text = _t("library_series")
 
+  m.seriesDetailHasTrailer = _hasTrailerFromItem(series)
+
   yr = 0
   if series.productionYear <> invalid then yr = _sceneIntFromAny(series.productionYear)
   yrText = ""
@@ -8222,6 +8270,7 @@ sub _renderEpisodeDetail(ep as Object)
   if m.seriesDetailTitle <> invalid then m.seriesDetailTitle.text = title
 
   if m.seriesDetailType <> invalid then m.seriesDetailType.text = _t("detail_episode")
+  m.seriesDetailHasTrailer = false
 
   yr = 0
   if e.productionYear <> invalid then yr = _sceneIntFromAny(e.productionYear)
@@ -8318,6 +8367,13 @@ sub _applySeriesDetailModeLayout()
   if m.seriesDetailActionTrailerBg <> invalid then m.seriesDetailActionTrailerBg.visible = (isEpisodeMode <> true)
   if m.seriesDetailActionTrailerText <> invalid then m.seriesDetailActionTrailerText.visible = (isEpisodeMode <> true)
   if m.seriesDetailActionTrailerFocus <> invalid then m.seriesDetailActionTrailerFocus.visible = (isEpisodeMode <> true)
+  if isEpisodeMode <> true then
+    hasTrailer = (m.seriesDetailHasTrailer = true)
+    if m.seriesDetailStatus = "PROCESSING" then hasTrailer = false
+    if m.seriesDetailActionTrailerBg <> invalid then m.seriesDetailActionTrailerBg.visible = hasTrailer
+    if m.seriesDetailActionTrailerText <> invalid then m.seriesDetailActionTrailerText.visible = hasTrailer
+    if m.seriesDetailActionTrailerFocus <> invalid then m.seriesDetailActionTrailerFocus.visible = false
+  end if
 
   if isEpisodeMode then
     if m.seriesDetailCastTitle <> invalid then m.seriesDetailCastTitle.translation = [60, 750]
@@ -8333,6 +8389,7 @@ sub _applySeriesDetailModeLayout()
     if m.seriesDetailCastTitle <> invalid then m.seriesDetailCastTitle.translation = [60, 1230]
     if m.seriesDetailCastList <> invalid then m.seriesDetailCastList.translation = [60, 1250]
     m.seriesDetailYCast = 1250
+    if m.seriesDetailHasTrailer <> true then m.seriesDetailActionFocus = 0
   end if
 end sub
 

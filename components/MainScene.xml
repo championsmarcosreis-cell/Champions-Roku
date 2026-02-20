@@ -119,7 +119,7 @@
                 translation="[60, 70]"
                 width="220"
                 height="320"
-                uri="pkg:/images/field_focus.png"
+                uri="pkg:/images/field_normal.png"
               />
 
               <Poster
@@ -136,7 +136,7 @@
                 translation="[300, 80]"
                 width="900"
                 height="280"
-                loadDisplayMode="zoomToFill"
+                loadDisplayMode="scaleToFit"
                 uri=""
               />
 
@@ -228,12 +228,12 @@
                 text=""
               />
 
-              <Rectangle
+              <Poster
                 id="seriesDetailActionStatusFocus"
                 translation="[66, 472]"
                 width="208"
                 height="44"
-                color="0x66FFFFFF"
+                uri="pkg:/images/button_focus.png"
                 visible="false"
               />
               <Poster
@@ -241,7 +241,7 @@
                 translation="[70, 476]"
                 width="200"
                 height="36"
-                uri="pkg:/images/button_focus.png"
+                uri="pkg:/images/button_normal.png"
               />
               <Label
                 id="seriesDetailActionStatusText"
@@ -250,24 +250,24 @@
                 height="20"
                 font="font:SmallSystemFont"
                 horizAlign="center"
-                color="0x0B0F16"
+                color="0xE6EBF3"
                 text=""
               />
 
-              <Rectangle
+              <Poster
                 id="seriesDetailActionTrailerFocus"
                 translation="[276, 472]"
                 width="208"
                 height="44"
-                color="0x66FFFFFF"
+                uri="pkg:/images/button_focus.png"
                 visible="false"
               />
-              <Poster
+              <Rectangle
                 id="seriesDetailActionTrailerBg"
                 translation="[280, 476]"
                 width="200"
                 height="36"
-                uri="pkg:/images/card.png"
+                color="0x00000000"
               />
               <Label
                 id="seriesDetailActionTrailerText"
