@@ -9,42 +9,34 @@
     <Poster
       id="cardBg"
       translation="[0, 0]"
-      width="220"
-      height="60"
+      width="240"
+      height="70"
       uri="pkg:/images/card.png"
     />
 
     <Poster
       id="focusRing"
       translation="[-3, -3]"
-      width="226"
-      height="66"
+      width="246"
+      height="76"
       uri="pkg:/images/field_focus.png"
       visible="false"
     />
 
     <Poster
       id="cover"
-      translation="[5, 5]"
-      width="210"
+      translation="[10, 6]"
+      width="220"
       height="50"
-      loadDisplayMode="scaleToFit"
+      loadDisplayMode="zoomToFill"
       uri=""
-    />
-
-    <Rectangle
-      id="textOverlay"
-      translation="[5, 40]"
-      width="210"
-      height="15"
-      color="0xB00A111D"
     />
 
     <Label
       id="title"
-      translation="[10, 40]"
-      width="200"
-      height="16"
+      translation="[10, 56]"
+      width="220"
+      height="12"
       font="font:SmallSystemFont"
       color="0xE6EBF3"
       wrap="true"

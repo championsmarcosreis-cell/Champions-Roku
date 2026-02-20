@@ -7898,7 +7898,7 @@ sub _renderSeriesDetail(payload as Object)
   overview = ""
   if series.overview <> invalid then overview = series.overview.ToStr().Trim()
   if overview = "" then overview = _t("series_no_overview")
-  if m.seriesDetailOverview <> invalid then m.seriesDetailOverview.text = _compactDialogText(overview, 420)
+  if m.seriesDetailOverview <> invalid then m.seriesDetailOverview.text = _compactDialogText(overview, 520)
 
   runtimeMin = _minutesFromTicks(series.runTimeTicks)
   if runtimeMin <= 0 and series.RunTimeTicks <> invalid then runtimeMin = _minutesFromTicks(series.RunTimeTicks)

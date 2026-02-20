@@ -10,7 +10,7 @@ sub onItemContentChanged()
   c = m.top.itemContent
   if c = invalid then
     if m.cover <> invalid then
-      if m.cover.hasField("loadDisplayMode") then m.cover.loadDisplayMode = "scaleToFit"
+      if m.cover.hasField("loadDisplayMode") then m.cover.loadDisplayMode = "zoomToFill"
       m.cover.uri = ""
     end if
     if m.title <> invalid then m.title.text = ""
