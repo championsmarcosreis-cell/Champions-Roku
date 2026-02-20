@@ -83,11 +83,11 @@ sub init()
   m.seriesDetailStatusItemId = ""
   m.seriesDetailActionFocus = 0
   m.seriesDetailScrollY = 0
-  m.seriesDetailContentHeight = 1530
+  m.seriesDetailContentHeight = 1700
   m.seriesDetailRowHeight = 200
-  m.seriesDetailYSeasons = 770
-  m.seriesDetailYEpisodes = 1010
-  m.seriesDetailYCast = 1250
+  m.seriesDetailYSeasons = 920
+  m.seriesDetailYEpisodes = 1160
+  m.seriesDetailYCast = 1400
   m.pendingResumeProbeItemId = ""
   m.pendingResumeProbeTitle = ""
   m.pendingResumeProbeQueued = false
@@ -2062,9 +2062,13 @@ sub _applySeriesDetailActionFocus()
   end if
 
   if headerFocused then
-    if statusVisible = true then
+    if statusVisible and trailerVisible then
+      if m.seriesDetailActionFocus <> 0 and m.seriesDetailActionFocus <> 1 then
+        m.seriesDetailActionFocus = 0
+      end if
+    else if statusVisible then
       m.seriesDetailActionFocus = 0
-    else if trailerVisible = true then
+    else if trailerVisible then
       m.seriesDetailActionFocus = 1
     else
       m.seriesDetailActionFocus = 0
@@ -8219,9 +8223,9 @@ sub _renderSeriesDetail(payload as Object)
   m.seriesDetailCast = people
   _renderSeriesDetailCast(people)
   if m.seriesDetailCastCount > 0 then
-    m.seriesDetailContentHeight = 1530
+    m.seriesDetailContentHeight = 1700
   else
-    m.seriesDetailContentHeight = 1280
+    m.seriesDetailContentHeight = 1450
   end if
 
   if m.seriesDetailSeasonsList <> invalid then
@@ -8384,13 +8388,13 @@ sub _applySeriesDetailModeLayout()
   end if
 
   if isEpisodeMode then
-    if m.seriesDetailCastTitle <> invalid then m.seriesDetailCastTitle.translation = [60, 750]
-    if m.seriesDetailCastList <> invalid then m.seriesDetailCastList.translation = [60, 770]
-    m.seriesDetailYCast = 770
+    if m.seriesDetailCastTitle <> invalid then m.seriesDetailCastTitle.translation = [60, 900]
+    if m.seriesDetailCastList <> invalid then m.seriesDetailCastList.translation = [60, 920]
+    m.seriesDetailYCast = 920
     if m.seriesDetailCastCount > 0 then
-      m.seriesDetailContentHeight = 1000
+      m.seriesDetailContentHeight = 1200
     else
-      m.seriesDetailContentHeight = 840
+      m.seriesDetailContentHeight = 1050
     end if
     m.seriesDetailActionFocus = 0
   else
