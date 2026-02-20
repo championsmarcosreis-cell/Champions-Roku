@@ -2,7 +2,6 @@ sub init()
   m.cardBg = m.top.findNode("cardBg")
   m.focusRing = m.top.findNode("focusRing")
   m.cover = m.top.findNode("cover")
-  m.textOverlay = m.top.findNode("textOverlay")
   m.title = m.top.findNode("title")
 end sub
 
@@ -41,13 +40,6 @@ end sub
 sub applyStyle()
   focused = (m.top.itemHasFocus = true)
   if m.focusRing <> invalid then m.focusRing.visible = focused
-  if m.textOverlay <> invalid then
-    if focused then
-      m.textOverlay.color = "0xD20A111D"
-    else
-      m.textOverlay.color = "0xB00A111D"
-    end if
-  end if
   if m.title <> invalid then
     if focused then
       m.title.color = "0xFFFFFF"
