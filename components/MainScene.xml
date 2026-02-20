@@ -68,6 +68,14 @@
         color="0xCC000000"
       />
 
+      <Rectangle
+        id="seriesDetailBackFocus"
+        translation="[32, 8]"
+        width="190"
+        height="30"
+        color="0x332F3C4C"
+        visible="false"
+      />
       <Label
         id="seriesDetailBack"
         translation="[40, 18]"
@@ -95,7 +103,7 @@
                 translation="[40, 40]"
                 width="1200"
                 height="480"
-                uri="pkg:/images/field_focus.png"
+                uri="pkg:/images/field_normal.png"
               />
 
               <Poster
@@ -287,7 +295,7 @@
                 translation="[40, 560]"
                 width="1200"
                 height="150"
-                uri="pkg:/images/field_focus.png"
+                uri="pkg:/images/field_normal.png"
               />
 
               <Poster

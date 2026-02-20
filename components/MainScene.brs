@@ -68,7 +68,7 @@ sub init()
   m.seriesDetailPlayEpisodeId = ""
   m.seriesDetailPlayEpisodeTitle = ""
   m.seriesDetailOpen = false
-  m.seriesDetailFocus = "header" ' header | seasons | episodes | cast
+  m.seriesDetailFocus = "header" ' back | header | seasons | episodes | cast
   m.seriesDetailSeasonIndex = -1
   m.seriesDetailData = {}
   m.seriesDetailSeasons = []
@@ -77,6 +77,9 @@ sub init()
   m.seriesDetailStatus = ""
   m.seriesDetailStatusItemId = ""
   m.seriesDetailActionFocus = 0
+  m.episodeDialogItemId = ""
+  m.episodeDialogTitle = ""
+  m.episodeDialogPlayable = false
   m.seriesDetailScrollY = 0
   m.seriesDetailContentHeight = 1530
   m.seriesDetailRowHeight = 200
@@ -322,6 +325,7 @@ sub bindUiNodes()
   m.seriesDetailGroup = m.top.findNode("seriesDetailGroup")
   m.seriesDetailViewport = m.top.findNode("seriesDetailViewport")
   m.seriesDetailContent = m.top.findNode("seriesDetailContent")
+  m.seriesDetailBackFocus = m.top.findNode("seriesDetailBackFocus")
   m.seriesDetailBack = m.top.findNode("seriesDetailBack")
   m.seriesDetailHero = m.top.findNode("seriesDetailHero")
   m.seriesDetailPosterGlow = m.top.findNode("seriesDetailPosterGlow")
@@ -2057,6 +2061,14 @@ sub _applySeriesDetailActionFocus()
   if m.seriesDetailActionTrailerFocus <> invalid then
     m.seriesDetailActionTrailerFocus.visible = (headerFocused and m.seriesDetailActionFocus = 1)
   end if
+end sub
+
+sub _applySeriesDetailBackFocus()
+  if m.seriesDetailBackFocus = invalid then return
+  focus = m.seriesDetailFocus
+  if focus = invalid then focus = ""
+  isBack = (m.seriesDetailOpen = true and LCase(focus.ToStr()) = "back")
+  m.seriesDetailBackFocus.visible = isBack
 end sub
 
 sub _setSeriesDetailScroll(targetY as Integer)
@@ -5866,11 +5878,17 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
       else if m.seriesDetailFocus = "seasons" then
         m.seriesDetailFocus = "header"
         applyFocus()
+      else if m.seriesDetailFocus = "header" then
+        m.seriesDetailFocus = "back"
+        applyFocus()
       end if
       return true
     end if
     if kl = "down" then
-      if m.seriesDetailFocus = "header" then
+      if m.seriesDetailFocus = "back" then
+        m.seriesDetailFocus = "header"
+        applyFocus()
+      else if m.seriesDetailFocus = "header" then
         if _browseListCount(m.seriesDetailSeasonsList) > 0 then
           m.seriesDetailFocus = "seasons"
         else if _browseListCount(m.seriesDetailEpisodesList) > 0 then
@@ -5906,7 +5924,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
       end if
     end if
     if kl = "ok" then
-      if m.seriesDetailFocus = "header" then
+      if m.seriesDetailFocus = "back" then
+        _closeSeriesDetail()
+        return true
+      else if m.seriesDetailFocus = "header" then
         return true
       end if
     end if
@@ -6234,11 +6255,15 @@ end function
 sub applyFocus()
   if m.seriesDetailOpen = true then
     if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = true
+    _applySeriesDetailBackFocus()
     _applySeriesDetailActionFocus()
     focusTarget = m.seriesDetailFocus
     if focusTarget = invalid then focusTarget = ""
     focusTarget = LCase(focusTarget.ToStr().Trim())
-    if focusTarget = "header" then
+    if focusTarget = "back" then
+      if m.top <> invalid then m.top.setFocus(true)
+      _setSeriesDetailScroll(0)
+    else if focusTarget = "header" then
       if m.top <> invalid then m.top.setFocus(true)
       _setSeriesDetailScroll(0)
     else if focusTarget = "seasons" then
@@ -8206,8 +8231,7 @@ sub onSeriesEpisodeSelected()
   if root = invalid then return
   it = root.getChild(idx)
   if it = invalid then return
-  _closeSeriesDetail()
-  _playBrowseItemNode(it)
+  _showEpisodeDetailDialog(it)
 end sub
 
 sub onSeriesCastSelected()
@@ -8251,6 +8275,65 @@ sub _showSeriesDetailDialog(payload as Object)
   m.pendingDialog = dlg
   m.top.dialog = dlg
   dlg.setFocus(true)
+end sub
+
+sub _showEpisodeDetailDialog(it as Object)
+  if it = invalid then return
+  if m.pendingDialog <> invalid and m.top.dialog = invalid then m.pendingDialog = invalid
+  if m.pendingDialog <> invalid then return
+
+  t = ""
+  if it.title <> invalid then t = it.title.ToStr().Trim()
+  if t = "" then t = "Episode"
+
+  msg = ""
+  if it.meta <> invalid then msg = it.meta.ToStr().Trim()
+  if msg = "" then msg = _t("series_no_overview")
+
+  canPlay = (m.seriesDetailStatus <> "PROCESSING")
+  eid = ""
+  if it.id <> invalid then eid = it.id.ToStr().Trim()
+  if eid = "" then canPlay = false
+
+  dlg = CreateObject("roSGNode", "Dialog")
+  dlg.title = t
+  dlg.message = msg
+  if canPlay then
+    dlg.buttons = [_t("detail_play"), _t("close")]
+  else
+    dlg.buttons = [_t("close")]
+  end if
+  dlg.observeField("buttonSelected", "onEpisodeDetailDone")
+  m.episodeDialogItemId = eid
+  m.episodeDialogTitle = t
+  m.episodeDialogPlayable = canPlay
+  m.pendingDialog = dlg
+  m.top.dialog = dlg
+  dlg.setFocus(true)
+end sub
+
+sub onEpisodeDetailDone()
+  dlg = m.pendingDialog
+  if dlg = invalid then return
+
+  idx = dlg.buttonSelected
+  canPlay = (m.episodeDialogPlayable = true)
+  playId = m.episodeDialogItemId
+  playTitle = m.episodeDialogTitle
+
+  m.top.dialog = invalid
+  m.pendingDialog = invalid
+  m.episodeDialogItemId = ""
+  m.episodeDialogTitle = ""
+  m.episodeDialogPlayable = false
+
+  if canPlay and idx = 0 and playId <> "" then
+    playVodById(playId, playTitle)
+    return
+  end if
+
+  setStatus("ready")
+  applyFocus()
 end sub
 
 sub onSeriesDetailDone()
