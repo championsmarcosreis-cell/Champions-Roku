@@ -41,10 +41,15 @@ sub init()
   m.livePrograms = []
   m.liveEpgWindowMinutes = 360
   m.liveEpgTickMinutes = 30
-  m.liveEpgWidth = 820
-  m.liveEpgRowHeight = 80
+  m.liveEpgMinorTickMinutes = 30
+  m.liveEpgWidth = 1240
+  m.liveEpgGutter = 380
+  m.liveEpgRowHeight = 92
   m.liveEpgRowsMax = 5
-  m.liveEpgOffsetTicks = -2
+  m.liveEpgOffsetTicks = 0
+  m.liveEpgStartSec = 0
+  m.liveFocusSec = 0
+  m.liveFocusTarget = "channels"
   m.lastPlayerState = ""
   m.devAutoplay = ""
   m.devAutoplayDone = false
@@ -198,7 +203,7 @@ sub init()
   if cfg0.appToken <> invalid then appTokenLen = Len(cfg0.appToken)
   jellyfinLen = 0
   if cfg0.jellyfinToken <> invalid then jellyfinLen = Len(cfg0.jellyfinToken)
-  print "MainScene init apiBase=" + m.apiBase + " appTokenLen=" + appTokenLen.ToStr() + " jellyfinTokenLen=" + jellyfinLen.ToStr() + " devAutoplay=" + m.devAutoplay + " uiLang=" + m.uiLang + " metaLang=" + m.metaLang + " build=2026-02-21-liveui8"
+  print "MainScene init apiBase=" + m.apiBase + " appTokenLen=" + appTokenLen.ToStr() + " jellyfinTokenLen=" + jellyfinLen.ToStr() + " devAutoplay=" + m.devAutoplay + " uiLang=" + m.uiLang + " metaLang=" + m.metaLang + " build=2026-02-21-liveui18"
 
   if cfg0.jellyfinToken <> invalid and cfg0.jellyfinToken <> "" then
     m.startupMode = "browse"
@@ -1987,6 +1992,7 @@ function _browsePosterUri(itemId as String, apiBase as String, jellyfinToken as 
   if tok = invalid then tok = ""
   tok = tok.ToStr().Trim()
   if tok <> "" then
+    q["api_key"] = tok
     q["X-Emby-Token"] = tok
     q["X-Jellyfin-Token"] = tok
   end if
@@ -2271,7 +2277,7 @@ function _browseChannelImageUri(channelId as String, apiBase as String, jellyfin
   imgType = imgType.ToStr().Trim()
   if imgType = "" then imgType = "Primary"
 
-  u = base + "/jellyfin/LiveTv/Channels/" + id + "/Images/" + imgType
+  u = base + "/jellyfin/Items/" + id + "/Images/" + imgType
   q = {
     maxWidth: "600"
     quality: "90"
@@ -3731,9 +3737,9 @@ function _ensureLiveListNodes() as Boolean
     lst = CreateObject("roSGNode", "MarkupList")
     if lst <> invalid then
       lst.id = "channelsList"
-      lst.translation = [40, 140]
-      lst.itemSize = [360, 80]
-      lst.numRows = 6
+      lst.translation = [20, 120]
+      lst.itemSize = [360, 92]
+      lst.numRows = 5
       lst.itemComponentName = "LiveChannelItem"
       m.liveCard.appendChild(lst)
       m.channelsList = lst
@@ -3744,9 +3750,9 @@ function _ensureLiveListNodes() as Boolean
     cb = CreateObject("roSGNode", "Rectangle")
     if cb <> invalid then
       cb.id = "channelsBg"
-      cb.translation = [32, 120]
+      cb.translation = [12, 110]
       cb.width = 376
-      cb.height = 520
+      cb.height = 470
       cb.color = "0x0F1623"
       cb.visible = false
       m.liveCard.appendChild(cb)
@@ -3758,7 +3764,7 @@ function _ensureLiveListNodes() as Boolean
     g = CreateObject("roSGNode", "Group")
     if g <> invalid then
       g.id = "epgGroup"
-      g.translation = [440, 120]
+      g.translation = [20, 88]
       m.liveCard.appendChild(g)
       m.epgGroup = g
     end if
@@ -3769,8 +3775,8 @@ function _ensureLiveListNodes() as Boolean
     if bg <> invalid then
       bg.id = "epgBg"
       bg.translation = [0, 0]
-      bg.width = 820
-      bg.height = 520
+      bg.width = 1240
+      bg.height = 452
       bg.color = "0x0F1623"
       bg.visible = false
       m.epgGroup.appendChild(bg)
@@ -3795,7 +3801,7 @@ function _ensureLiveListNodes() as Boolean
     if hl <> invalid then
       hl.id = "epgHeaderLine"
       hl.translation = [0, 28]
-      hl.width = 820
+      hl.width = 1240
       hl.height = 1
       hl.color = "0x1F2A3B"
       m.epgGroup.appendChild(hl)
@@ -3808,9 +3814,9 @@ function _ensureLiveListNodes() as Boolean
     if nl <> invalid then
       nl.id = "epgNowLine"
       nl.translation = [0, 28]
-      nl.width = 2
-      nl.height = 360
-      nl.color = "0xD8B765"
+      nl.width = 1
+      nl.height = 400
+      nl.color = "0xFFFFFF"
       m.epgGroup.appendChild(nl)
       m.epgNowLine = nl
     end if
@@ -3830,7 +3836,7 @@ function _ensureLiveListNodes() as Boolean
     l = CreateObject("roSGNode", "Label")
     if l <> invalid then
       l.id = "emptyLabel"
-      l.translation = [40, 360]
+      l.translation = [20, 330]
       l.width = 360
       l.height = 34
       l.font = "font:SmallSystemFont"
@@ -5398,8 +5404,17 @@ sub onGatewayTaskStateChanged()
           if poster = "" then poster = _browseChannelImageUri(c.id, basePrev, tokenPrev, "Logo")
           if poster = "" then poster = _browseChannelPosterUri(c.id, basePrev, tokenPrev)
           if poster = "" then poster = _browsePosterUri(c.id, basePrev, tokenPrev)
-          if poster <> "" and tokenPrev <> invalid and tokenPrev.ToStr().Trim() <> "" and Instr(1, poster, "X-Emby-Token=") = 0 then
-            poster = appendQuery(poster, { "X-Emby-Token": tokenPrev, "X-Jellyfin-Token": tokenPrev })
+          if poster <> "" then
+            q = {}
+            if tokenPrev <> invalid and tokenPrev.ToStr().Trim() <> "" then
+              if Instr(1, poster, "api_key=") = 0 then q["api_key"] = tokenPrev
+              if Instr(1, poster, "X-Emby-Token=") = 0 then q["X-Emby-Token"] = tokenPrev
+              if Instr(1, poster, "X-Jellyfin-Token=") = 0 then q["X-Jellyfin-Token"] = tokenPrev
+            end if
+            if cfgPrev.appToken <> invalid and cfgPrev.appToken.Trim() <> "" then
+              if Instr(1, poster, "app_token=") = 0 and Instr(1, poster, "appToken=") = 0 then q["app_token"] = cfgPrev.appToken.Trim()
+            end if
+            if q.Count() > 0 then poster = appendQuery(poster, q)
           end if
           if poster = "" then poster = "pkg:/images/logo.png"
           c.hdPosterUrl = poster
@@ -5472,6 +5487,8 @@ sub onGatewayTaskStateChanged()
         c = CreateObject("roSGNode", "ContentNode")
         c.addField("programTitle", "string", false)
         c.addField("programNextTitle", "string", false)
+        c.addField("programTimeLabel", "string", false)
+        c.addField("programProgress", "float", false)
         c.addField("logoUrl", "string", false)
         if ch <> invalid then
           if ch.id <> invalid then c.id = ch.id
@@ -5509,11 +5526,28 @@ sub onGatewayTaskStateChanged()
           end if
           if logo = "" then logo = _browseChannelImageUri(c.id, basePrev, tokenPrev, "Logo")
           if logo = "" then logo = _browseChannelPosterUri(c.id, basePrev, tokenPrev)
-          if logo <> "" and tokenPrev <> invalid and tokenPrev.ToStr().Trim() <> "" and Instr(1, logo, "X-Emby-Token=") = 0 then
-            logo = appendQuery(logo, { "X-Emby-Token": tokenPrev, "X-Jellyfin-Token": tokenPrev })
+          if logo <> "" then
+            q = {}
+            if tokenPrev <> invalid and tokenPrev.ToStr().Trim() <> "" then
+              if Instr(1, logo, "api_key=") = 0 then q["api_key"] = tokenPrev
+              if Instr(1, logo, "X-Emby-Token=") = 0 then q["X-Emby-Token"] = tokenPrev
+              if Instr(1, logo, "X-Jellyfin-Token=") = 0 then q["X-Jellyfin-Token"] = tokenPrev
+            end if
+            if cfg.appToken <> invalid and cfg.appToken.Trim() <> "" then
+              if Instr(1, logo, "app_token=") = 0 and Instr(1, logo, "appToken=") = 0 then q["app_token"] = cfg.appToken.Trim()
+            end if
+            if q.Count() > 0 then logo = appendQuery(logo, q)
           end if
           if logo = "" then logo = "pkg:/images/logo.png"
+          if m.liveLogoDebugPrinted <> true then
+            print "live logo url=" + logo
+            m.liveLogoDebugPrinted = true
+          end if
           c.logoUrl = logo
+          if c.hasField("hdPosterUrl") <> true then c.addField("hdPosterUrl", "string", false)
+          if c.hasField("posterUrl") <> true then c.addField("posterUrl", "string", false)
+          c.hdPosterUrl = logo
+          c.posterUrl = logo
         else
           c.title = ""
           c.addField("path", "string", false)
@@ -6976,6 +7010,34 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
   end if
 
+  if m.mode = "live" then
+    if kl = "up" then
+      if m.liveFocusTarget <> "timeline" then _setLiveFocus("timeline")
+      return true
+    end if
+    if kl = "down" then
+      if m.liveFocusTarget = "timeline" then
+        _setLiveFocus("channels")
+        return true
+      end if
+      ' Allow list to handle DOWN while focused on channels.
+    end if
+    if kl = "left" or kl = "right" then
+      if m.liveFocusTarget = "timeline" then
+        if kl = "left" then
+          _shiftLiveFocusTicks(-1)
+        else
+          _shiftLiveFocusTicks(1)
+        end if
+        return true
+      end if
+    end if
+    if kl = "ok" and m.liveFocusTarget = "timeline" then
+      _setLiveFocus("channels")
+      return true
+    end if
+  end if
+
   if kl = "up" then
     if m.player <> invalid and m.player.visible = true then return false
     if m.mode = "live" or m.mode = "browse" then return false
@@ -7027,12 +7089,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
 
   if m.mode = "live" then
     if kl = "left" or kl = "right" then
-      ' Keep navigation intuitive: RIGHT moves timeline to the right on screen.
-      delta = 1
-      if kl = "right" then delta = -1
-      if m.liveEpgOffsetTicks = invalid then m.liveEpgOffsetTicks = 0
-      m.liveEpgOffsetTicks = Int(m.liveEpgOffsetTicks) + delta
-      _renderLiveTimeline()
+      ' Keep focus on the channel list (avoid losing highlight).
+      if m.channelsList <> invalid then m.channelsList.setFocus(true)
       return true
     end if
   end if
@@ -7129,7 +7187,17 @@ sub applyFocus()
   end if
 
   if m.mode = "live" then
-    if m.channelsList <> invalid then m.channelsList.setFocus(true)
+    if m.liveFocusTarget = "timeline" then
+      if m.channelsList <> invalid and m.channelsList.hasField("focusable") then
+        m.channelsList.focusable = false
+      end if
+      if m.top <> invalid then m.top.setFocus(true)
+    else
+      if m.channelsList <> invalid then
+        if m.channelsList.hasField("focusable") then m.channelsList.focusable = true
+        m.channelsList.setFocus(true)
+      end if
+    end if
     return
   end if
 
@@ -9710,6 +9778,9 @@ sub enterLive()
   _ensureLiveNodes()
   print "enterLive()"
   m.mode = "live"
+  m.liveFocusTarget = "channels"
+  m.liveFocusSec = 0
+  m.liveEpgStartSec = 0
   m.pendingLiveLoad = false
   m.seriesDetailOpen = false
   if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = false
@@ -9725,6 +9796,37 @@ sub enterLive()
   layoutCards()
   applyFocus()
   loadChannels()
+end sub
+
+sub _setLiveFocus(target as String)
+  t = target
+  if t = invalid then t = ""
+  t = LCase(t.ToStr().Trim())
+  if t <> "timeline" then t = "channels"
+  m.liveFocusTarget = t
+
+  if m.channelsList <> invalid and m.channelsList.hasField("focusable") then
+    m.channelsList.focusable = (t = "channels")
+  end if
+
+  if t = "channels" then
+    if m.channelsList <> invalid then m.channelsList.setFocus(true)
+  else
+    if m.top <> invalid then m.top.setFocus(true)
+  end if
+  _renderLiveTimeline()
+end sub
+
+sub _shiftLiveFocusTicks(delta as Integer)
+  tickMin = m.liveEpgTickMinutes
+  if tickMin = invalid or tickMin <= 0 then tickMin = 30
+  tickSec = tickMin * 60
+  if tickSec <= 0 then return
+  focusSec = m.liveFocusSec
+  if focusSec = invalid or focusSec <= 0 then focusSec = _nowEpochSec()
+  focusSec = focusSec + (delta * tickSec)
+  m.liveFocusSec = focusSec
+  _renderLiveTimeline()
 end sub
 
 sub loadChannels()
@@ -9760,7 +9862,9 @@ sub loadChannels()
   m.channelsList.content = CreateObject("roSGNode", "ContentNode")
   m.liveProgramsLoaded = false
   m.livePrograms = []
-  m.liveEpgOffsetTicks = -2
+  m.liveEpgOffsetTicks = 0
+  m.liveFocusSec = 0
+  m.liveEpgStartSec = 0
   _renderLiveTimeline()
 
   cfg = loadConfig()
@@ -9845,38 +9949,9 @@ sub _applyLivePrograms(items as Object)
   root = m.channelsList.content
   if root = invalid then return
 
-  progMap = {}
-  if type(items) = "roArray" then
-    for each it in items
-      if it = invalid then continue for
-      cid = ""
-      if it.channelId <> invalid then cid = it.channelId
-      if cid <> invalid then cid = cid.ToStr().Trim()
-      if cid = "" then continue for
-
-      entry = progMap[cid]
-      titles = []
-      if type(entry) = "roAssociativeArray" and entry.titles <> invalid and type(entry.titles) = "roArray" then
-        titles = entry.titles
-      end if
-      if titles.Count() >= 2 then
-        progMap[cid] = { titles: titles }
-        continue for
-      end if
-
-      t = ""
-      if it.name <> invalid then t = it.name
-      if t = invalid then t = ""
-      t = t.ToStr().Trim()
-      if t = "" and it.episodeTitle <> invalid then
-        t = it.episodeTitle.ToStr().Trim()
-      end if
-      if t = "" then t = "(Sem titulo)"
-
-      titles.Push(t)
-      progMap[cid] = { titles: titles }
-    end for
-  end if
+  progMap = _buildLiveProgramMap(items)
+  focusSec = m.liveFocusSec
+  if focusSec = invalid or focusSec <= 0 then focusSec = _nowEpochSec()
 
   for i = 0 to root.getChildCount() - 1
     c = root.getChild(i)
@@ -9888,16 +9963,44 @@ sub _applyLivePrograms(items as Object)
     if c.hasField("id") then cid = c.id
     if cid <> invalid then cid = cid.ToStr().Trim()
 
-    entry = progMap[cid]
+    programs = progMap[cid]
+    if type(programs) <> "roArray" then programs = []
+    cur = invalid
+    nextProg = invalid
+    nextStart = 0
+    for each p in programs
+      if type(p) <> "roAssociativeArray" then continue for
+      st = p.start
+      en = p.finish
+      if focusSec >= st and focusSec < en then
+        cur = p
+        exit for
+      end if
+      if st > focusSec and (nextProg = invalid or st < nextStart) then
+        nextProg = p
+        nextStart = st
+      end if
+    end for
+
     nowTitle = ""
     nextTitle = ""
-    if type(entry) = "roAssociativeArray" and entry.titles <> invalid and type(entry.titles) = "roArray" then
-      titles = entry.titles
-      if titles.Count() > 0 then nowTitle = titles[0]
-      if titles.Count() > 1 then nextTitle = titles[1]
+    timeLabel = ""
+    prog = -1.0
+    if cur <> invalid then
+      if cur.title <> invalid then nowTitle = cur.title
+      st = cur.start
+      en = cur.finish
+      if en > st then
+        timeLabel = _formatTimeLabel(st) + " - " + _formatTimeLabel(en)
+        prog = (focusSec - st) / (en - st)
+      end if
     end if
+    if nextProg <> invalid and nextProg.title <> invalid then nextTitle = nextProg.title
+
     c.programTitle = nowTitle
     c.programNextTitle = nextTitle
+    if c.hasField("programTimeLabel") then c.programTimeLabel = timeLabel
+    if c.hasField("programProgress") then c.programProgress = prog
   end for
 end sub
 
@@ -9911,6 +10014,7 @@ function _formatTimeLabel(epochSec as Integer) as String
   dt = CreateObject("roDateTime")
   if dt = invalid then return ""
   dt.FromSeconds(epochSec)
+  dt.ToLocalTime()
   h = dt.GetHours()
   m = dt.GetMinutes()
   return _pad2(h) + ":" + _pad2(m)
@@ -9919,39 +10023,22 @@ end function
 function _formatLiveDate() as String
   dt = CreateObject("roDateTime")
   if dt = invalid then return ""
+  dt.ToLocalTime()
   day = dt.GetDayOfMonth()
   month = dt.GetMonth()
   year = dt.GetYear()
-  dow = dt.GetWeekday()
-
   monthsPt = ["janeiro","fevereiro","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"]
   daysPt = ["domingo","segunda-feira","terca-feira","quarta-feira","quinta-feira","sexta-feira","sabado"]
 
   if day < 1 then day = 1
   if month < 1 then month = 1
   if month > 12 then month = 12
-  if type(dow) = "roString" then
-    dowStr = LCase(dow.Trim())
-    if dowStr = "sunday" then
-      dow = 0
-    else if dowStr = "monday" then
-      dow = 1
-    else if dowStr = "tuesday" then
-      dow = 2
-    else if dowStr = "wednesday" then
-      dow = 3
-    else if dowStr = "thursday" then
-      dow = 4
-    else if dowStr = "friday" then
-      dow = 5
-    else if dowStr = "saturday" then
-      dow = 6
-    else
-      dow = 0
-    end if
-  end if
-  if _sceneIntFromAny(dow) < 0 then dow = 0
-  if _sceneIntFromAny(dow) > 6 then dow = 6
+  if year < 1 then year = 1
+  days = _daysFromCivil(year, month, day)
+  dow = (days + 4) mod 7 ' 1970-01-01 was a Thursday (4 when Sunday=0)
+  if dow < 0 then dow = dow + 7
+  if dow < 0 then dow = 0
+  if dow > 6 then dow = 6
 
   return "Hoje — " + daysPt[dow] + ", " + day.ToStr() + " de " + monthsPt[month - 1] + " de " + year.ToStr()
 end function
@@ -10056,26 +10143,58 @@ sub _clearChildren(n as Object)
   end while
 end sub
 
-sub _updateEpgHeader(startSec as Integer, tickSec as Integer, windowSec as Integer, width as Integer)
+sub _updateEpgHeader(startSec as Integer, tickSec as Integer, windowSec as Integer, width as Integer, startX as Integer)
   if m.epgHeader = invalid then return
   _clearChildren(m.epgHeader)
   if tickSec <= 0 or windowSec <= 0 then return
+
+  minorSec = tickSec
+  minorMin = m.liveEpgMinorTickMinutes
+  if minorMin <> invalid then
+    mm = Int(minorMin)
+    if mm > 0 then minorSec = mm * 60
+  end if
+  if minorSec <= 0 then minorSec = tickSec
+  if minorSec > tickSec then minorSec = tickSec
+
+  if minorSec > 0 then
+    minorSteps = Int(windowSec / minorSec)
+    if minorSteps < 1 then minorSteps = 1
+    minorStepPx = width / minorSteps
+
+    for i = 0 to minorSteps
+      tick = CreateObject("roSGNode", "Rectangle")
+      if tick = invalid then continue for
+      tick.translation = [startX + Int(i * minorStepPx), 18]
+      tick.width = 1
+      tick.height = 8
+      tick.color = "0xAAB4C2"
+      m.epgHeader.appendChild(tick)
+    end for
+  end if
 
   steps = Int(windowSec / tickSec)
   if steps < 1 then steps = 1
   stepPx = width / steps
 
   for i = 0 to steps
+    t = startSec + (i * tickSec)
+    x = startX + Int(i * stepPx)
+    w = Int(stepPx)
+    maxW = (startX + width) - x
+    if w > maxW then w = maxW
+    if w <= 0 then continue for
     lbl = CreateObject("roSGNode", "Label")
-    if lbl = invalid then continue for
-    lbl.translation = [Int(i * stepPx), 0]
-    lbl.width = 70
-    lbl.height = 22
-    lbl.font = "font:SmallSystemFont"
-    lbl.color = "0xAAB4C2"
-    lbl.horizAlign = "center"
-    lbl.text = _formatTimeLabel(startSec + (i * tickSec))
-    m.epgHeader.appendChild(lbl)
+    if lbl <> invalid then
+      lbl.translation = [x, 0]
+      lbl.width = w
+      lbl.height = 22
+      lbl.font = "font:SmallSystemFont"
+      lbl.color = "0xAAB4C2"
+      lbl.horizAlign = "left"
+      lbl.text = _formatTimeLabel(t)
+      m.epgHeader.appendChild(lbl)
+    end if
   end for
 end sub
 
@@ -10086,7 +10205,14 @@ sub _renderLiveTimeline()
   if root = invalid then return
 
   width = m.liveEpgWidth
+  if m.epgBg <> invalid and m.epgBg.width <> invalid and m.epgBg.width > 0 then width = m.epgBg.width
   if width = invalid or width <= 0 then width = 800
+  gutter = m.liveEpgGutter
+  if gutter = invalid then gutter = 0
+  gutter = Int(gutter)
+  if gutter < 0 then gutter = 0
+  if gutter > width - 60 then gutter = width - 60
+  timelineW = width - gutter
   rowH = m.liveEpgRowHeight
   if rowH = invalid or rowH <= 0 then rowH = 72
   maxRows = m.liveEpgRowsMax
@@ -10103,17 +10229,28 @@ sub _renderLiveTimeline()
   if tickSec <= 0 then tickSec = 1800
   if windowSec <= 0 then windowSec = 7200
 
-  startSec = nowSec - (nowSec mod tickSec)
-  offsetTicks = m.liveEpgOffsetTicks
-  if offsetTicks = invalid then offsetTicks = 0
-  maxOffset = 8
-  minOffset = -6
-  if offsetTicks > maxOffset then offsetTicks = maxOffset
-  if offsetTicks < minOffset then offsetTicks = minOffset
-  m.liveEpgOffsetTicks = offsetTicks
-  startSec = startSec + (offsetTicks * tickSec)
+  startSec = m.liveEpgStartSec
+  if startSec = invalid or startSec <= 0 then
+    startSec = nowSec - (nowSec mod tickSec)
+  end if
+  startSec = startSec - (startSec mod tickSec)
+
+  focusSec = m.liveFocusSec
+  if focusSec = invalid or focusSec <= 0 then focusSec = nowSec
+
   endSec = startSec + windowSec
-  _updateEpgHeader(startSec, tickSec, windowSec, width)
+  if focusSec < startSec then
+    startSec = focusSec - (focusSec mod tickSec)
+    endSec = startSec + windowSec
+  else if focusSec > endSec then
+    startSec = focusSec - windowSec
+    startSec = startSec - (startSec mod tickSec)
+    endSec = startSec + windowSec
+  end if
+  m.liveEpgStartSec = startSec
+  m.liveFocusSec = focusSec
+
+  _updateEpgHeader(startSec, tickSec, windowSec, timelineW, gutter)
 
   total = root.getChildCount()
   rows = total
@@ -10122,22 +10259,27 @@ sub _renderLiveTimeline()
 
   headerH = 28
   if m.epgHeaderLine <> invalid then
-    m.epgHeaderLine.width = width
+    m.epgHeaderLine.translation = [gutter, headerH]
+    m.epgHeaderLine.width = timelineW
   end if
   if m.epgNowLine <> invalid then
-    rel = nowSec - startSec
+    rel = focusSec - startSec
     if rel < 0 then rel = 0
     if rel > windowSec then rel = windowSec
-    nx = Int((rel * width) / windowSec)
-    m.epgNowLine.translation = [nx, headerH]
+    nx = Int((rel * timelineW) / windowSec)
+    m.epgNowLine.translation = [gutter + nx, headerH]
     if rows > 0 then
       m.epgNowLine.height = rows * rowH
+    end if
+    if m.liveFocusTarget = "timeline" then
+      m.epgNowLine.color = "0xD7B25C"
+    else
+      m.epgNowLine.color = "0x6F7A8A"
     end if
   end if
 
   _clearChildren(m.epgRows)
-
-  progMap = _buildLiveProgramMap(m.livePrograms)
+  _applyLivePrograms(m.livePrograms)
 
   focusIdx = -1
   if m.channelsList.itemFocused <> invalid then focusIdx = Int(m.channelsList.itemFocused)
@@ -10154,70 +10296,11 @@ sub _renderLiveTimeline()
     if ch.hasField("id") then cid = ch.id
     if cid <> invalid then cid = cid.ToStr().Trim()
 
-    programs = progMap[cid]
-    if type(programs) <> "roArray" then programs = []
-
-    cur = invalid
-    nextProg = invalid
-    nextStart = 0
-    for each p in programs
-      if type(p) <> "roAssociativeArray" then continue for
-      st = p.start
-      en = p.finish
-      if nowSec >= st and nowSec < en then
-        cur = p
-        exit for
-      end if
-      if st >= nowSec and (nextProg = invalid or st < nextStart) then
-        nextProg = p
-        nextStart = st
-      end if
-    end for
-    if cur = invalid then cur = nextProg
-    if cur <> invalid then
-      st = cur.start
-      en = cur.finish
-      if en > startSec and st < endSec then
-        segStart = st
-        segEnd = en
-        if segStart < startSec then segStart = startSec
-        if segEnd > endSec then segEnd = endSec
-        segDur = segEnd - segStart
-        if segDur > 0 then
-          x = Int(((segStart - startSec) * width) / windowSec)
-          w = Int((segDur * width) / windowSec)
-          if w < 6 then w = 6
-
-          bar = CreateObject("roSGNode", "Rectangle")
-          if bar <> invalid then
-            bar.translation = [x, 6]
-            bar.width = w
-            bar.height = rowH - 12
-            bar.color = "0xD8B765"
-            row.appendChild(bar)
-          end if
-
-          if w >= 50 then
-            label = CreateObject("roSGNode", "Label")
-            if label <> invalid then
-              label.translation = [x + 6, 10]
-              label.width = w - 12
-              label.height = rowH - 20
-              label.font = "font:SmallSystemFont"
-              label.color = "0xE6EBF3"
-              if cur.title <> invalid then label.text = cur.title else label.text = ""
-              row.appendChild(label)
-            end if
-          end if
-        end if
-      end if
-    end if
-
     ' Row divider
     line = CreateObject("roSGNode", "Rectangle")
     if line <> invalid then
-      line.translation = [0, rowH - 1]
-      line.width = width
+      line.translation = [gutter, rowH - 1]
+      line.width = timelineW
       line.height = 1
       line.color = "0x1F2A3B"
       row.appendChild(line)
