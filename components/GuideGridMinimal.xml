@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="GuideGridMinimal" extends="Group">
+  <children>
+    <Rectangle
+      id="liveBgTop"
+      translation="[0, 0]"
+      width="1280"
+      height="720"
+      color="0x0A111D"
+    />
+
+    <Group
+      id="liveLayout"
+      translation="[32, 24]"
+    >
+      <Group
+        id="liveHeader"
+        translation="[0, 0]"
+      >
+        <Rectangle
+          id="backFocus"
+          translation="[-6, 0]"
+          width="28"
+          height="18"
+          color="0x66D7B25C"
+          opacity="0.95"
+          visible="false"
+        />
+        <Rectangle
+          id="backFocusLine"
+          translation="[0, 0]"
+          width="24"
+          height="2"
+          color="0xD7B25C"
+          visible="false"
+        />
+        <Label
+          id="backIcon"
+          translation="[0, 2]"
+          width="24"
+          height="36"
+          font="font:MediumSystemFont"
+          color="0xC9D4E3"
+          text="←"
+        />
+
+        <Label
+          id="liveTitle"
+          translation="[26, 0]"
+          width="260"
+          height="40"
+          font="font:LargeBoldSystemFont"
+          color="0xF2F5FA"
+          text="Live TV"
+        />
+
+        <Label
+          id="liveDate"
+          translation="[280, 8]"
+          width="620"
+          height="28"
+          font="font:MediumSystemFont"
+          color="0x9FB0C6"
+          text=""
+        />
+
+        <Group
+          id="agendaButton"
+          translation="[980, 0]"
+          focusable="true"
+          visible="true"
+        >
+          <Rectangle
+            id="agendaFocus"
+            translation="[-4, 0]"
+            width="200"
+            height="18"
+            color="0x66D7B25C"
+            opacity="0.95"
+            visible="false"
+          />
+          <Rectangle
+            id="agendaFocusLine"
+            translation="[0, 0]"
+            width="200"
+            height="2"
+            color="0xD7B25C"
+            visible="false"
+          />
+          <Rectangle
+            id="agendaBg"
+            translation="[0, 4]"
+            width="200"
+            height="36"
+            color="0x172234"
+            opacity="0.9"
+            visible="false"
+          />
+          <Label
+            id="agendaLabel"
+            translation="[16, 10]"
+            width="160"
+            height="24"
+            font="font:SmallSystemFont"
+            color="0xF2F5FA"
+            text="Agenda"
+          />
+        </Group>
+      </Group>
+
+      <Group
+        id="dateStripRow"
+        translation="[0, 52]"
+      >
+        <Label
+          id="dateStripLabel"
+          translation="[0, 0]"
+          width="180"
+          height="22"
+          font="font:SmallSystemFont"
+          color="0xD7B25C"
+          text="Hoje"
+        />
+      </Group>
+
+      <LiveTvTimeline
+        id="liveTimeline"
+        translation="[0, 84]"
+        focusable="false"
+      />
+      <Rectangle
+        id="timeRulerFocus"
+        translation="[0, 84]"
+        width="960"
+        height="4"
+        color="0xD7B25C"
+        visible="false"
+        focusable="true"
+      />
+
+      <Group
+        id="liveContentLayout"
+        translation="[0, 150]"
+        focusable="false"
+      >
+        <Group
+          id="channelColumn"
+          translation="[0, 0]"
+          focusable="false"
+        >
+          <Rectangle
+            id="channelColumnBg"
+            translation="[0, 0]"
+            width="180"
+            height="320"
+            color="0x0F1726"
+            focusable="false"
+          />
+          <Rectangle
+            id="channelListFocus"
+            translation="[0, 0]"
+            width="180"
+            height="110"
+            color="0x55D7B25C"
+            visible="false"
+            focusable="true"
+          />
+          <Group id="channelRows" translation="[0, 0]" focusable="false" />
+        </Group>
+
+        <Group
+          id="programTrack"
+          translation="[0, 0]"
+          focusable="false"
+        >
+          <Group
+            id="epgGroup"
+            translation="[0, 0]"
+            focusable="false"
+          >
+            <Rectangle
+              id="epgBg"
+              translation="[0, 0]"
+              width="960"
+              height="320"
+              color="0x0D1524"
+              focusable="false"
+            />
+
+            <Group id="epgRows" translation="[0, 0]" focusable="false" />
+
+            <Rectangle
+              id="gridNowLine"
+              translation="[0, 0]"
+              width="2"
+              height="320"
+              color="0xD7B25C"
+              focusable="false"
+            />
+          </Group>
+        </Group>
+      </Group>
+    </Group>
+
+    <MarkupList
+      id="channelsList"
+      translation="[-2000, -2000]"
+      itemSize="[360, 92]"
+      numRows="5"
+      itemComponentName="LiveChannelItem"
+      visible="false"
+      opacity="0"
+    />
+
+    <Label
+      id="emptyLabel"
+      translation="[20, 660]"
+      width="1240"
+      height="34"
+      font="font:SmallSystemFont"
+      horizAlign="center"
+      color="0xAAB4C2"
+      visible="false"
+      text="Sem canais"
+    />
+
+    <Group
+      id="dayStripOverlay"
+      visible="false"
+    >
+      <Rectangle
+        id="dayStripScrim"
+        translation="[0, 0]"
+        width="1280"
+        height="720"
+        color="0x88000000"
+      />
+      <Group
+        id="dayStripPanel"
+        translation="[160, 240]"
+      >
+        <Rectangle
+          id="dayStripBg"
+          translation="[0, 0]"
+          width="960"
+          height="120"
+          color="0x0E1624"
+          opacity="0.98"
+        />
+        <Group
+          id="dayStripRow"
+          translation="[20, 20]"
+        >
+          <Rectangle
+            id="dayStripFocus"
+            translation="[0, 0]"
+            width="110"
+            height="80"
+            color="0x55D7B25C"
+            visible="false"
+          />
+
+          <Group id="dayItem0" translation="[0, 0]">
+            <Label id="dayItemLabel0" translation="[0, 0]" width="110" height="24" font="font:SmallSystemFont" color="0xC9D4E3" horizAlign="center" text="Hoje" />
+            <Label id="dayItemDate0" translation="[0, 28]" width="110" height="24" font="font:SmallSystemFont" color="0x8EA0B8" horizAlign="center" text="21" />
+          </Group>
+          <Group id="dayItem1" translation="[120, 0]">
+            <Label id="dayItemLabel1" translation="[0, 0]" width="110" height="24" font="font:SmallSystemFont" color="0xC9D4E3" horizAlign="center" text="dom" />
+            <Label id="dayItemDate1" translation="[0, 28]" width="110" height="24" font="font:SmallSystemFont" color="0x8EA0B8" horizAlign="center" text="22" />
+          </Group>
+          <Group id="dayItem2" translation="[240, 0]">
+            <Label id="dayItemLabel2" translation="[0, 0]" width="110" height="24" font="font:SmallSystemFont" color="0xC9D4E3" horizAlign="center" text="seg" />
+            <Label id="dayItemDate2" translation="[0, 28]" width="110" height="24" font="font:SmallSystemFont" color="0x8EA0B8" horizAlign="center" text="23" />
+          </Group>
+          <Group id="dayItem3" translation="[360, 0]">
+            <Label id="dayItemLabel3" translation="[0, 0]" width="110" height="24" font="font:SmallSystemFont" color="0xC9D4E3" horizAlign="center" text="ter" />
+            <Label id="dayItemDate3" translation="[0, 28]" width="110" height="24" font="font:SmallSystemFont" color="0x8EA0B8" horizAlign="center" text="24" />
+          </Group>
+          <Group id="dayItem4" translation="[480, 0]">
+            <Label id="dayItemLabel4" translation="[0, 0]" width="110" height="24" font="font:SmallSystemFont" color="0xC9D4E3" horizAlign="center" text="qua" />
+            <Label id="dayItemDate4" translation="[0, 28]" width="110" height="24" font="font:SmallSystemFont" color="0x8EA0B8" horizAlign="center" text="25" />
+          </Group>
+          <Group id="dayItem5" translation="[600, 0]">
+            <Label id="dayItemLabel5" translation="[0, 0]" width="110" height="24" font="font:SmallSystemFont" color="0xC9D4E3" horizAlign="center" text="qui" />
+            <Label id="dayItemDate5" translation="[0, 28]" width="110" height="24" font="font:SmallSystemFont" color="0x8EA0B8" horizAlign="center" text="26" />
+          </Group>
+          <Group id="dayItem6" translation="[720, 0]">
+            <Label id="dayItemLabel6" translation="[0, 0]" width="110" height="24" font="font:SmallSystemFont" color="0xC9D4E3" horizAlign="center" text="sex" />
+            <Label id="dayItemDate6" translation="[0, 28]" width="110" height="24" font="font:SmallSystemFont" color="0x8EA0B8" horizAlign="center" text="27" />
+          </Group>
+        </Group>
+      </Group>
+    </Group>
+  </children>
+</component>

@@ -50,9 +50,9 @@
       visible="false"
     />
 
-    <LiveCard
+    <GuideGridMinimal
       id="liveCard"
-      translation="[380, 150]"
+      translation="[0, 0]"
       visible="false"
     />
 
