@@ -8135,20 +8135,9 @@ sub enterLogin()
 end sub
 
 sub enterHome()
-  m.mode = "home"
-  m.focusIndex = 0
-  m.pendingLiveLoad = false
-  if m.logoPoster <> invalid then m.logoPoster.visible = true
-  if m.titleLabel <> invalid then m.titleLabel.visible = true
-  if m.loginCard <> invalid then m.loginCard.visible = false
-  if m.homeCard <> invalid then m.homeCard.visible = true
-  if m.browseCard <> invalid then m.browseCard.visible = false
-  if m.liveCard <> invalid then m.liveCard.visible = false
-  layoutCards()
-  if m.top <> invalid then m.top.setFocus(true)
-  if m.hintLabel <> invalid then m.hintLabel.visible = false
-  applyFocus()
-  setStatus("ready")
+  ' Home mapping screen is deprecated: always route to login.
+  print "enterHome disabled; routing to login"
+  enterLogin()
 end sub
 
 sub enterBrowse()
