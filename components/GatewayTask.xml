@@ -8,6 +8,9 @@
     <field id="username" type="string" />
     <field id="password" type="string" />
     <field id="jellyfinToken" type="string" />
+    <field id="channelIds" type="string" />
+    <field id="startDate" type="string" />
+    <field id="endDate" type="string" />
     <field id="path" type="string" />
     <field id="parentId" type="string" />
     <field id="limit" type="integer" />

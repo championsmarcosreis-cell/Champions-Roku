@@ -587,6 +587,61 @@ function gatewayJellyfinLiveChannels(apiBase as String, appToken as String, jell
   return { ok: true, items: out }
 end function
 
+function gatewayJellyfinLivePrograms(apiBase as String, appToken as String, jellyfinToken as String, userId as String, channelIds as String, startDate as String, endDate as String) as Object
+  base = _trimSlash(apiBase)
+  url = base + "/jellyfin/LiveTv/Programs"
+
+  qs = {}
+  if userId <> invalid and userId.Trim() <> "" then qs.UserId = userId.Trim()
+  if channelIds <> invalid and channelIds.Trim() <> "" then qs.ChannelIds = channelIds.Trim()
+  if startDate <> invalid and startDate.Trim() <> "" then qs.StartDate = startDate.Trim()
+  if endDate <> invalid and endDate.Trim() <> "" then qs.EndDate = endDate.Trim()
+  qs.SortBy = "StartDate"
+  qs.SortOrder = "Ascending"
+  url = _urlWithQuery(url, qs)
+
+  headers = {
+    "X-Emby-Authorization": _jellyfinClientHeader()
+    "X-Emby-Token": jellyfinToken
+  }
+  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+
+  resp = httpJson("GET", url, headers)
+  if resp.ok <> true then
+    return { ok: false, error: resp.error }
+  end if
+
+  data = resp.data
+  items = invalid
+  if data <> invalid then items = data.Items
+  if type(items) <> "roArray" then items = []
+
+  out = []
+  for each it in items
+    channelId = ""
+    name = ""
+    episodeTitle = ""
+    startDateStr = ""
+    endDateStr = ""
+    if it <> invalid then
+      if it.ChannelId <> invalid then channelId = it.ChannelId
+      if it.Name <> invalid then name = it.Name
+      if it.EpisodeTitle <> invalid then episodeTitle = it.EpisodeTitle
+      if it.StartDate <> invalid then startDateStr = it.StartDate
+      if it.EndDate <> invalid then endDateStr = it.EndDate
+    end if
+    out.Push({
+      channelId: channelId
+      name: name
+      episodeTitle: episodeTitle
+      startDate: startDateStr
+      endDate: endDateStr
+    })
+  end for
+
+  return { ok: true, items: out }
+end function
+
 function _parseQueryString(qs as String) as Object
   out = {}
   if qs = invalid then return out

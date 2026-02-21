@@ -206,6 +206,19 @@ sub doWork()
     return
   end if
 
+  if kind = "programs" then
+    chanIds = m.top.channelIds
+    if chanIds = invalid then chanIds = ""
+    resp = gatewayJellyfinLivePrograms(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, chanIds, m.top.startDate, m.top.endDate)
+    if resp.ok = true then
+      m.top.ok = true
+      m.top.resultJson = FormatJson(resp.items)
+    else
+      m.top.error = resp.error
+    end if
+    return
+  end if
+
   if kind = "series_detail" then
     lim = m.top.limit
     if lim = invalid then lim = 0
