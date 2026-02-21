@@ -23,17 +23,22 @@
       />
     </Group>
 
-    <LayoutGroup
+    <Group
       id="liveLayout"
       translation="[20, 20]"
-      layoutDirection="vert"
-      itemSpacings="[0, 16]"
     >
-      <LiveTvHeader id="liveHeader" />
-      <LiveTvTimeline id="liveTimeline" />
+      <LiveTvHeader
+        id="liveHeader"
+        translation="[0, 0]"
+      />
+      <LiveTvTimeline
+        id="liveTimeline"
+        translation="[340, 112]"
+      />
 
       <LayoutGroup
         id="liveContentLayout"
+        translation="[0, 200]"
         layoutDirection="horiz"
         itemSpacings="[20, 0]"
       >
@@ -79,20 +84,24 @@
             </Group>
           </children>
         </Group>
-
-        <LiveTvLiveCta id="liveCta" />
       </LayoutGroup>
-    </LayoutGroup>
+
+      <LiveTvLiveCta
+        id="liveCta"
+        translation="[940, 200]"
+      />
+    </Group>
 
     <MarkupList
       id="channelsList"
       translation="[-2000, -2000]"
-      width="1"
-      height="1"
+      width="0"
+      height="0"
       itemSize="[360, 92]"
       numRows="5"
       itemComponentName="LiveChannelItem"
       visible="false"
+      opacity="0"
     />
 
     <Rectangle

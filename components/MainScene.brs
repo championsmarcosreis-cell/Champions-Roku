@@ -418,6 +418,9 @@ sub bindUiNodes()
     if m.shelvesViewport.hasField("clipChildren") then m.shelvesViewport.clipChildren = true
   end if
   m.liveCard = m.top.findNode("liveCard")
+  m.liveLayoutRoot = m.top.findNode("liveLayout")
+  m.liveContentLayout = m.top.findNode("liveContentLayout")
+  m.liveTrackColumn = m.top.findNode("liveTrackColumn")
   m.liveHeader = m.top.findNode("liveHeader")
   m.liveTimeline = m.top.findNode("liveTimeline")
   m.liveChannelCard = m.top.findNode("liveChannelCard")
@@ -517,7 +520,6 @@ sub bindUiNodes()
 
   if m.channelsList <> invalid and (m.channelsObsSetup <> true) then
     m.channelsList.observeField("itemSelected", "onChannelSelected")
-    m.channelsList.observeField("itemFocused", "onChannelFocused")
     m.channelsObsSetup = true
   end if
 
@@ -3506,7 +3508,7 @@ end sub
 sub _setBrowseLiveInputEnabled(enabled as Boolean, reason as String)
   m.navListsInputLocked = (enabled <> true)
 
-  nodes = [m.viewsList, m.itemsList, m.channelsList]
+  nodes = [m.viewsList, m.itemsList]
   for each n in nodes
     if n <> invalid and n.hasField("focusable") then
       n.focusable = enabled
@@ -3610,12 +3612,23 @@ end function
 function _ensureLiveNodes() as Boolean
   if m.liveCard = invalid then m.liveCard = m.top.findNode("liveCard")
   if m.liveCard <> invalid then
+    if m.liveLayoutRoot = invalid then m.liveLayoutRoot = m.liveCard.findNode("liveLayout")
+    if m.liveContentLayout = invalid then m.liveContentLayout = m.liveCard.findNode("liveContentLayout")
+    if m.liveTrackColumn = invalid then m.liveTrackColumn = m.liveCard.findNode("liveTrackColumn")
     if m.liveHeader = invalid then m.liveHeader = m.liveCard.findNode("liveHeader")
     if m.liveTimeline = invalid then m.liveTimeline = m.liveCard.findNode("liveTimeline")
     if m.liveChannelCard = invalid then m.liveChannelCard = m.liveCard.findNode("liveChannelCard")
     if m.liveTrackFocus = invalid then m.liveTrackFocus = m.liveCard.findNode("liveTrackFocus")
     if m.liveTrackTitle = invalid then m.liveTrackTitle = m.liveCard.findNode("liveTrackTitle")
     if m.liveCta = invalid then m.liveCta = m.liveCard.findNode("liveCta")
+    if m.liveCta = invalid and m.liveLayoutRoot <> invalid then
+      cta = CreateObject("roSGNode", "LiveTvLiveCta")
+      if cta <> invalid then
+        cta.id = "liveCta"
+        m.liveLayoutRoot.appendChild(cta)
+        m.liveCta = cta
+      end if
+    end if
     if m.channelsList = invalid then m.channelsList = m.liveCard.findNode("channelsList")
     if m.liveEmptyLabel = invalid then m.liveEmptyLabel = m.liveCard.findNode("emptyLabel")
     if m.liveTitle = invalid then m.liveTitle = m.liveCard.findNode("liveTitle")
@@ -3753,10 +3766,13 @@ function _ensureLiveListNodes() as Boolean
     lst = CreateObject("roSGNode", "MarkupList")
     if lst <> invalid then
       lst.id = "channelsList"
-      lst.translation = [20, 120]
+      lst.translation = [-2000, -2000]
       lst.itemSize = [360, 92]
       lst.numRows = 5
       lst.itemComponentName = "LiveChannelItem"
+      lst.visible = false
+      if lst.hasField("opacity") then lst.opacity = 0
+      if lst.hasField("focusable") then lst.focusable = false
       m.liveCard.appendChild(lst)
       m.channelsList = lst
     end if
@@ -10009,16 +10025,44 @@ function _buildLiveLayoutMetrics() as Object
       if ds.height <> invalid then h = Int(ds.height)
     end if
   end if
+  ' SceneGraph runs in hd (1280x720) for this channel; clamp physical TV size.
+  if w > 1280 then w = 1280
+  if h > 720 then h = 720
 
-  scale = w / 1280.0
+  scale = w / 1920.0
   if scale <= 0 then scale = 1.0
+  safeMargin = Int(80 * scale)
+  if safeMargin < 40 then safeMargin = 40
+  gutter = Int(24 * scale)
+  if gutter < 12 then gutter = 12
+  leftW = Int(420 * scale)
+  rightW = Int(260 * scale)
+  headerH = Int(96 * scale)
+  if headerH < 64 then headerH = 64
+  timelineH = Int(64 * scale)
+  if timelineH < 44 then timelineH = 44
+
+  usableW = w - (safeMargin * 2)
+  centerW = usableW - (gutter * 2) - leftW - rightW
+  if centerW < Int(520 * scale) then centerW = Int(520 * scale)
+  if centerW < 360 then centerW = 360
+
+  contentY = safeMargin + headerH + timelineH + gutter
+  contentH = h - contentY - safeMargin
+  if contentH < Int(340 * scale) then contentH = Int(340 * scale)
+
   return {
     width: w
     height: h
     scale: scale
-    safeMargin: Int(20 * scale)
-    headerH: Int(100 * scale)
-    timelineH: Int(66 * scale)
+    safeMargin: safeMargin
+    gutter: gutter
+    leftW: leftW
+    centerW: centerW
+    rightW: rightW
+    headerH: headerH
+    timelineH: timelineH
+    contentH: contentH
   }
 end function
 
@@ -10028,41 +10072,100 @@ sub _configureLiveLayout()
   if type(m.liveLayout) <> "roAssociativeArray" then return
 
   safeMargin = Int(m.liveLayout.safeMargin)
-  if safeMargin < 16 then safeMargin = 16
+  gutter = Int(m.liveLayout.gutter)
+  leftW = Int(m.liveLayout.leftW)
+  centerW = Int(m.liveLayout.centerW)
+  rightW = Int(m.liveLayout.rightW)
   headerH = Int(m.liveLayout.headerH)
-  if headerH < 88 then headerH = 88
   timelineH = Int(m.liveLayout.timelineH)
-  if timelineH < 56 then timelineH = 56
+  contentH = Int(m.liveLayout.contentH)
+  contentW = leftW + gutter + centerW + gutter + rightW
+  contentY = headerH + timelineH + gutter * 2
 
-  contentW = 1280 - (safeMargin * 2)
-  if contentW < 1120 then contentW = 1120
-  m.liveEpgWidth = contentW - 32
-  trackW = contentW - 320 - 244 - 40
-  if trackW < 520 then trackW = 520
+  timelineX = leftW + gutter
+  timelineW = centerW + gutter + rightW
+  m.liveEpgWidth = timelineW - 32
+  trackW = centerW
+  if trackW < 360 then trackW = 360
 
-  liveLayout = m.top.findNode("liveLayout")
-  if liveLayout <> invalid then liveLayout.translation = [safeMargin, safeMargin]
+  if m.liveLayoutRoot <> invalid then m.liveLayoutRoot.translation = [safeMargin, safeMargin]
 
   if m.liveHeader <> invalid then
+    m.liveHeader.translation = [0, 0]
     hdrBg = m.liveHeader.findNode("bg")
     if hdrBg <> invalid then hdrBg.width = contentW
     if hdrBg <> invalid then hdrBg.height = headerH
+    row = m.liveHeader.findNode("row")
+    if row <> invalid then row.translation = [Int(28 * m.liveLayout.scale), Int((headerH - 64) / 2)]
   end if
   if m.liveTimeline <> invalid then
+    m.liveTimeline.translation = [timelineX, headerH + gutter]
     tlBg = m.liveTimeline.findNode("timelineBg")
-    if tlBg <> invalid then tlBg.width = contentW
+    if tlBg <> invalid then tlBg.width = timelineW
     if tlBg <> invalid then tlBg.height = timelineH
+    tlHeader = m.liveTimeline.findNode("epgHeader")
+    if tlHeader <> invalid then tlHeader.translation = [16, 8]
     tlLine = m.liveTimeline.findNode("epgHeaderLine")
     if tlLine <> invalid then
       tlLine.translation = [16, timelineH - 16]
-      tlLine.width = contentW - 32
+      tlLine.width = timelineW - 32
     end if
     nowLine = m.liveTimeline.findNode("epgNowLine")
     if nowLine <> invalid then nowLine.height = timelineH - 10
   end if
-  if m.epgBg <> invalid then m.epgBg.width = trackW
-  if m.liveTrackFocus <> invalid then m.liveTrackFocus.width = trackW + 8
+
+  if m.liveContentLayout <> invalid then
+    m.liveContentLayout.translation = [0, contentY]
+    m.liveContentLayout.itemSpacings = [gutter, 0]
+  end if
+  if m.liveChannelCard <> invalid and m.liveChannelCard.hasField("layoutWidth") then
+    m.liveChannelCard.layoutWidth = leftW
+  end if
+  if m.epgBg <> invalid then
+    m.epgBg.width = trackW
+    m.epgBg.height = contentH
+  end if
+  if m.liveTrackColumn <> invalid then
+    m.liveTrackColumn.translation = [0, 0]
+  end if
+  if m.epgGroup <> invalid then m.epgGroup.translation = [20, 56]
+  if m.liveTrackFocus <> invalid then
+    m.liveTrackFocus.width = trackW + 8
+    m.liveTrackFocus.height = contentH + 8
+  end if
   if m.liveTrackTitle <> invalid then m.liveTrackTitle.width = trackW - 40
+  if m.liveCta <> invalid and m.liveCta.hasField("layoutWidth") then
+    m.liveCta.layoutWidth = rightW
+  end if
+  if m.liveCta <> invalid then
+    m.liveCta.translation = [leftW + gutter + centerW + gutter, contentY]
+  end if
+  if m.liveEmptyLabel <> invalid then
+    m.liveEmptyLabel.translation = [0, headerH + timelineH + gutter + Int(contentH / 2)]
+    m.liveEmptyLabel.width = contentW
+  end if
+  if m.liveCard <> invalid then
+    bgTop = m.liveCard.findNode("liveBgTop")
+    if bgTop <> invalid then
+      bgTop.width = m.liveLayout.width
+      bgTop.height = m.liveLayout.height
+    end if
+    bgGlow = m.liveCard.findNode("liveBgGlow")
+    if bgGlow <> invalid then
+      bgGlow.translation = [safeMargin, Int(safeMargin * 0.5)]
+      glowRect = m.liveCard.findNode("liveGlowRect")
+      if glowRect <> invalid then
+        glowRect.width = contentW
+        glowRect.height = m.liveLayout.height - safeMargin
+      end if
+    end if
+  end if
+  if m.channelsList <> invalid then
+    m.channelsList.translation = [-2000, -2000]
+    m.channelsList.visible = false
+    if m.channelsList.hasField("opacity") then m.channelsList.opacity = 0
+    if m.channelsList.hasField("focusable") then m.channelsList.focusable = false
+  end if
 end sub
 
 sub _shiftLiveFocusTicks(delta as Integer)
@@ -10481,18 +10584,19 @@ sub _renderLiveTimeline()
   m.liveEpgStartSec = startSec
   m.liveFocusSec = nowSec
 
-  _updateEpgHeader(startSec, tickSec, windowSec, width, 0)
+  hdrX = 16
+  if m.epgHeaderLine <> invalid then
+    trHdr0 = m.epgHeaderLine.translation
+    if type(trHdr0) = "roArray" and trHdr0.Count() >= 2 then hdrX = Int(trHdr0[0])
+  end if
+  _updateEpgHeader(startSec, tickSec, windowSec, width, hdrX)
 
   if m.epgNowLine <> invalid then
     relNow = nowSec - startSec
     if relNow < 0 then relNow = 0
     if relNow > windowSec then relNow = windowSec
     nx = Int((relNow * width) / windowSec)
-    xNow = 16
-    if m.epgHeaderLine <> invalid then
-      trHdr = m.epgHeaderLine.translation
-      if type(trHdr) = "roArray" and trHdr.Count() >= 2 then xNow = Int(trHdr[0])
-    end if
+    xNow = hdrX
     trNow = m.epgNowLine.translation
     yNow = 4
     if type(trNow) = "roArray" and trNow.Count() >= 2 then yNow = Int(trNow[1])
@@ -10522,6 +10626,14 @@ sub _renderLiveTimeline()
     if trackW < 320 then trackW = width
   end if
   trackH = 190
+  if m.epgBg <> invalid and m.epgBg.height <> invalid then
+    trackH = Int(m.epgBg.height) - 20
+    if trackH < 180 then trackH = 180
+  end if
+  uiScale = 1.0
+  if m.liveLayout <> invalid and type(m.liveLayout) = "roAssociativeArray" then
+    if m.liveLayout.scale <> invalid then uiScale = m.liveLayout.scale
+  end if
 
   row = CreateObject("roSGNode", "Group")
   row.translation = [0, 0]
@@ -10539,8 +10651,8 @@ sub _renderLiveTimeline()
   if label <> invalid then
     label.translation = [16, 12]
     label.width = trackW - 32
-    label.height = 26
-    label.font = "font:SmallSystemFont"
+    label.height = 36
+    label.font = "font:MediumSystemFont"
     label.color = "0xC5D1E2"
     curTxt = ""
     if selected.programTitle <> invalid then curTxt = selected.programTitle.ToStr().Trim()
@@ -10549,8 +10661,8 @@ sub _renderLiveTimeline()
     row.appendChild(label)
   end if
 
-  barY = 50
-  barH = 102
+  barY = 56
+  barH = 108
   barBg = CreateObject("roSGNode", "Rectangle")
   if barBg <> invalid then
     barBg.translation = [12, barY]
@@ -10560,30 +10672,87 @@ sub _renderLiveTimeline()
     row.appendChild(barBg)
   end if
 
+  ordered = []
   for each prog in programs
-    if type(prog) <> "roAssociativeArray" then continue for
+    if type(prog) = "roAssociativeArray" then ordered.Push(prog)
+  end for
+  for i = 0 to ordered.Count() - 2
+    for j = i + 1 to ordered.Count() - 1
+      a = ordered[i]
+      b = ordered[j]
+      sa = Int(a.start)
+      sb = Int(b.start)
+      if sb < sa then
+        tmp = ordered[i]
+        ordered[i] = ordered[j]
+        ordered[j] = tmp
+      end if
+    end for
+  end for
+
+  currentIdx = -1
+  for i = 0 to ordered.Count() - 1
+    p = ordered[i]
+    st = Int(p.start)
+    en = Int(p.finish)
+    if nowSec >= st and nowSec < en then
+      currentIdx = i
+      exit for
+    end if
+  end for
+  if currentIdx < 0 then
+    for i = 0 to ordered.Count() - 1
+      p = ordered[i]
+      if Int(p.start) >= nowSec then
+        currentIdx = i
+        exit for
+      end if
+    end for
+  end if
+  if currentIdx < 0 and ordered.Count() > 0 then currentIdx = 0
+
+  drawPrograms = []
+  if currentIdx >= 0 then
+    for i = currentIdx to currentIdx + 2
+      if i >= 0 and i < ordered.Count() then drawPrograms.Push(ordered[i])
+    end for
+  end if
+  if drawPrograms.Count() <= 0 then
+    for i = 0 to 2
+      if i < ordered.Count() then drawPrograms.Push(ordered[i])
+    end for
+  end if
+
+  drawCount = drawPrograms.Count()
+  if drawCount <= 0 then drawCount = 1
+  gap = Int(14 * uiScale)
+  if gap < 8 then gap = 8
+  availableW = trackW - 24
+  minBlockW = Int(240 * uiScale)
+  maxBlockW = Int(280 * uiScale)
+  blockW = Int((availableW - (gap * (drawCount - 1))) / drawCount)
+  if blockW < minBlockW then blockW = minBlockW
+  if blockW > maxBlockW then blockW = maxBlockW
+  totalBlocksW = drawCount * blockW + (drawCount - 1) * gap
+  if totalBlocksW > availableW then
+    blockW = Int((availableW - (gap * (drawCount - 1))) / drawCount)
+    if blockW < Int(170 * uiScale) then blockW = Int(170 * uiScale)
+  end if
+  blockH = Int(92 * uiScale)
+  if blockH < 76 then blockH = 76
+
+  drawX = 12
+  for i = 0 to drawPrograms.Count() - 1
+    prog = drawPrograms[i]
     st = Int(prog.start)
     en = Int(prog.finish)
-    if en <= st then continue for
-    if en <= startSec then continue for
-    if st >= (startSec + windowSec) then continue for
-
-    drawStart = st
-    if drawStart < startSec then drawStart = startSec
-    drawEnd = en
-    if drawEnd > (startSec + windowSec) then drawEnd = startSec + windowSec
-    if drawEnd <= drawStart then continue for
-
-    pxStart = Int(((drawStart - startSec) * (trackW - 24)) / windowSec)
-    pxW = Int(((drawEnd - drawStart) * (trackW - 24)) / windowSec)
-    if pxW < 8 then pxW = 8
+    isCurrent = (nowSec >= st and nowSec < en)
 
     block = CreateObject("roSGNode", "Rectangle")
     if block <> invalid then
-      block.translation = [12 + pxStart, barY + 8]
-      block.width = pxW
-      block.height = barH - 16
-      isCurrent = (nowSec >= st and nowSec < en)
+      block.translation = [drawX, barY + 8]
+      block.width = blockW
+      block.height = blockH
       if isCurrent then
         block.color = "0x2A3B56"
       else
@@ -10595,21 +10764,25 @@ sub _renderLiveTimeline()
     txt = ""
     if prog.title <> invalid then txt = prog.title.ToStr().Trim()
     if txt = "" then txt = "(Sem titulo)"
+    maxChars = Int(blockW / (11 * uiScale))
+    if maxChars < 10 then maxChars = 10
+    if Len(txt) > maxChars then txt = Left(txt, maxChars - 1) + "..."
+
     lbl = CreateObject("roSGNode", "Label")
     if lbl <> invalid then
-      lbl.translation = [16 + pxStart, barY + 16]
-      lbl.width = pxW - 8
+      lbl.translation = [drawX + 12, barY + 20]
+      lbl.width = blockW - 20
       if lbl.width < 20 then lbl.width = 20
-      lbl.height = 58
-      lbl.font = "font:SmallSystemFont"
-      lbl.wrap = true
-      lbl.numLines = 2
+      lbl.height = 34
+      lbl.font = "font:MediumSystemFont"
+      lbl.wrap = false
+      lbl.numLines = 1
       lbl.color = "0xE3EBF7"
       lbl.text = txt
       row.appendChild(lbl)
     end if
 
-    if nowSec >= st and nowSec < en then
+    if isCurrent then
       pct = 0.0
       if en > st then pct = (nowSec - st) / (en - st)
       if pct < 0 then pct = 0
@@ -10617,15 +10790,17 @@ sub _renderLiveTimeline()
 
       progFill = CreateObject("roSGNode", "Rectangle")
       if progFill <> invalid then
-        progFill.translation = [12 + pxStart, barY + barH - 8]
-        progFill.width = Int(pxW * pct)
+        progFill.translation = [drawX, barY + 8 + blockH - 4]
+        progFill.width = Int(blockW * pct)
         if progFill.width < 4 then progFill.width = 4
-        if progFill.width > pxW then progFill.width = pxW
+        if progFill.width > blockW then progFill.width = blockW
         progFill.height = 4
         progFill.color = "0xD7B25C"
         row.appendChild(progFill)
       end if
     end if
+
+    drawX = drawX + blockW + gap
   end for
 
   if m.liveTrackFocus <> invalid then

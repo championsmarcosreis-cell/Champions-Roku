@@ -5,33 +5,34 @@
     <field id="logoUri" type="string" onChange="onFieldsChanged" />
     <field id="badgeText" type="string" onChange="onFieldsChanged" />
     <field id="ctaFocused" type="boolean" onChange="onFieldsChanged" />
+    <field id="layoutWidth" type="integer" onChange="onFieldsChanged" />
   </interface>
 
   <children>
     <Rectangle
       id="focusRing"
       translation="[-4, -4]"
-      width="252"
-      height="338"
+      width="181"
+      height="268"
       color="0x2FD7B25C"
       visible="false"
     />
 
     <Rectangle
-      id="tileBg"
+      id="tileBorder"
       translation="[0, 0]"
-      width="244"
-      height="330"
-      color="0x131F31"
+      width="173"
+      height="260"
+      color="0x334962"
+      opacity="0.55"
     />
 
     <Rectangle
-      id="tileBorder"
+      id="tileBg"
       translation="[0, 0]"
-      width="244"
-      height="330"
-      color="0x334962"
-      opacity="0.55"
+      width="173"
+      height="260"
+      color="0x131F31"
     />
 
     <Rectangle
@@ -56,7 +57,7 @@
       translation="[18, 160]"
       width="206"
       height="30"
-      font="font:SmallSystemFont"
+      font="font:MediumSystemFont"
       horizAlign="center"
       color="0xDCE5F2"
       text="Canal ao vivo"
@@ -75,7 +76,7 @@
       translation="[62, 206]"
       width="120"
       height="20"
-      font="font:SmallSystemFont"
+      font="font:MediumSystemFont"
       horizAlign="center"
       color="0xFFFFFF"
       text="AO VIVO"
