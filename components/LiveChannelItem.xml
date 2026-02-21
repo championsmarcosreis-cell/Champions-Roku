@@ -6,17 +6,33 @@
   </interface>
 
   <children>
-    <Poster
+    <Rectangle
       id="bg"
       width="360"
-      height="76"
+      height="88"
       translation="[0, 2]"
-      uri="pkg:/images/field_normal.png"
+      color="0x121A26"
+    />
+
+    <Rectangle
+      id="logoBorder"
+      translation="[7, 12]"
+      width="66"
+      height="66"
+      color="0x1F2A3B"
+    />
+
+    <Rectangle
+      id="logoBg"
+      translation="[8, 13]"
+      width="64"
+      height="64"
+      color="0x0F1623"
     />
 
     <Poster
       id="logo"
-      translation="[12, 10]"
+      translation="[12, 17]"
       width="56"
       height="56"
       loadDisplayMode="scaleToFit"
@@ -25,9 +41,9 @@
 
     <Label
       id="title"
-      translation="[80, 10]"
+      translation="[86, 6]"
       width="260"
-      height="24"
+      height="20"
       font="font:MediumSystemFont"
       color="0xD0D6E0"
       numLines="1"
@@ -36,11 +52,49 @@
 
     <Label
       id="program"
-      translation="[80, 38]"
+      translation="[86, 28]"
       width="260"
-      height="24"
+      height="20"
       font="font:SmallSystemFont"
-      color="0x9AA4B2"
+      color="0xE2E8F0"
+      numLines="1"
+      text=""
+    />
+
+    <Rectangle
+      id="progressBg"
+      translation="[86, 48]"
+      width="250"
+      height="4"
+      color="0x1F2A3B"
+    />
+
+    <Rectangle
+      id="progressFill"
+      translation="[86, 48]"
+      width="0"
+      height="4"
+      color="0xD7B25C"
+    />
+
+    <Label
+      id="time"
+      translation="[86, 56]"
+      width="260"
+      height="18"
+      font="font:SmallSystemFont"
+      color="0x8EA0B8"
+      numLines="1"
+      text=""
+    />
+
+    <Label
+      id="next"
+      translation="[86, 72]"
+      width="260"
+      height="18"
+      font="font:SmallSystemFont"
+      color="0x8EA0B8"
       numLines="1"
       text=""
     />

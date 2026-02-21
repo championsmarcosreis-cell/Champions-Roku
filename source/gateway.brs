@@ -561,14 +561,18 @@ function gatewayJellyfinLiveChannels(apiBase as String, appToken as String, jell
 
     if id <> invalid and id.Trim() <> "" then
       cid = id.Trim()
-      logoPath = "/jellyfin/LiveTv/Channels/" + cid + "/Images/" + logoType
+      ' Prefer the same path the Flutter client uses: Items/<id>/Images/*
+      ' LiveTv/Channels is kept only as a fallback.
+      logoPath = "/jellyfin/Items/" + cid + "/Images/" + logoType
       if logoTag <> "" then
         logoPath = _urlWithQuery(logoPath, { tag: logoTag })
+      else if logoType = "Primary" and primaryTag <> "" then
+        logoPath = _urlWithQuery(logoPath, { tag: primaryTag })
       end if
 
-      logoFallbackPath = "/jellyfin/Items/" + cid + "/Images/Primary"
-      if primaryTag <> "" then
-        logoFallbackPath = _urlWithQuery(logoFallbackPath, { tag: primaryTag })
+      logoFallbackPath = "/jellyfin/LiveTv/Channels/" + cid + "/Images/" + logoType
+      if logoTag <> "" then
+        logoFallbackPath = _urlWithQuery(logoFallbackPath, { tag: logoTag })
       end if
     end if
 
