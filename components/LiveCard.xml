@@ -5,33 +5,87 @@
     <Poster
       id="cardBg"
       translation="[0, 0]"
-      width="520"
-      height="420"
+      width="1280"
+      height="720"
       uri="pkg:/images/card.png"
+      visible="false"
+    />
+
+    <Rectangle
+      id="channelsBg"
+      translation="[32, 120]"
+      width="376"
+      height="520"
+      color="0x0F1623"
+      visible="false"
     />
 
     <Label
       id="liveTitle"
-      translation="[40, 22]"
-      width="440"
-      height="34"
-      font="font:MediumSystemFont"
-      color="0xD8B765"
-      text="Canais"
+      translation="[60, 26]"
+      width="520"
+      height="36"
+      font="font:LargeSystemFont"
+      color="0xE6EBF3"
+      text="Live TV"
+    />
+
+    <Label
+      id="liveDate"
+      translation="[60, 62]"
+      width="700"
+      height="24"
+      font="font:SmallSystemFont"
+      color="0xAAB4C2"
+      text=""
     />
 
     <MarkupList
       id="channelsList"
-      translation="[40, 70]"
-      itemSize="[440, 60]"
+      translation="[60, 170]"
+      itemSize="[360, 80]"
       numRows="5"
-      itemComponentName="ChampionsMenuItem"
+      itemComponentName="LiveChannelItem"
     />
+
+    <Group
+      id="epgGroup"
+      translation="[440, 130]"
+    >
+      <Rectangle
+        id="epgBg"
+        translation="[0, 0]"
+        width="820"
+        height="520"
+        color="0x0F1623"
+        visible="false"
+      />
+
+      <Group id="epgHeader" translation="[0, 0]" />
+
+      <Rectangle
+        id="epgHeaderLine"
+        translation="[0, 28]"
+        width="820"
+        height="1"
+        color="0x1F2A3B"
+      />
+
+      <Rectangle
+        id="epgNowLine"
+        translation="[0, 28]"
+        width="2"
+        height="360"
+        color="0xD8B765"
+      />
+
+      <Group id="epgRows" translation="[0, 32]" />
+    </Group>
 
     <Label
       id="emptyLabel"
-      translation="[40, 200]"
-      width="440"
+      translation="[70, 320]"
+      width="320"
       height="34"
       font="font:SmallSystemFont"
       horizAlign="center"

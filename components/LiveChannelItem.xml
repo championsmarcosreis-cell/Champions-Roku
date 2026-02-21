@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="LiveChannelItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onItemContentChanged" />
+    <field id="itemHasFocus" type="boolean" onChange="onItemHasFocusChanged" />
+  </interface>
+
+  <children>
+    <Poster
+      id="bg"
+      width="360"
+      height="76"
+      translation="[0, 2]"
+      uri="pkg:/images/field_normal.png"
+    />
+
+    <Poster
+      id="logo"
+      translation="[12, 10]"
+      width="56"
+      height="56"
+      loadDisplayMode="scaleToFit"
+      uri=""
+    />
+
+    <Label
+      id="title"
+      translation="[80, 10]"
+      width="260"
+      height="24"
+      font="font:MediumSystemFont"
+      color="0xD0D6E0"
+      numLines="1"
+      text=""
+    />
+
+    <Label
+      id="program"
+      translation="[80, 38]"
+      width="260"
+      height="24"
+      font="font:SmallSystemFont"
+      color="0x9AA4B2"
+      numLines="1"
+      text=""
+    />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/LiveChannelItem.brs" />
+</component>

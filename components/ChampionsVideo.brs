@@ -11,6 +11,7 @@ sub init()
 end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
+  if m.top.visible <> true then return false
   k = key
   if k = invalid then k = ""
   kl = LCase(k.Trim())

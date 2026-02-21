@@ -37,6 +37,14 @@ sub init()
   m.vodJellyfinTranscodeAttempted = false
   m.liveEdgeSnapped = false
   m.liveFallbackAttempted = false
+  m.liveProgramsLoaded = false
+  m.livePrograms = []
+  m.liveEpgWindowMinutes = 360
+  m.liveEpgTickMinutes = 30
+  m.liveEpgWidth = 820
+  m.liveEpgRowHeight = 80
+  m.liveEpgRowsMax = 5
+  m.liveEpgOffsetTicks = -2
   m.lastPlayerState = ""
   m.devAutoplay = ""
   m.devAutoplayDone = false
@@ -57,6 +65,7 @@ sub init()
   m.browseLibraryRawItems = []
   m.pendingLibraryViewId = ""
   m.pendingLibraryLoad = false
+  m.pendingLiveLoad = false
   m.browseLibraryAutoFocusPending = false
   m.activeViewId = ""
   m.activeViewCollection = ""
@@ -189,7 +198,7 @@ sub init()
   if cfg0.appToken <> invalid then appTokenLen = Len(cfg0.appToken)
   jellyfinLen = 0
   if cfg0.jellyfinToken <> invalid then jellyfinLen = Len(cfg0.jellyfinToken)
-  print "MainScene init apiBase=" + m.apiBase + " appTokenLen=" + appTokenLen.ToStr() + " jellyfinTokenLen=" + jellyfinLen.ToStr() + " devAutoplay=" + m.devAutoplay + " uiLang=" + m.uiLang + " metaLang=" + m.metaLang + " build=2026-02-20q"
+  print "MainScene init apiBase=" + m.apiBase + " appTokenLen=" + appTokenLen.ToStr() + " jellyfinTokenLen=" + jellyfinLen.ToStr() + " devAutoplay=" + m.devAutoplay + " uiLang=" + m.uiLang + " metaLang=" + m.metaLang + " build=2026-02-21-liveui8"
 
   if cfg0.jellyfinToken <> invalid and cfg0.jellyfinToken <> "" then
     m.startupMode = "browse"
@@ -207,6 +216,7 @@ sub init()
   ' IMPORTANT: On some Roku firmware versions, init() runs before all XML nodes
   ' are materialized. Bind UI nodes on a short timer with retries.
   m.bindAttempts = 0
+  m.bindFallbackDone = false
   m.bindTimer = CreateObject("roSGNode", "Timer")
   if m.bindTimer <> invalid then
     m.bindTimer.duration = 0.1
@@ -257,6 +267,14 @@ sub init()
     m.deferredBrowseTimer.repeat = false
     m.deferredBrowseTimer.observeField("fire", "onDeferredBrowseTimerFire")
     m.top.appendChild(m.deferredBrowseTimer)
+  end if
+
+  m.liveLoadRetryTimer = CreateObject("roSGNode", "Timer")
+  if m.liveLoadRetryTimer <> invalid then
+    m.liveLoadRetryTimer.duration = 0.3
+    m.liveLoadRetryTimer.repeat = false
+    m.liveLoadRetryTimer.observeField("fire", "onLiveLoadRetryFire")
+    m.top.appendChild(m.liveLoadRetryTimer)
   end if
 
   ' Simple VOD scrubbing driven by LEFT/RIGHT events from ChampionsVideo.
@@ -369,8 +387,11 @@ sub bindUiNodes()
   m.seriesDetailEpisodesTitle = m.top.findNode("seriesDetailEpisodesTitle")
   m.seriesDetailEpisodesList = m.top.findNode("seriesDetailEpisodesList")
   m.seriesDetailCastTitle = m.top.findNode("seriesDetailCastTitle")
+  m.liveTitle = m.top.findNode("liveTitle")
+  m.liveDate = m.top.findNode("liveDate")
   m.seriesDetailCastList = m.top.findNode("seriesDetailCastList")
   m.seriesDetailHint = m.top.findNode("seriesDetailHint")
+  _ensureBrowseNodes()
   if m.viewsList <> invalid and m.viewsList.hasField("numColumns") then
     m.viewsGridCols = _gridCols(m.viewsList.numColumns, m.viewsGridCols)
   end if
@@ -391,6 +412,18 @@ sub bindUiNodes()
   m.liveCard = m.top.findNode("liveCard")
   m.channelsList = m.top.findNode("channelsList")
   m.liveEmptyLabel = m.top.findNode("emptyLabel")
+  m.channelsBg = m.top.findNode("channelsBg")
+  m.epgGroup = m.top.findNode("epgGroup")
+  m.epgBg = m.top.findNode("epgBg")
+  m.epgHeader = m.top.findNode("epgHeader")
+  m.epgTick0 = m.top.findNode("epgTick0")
+  m.epgTick1 = m.top.findNode("epgTick1")
+  m.epgTick2 = m.top.findNode("epgTick2")
+  m.epgTick3 = m.top.findNode("epgTick3")
+  m.epgHeaderLine = m.top.findNode("epgHeaderLine")
+  m.epgNowLine = m.top.findNode("epgNowLine")
+  m.epgRows = m.top.findNode("epgRows")
+  _ensureLiveNodes()
 
   m.usernameBg = m.top.findNode("usernameBg")
   m.usernameText = m.top.findNode("usernameText")
@@ -470,6 +503,7 @@ sub bindUiNodes()
 
   if m.channelsList <> invalid and (m.channelsObsSetup <> true) then
     m.channelsList.observeField("itemSelected", "onChannelSelected")
+    m.channelsList.observeField("itemFocused", "onChannelFocused")
     m.channelsObsSetup = true
   end if
 
@@ -520,7 +554,9 @@ sub bindUiNodes()
 end sub
 
 function uiReady() as Boolean
-  return (m.loginCard <> invalid and m.homeCard <> invalid and m.browseCard <> invalid and m.viewsList <> invalid and m.itemsList <> invalid and m.continueList <> invalid and m.recentMoviesList <> invalid and m.recentSeriesList <> invalid and m.libraryItemsList <> invalid and m.liveCard <> invalid and m.channelsList <> invalid and m.hintLabel <> invalid)
+  _ensureBrowseNodes()
+  _ensureLiveNodes()
+  return (m.loginCard <> invalid and m.homeCard <> invalid and m.browseCard <> invalid and m.viewsList <> invalid and m.itemsList <> invalid and m.continueList <> invalid and m.recentMoviesList <> invalid and m.recentSeriesList <> invalid and m.libraryItemsList <> invalid and m.liveCard <> invalid and m.hintLabel <> invalid)
 end function
 
 function _isPlaybackVisible() as Boolean
@@ -579,10 +615,19 @@ sub onBindTimerFire()
   end if
 
   ' Give the user something usable even if late binding failed.
-  renderForm()
-  enterLogin()
-  print "UI bind fallback: continuing with login mode"
-  setStatus("ready")
+  if m.bindFallbackDone <> true then
+    m.bindFallbackDone = true
+    renderForm()
+    enterLogin()
+    print "UI bind fallback: continuing with login mode"
+    setStatus("ready")
+  end if
+
+  ' Keep trying in the background (some firmwares materialize nodes late).
+  if m.bindTimer <> invalid then
+    m.bindTimer.duration = 0.5
+    m.bindTimer.control = "start"
+  end if
 end sub
 
 sub onDevAutoplayFire()
@@ -622,7 +667,7 @@ sub layoutCards()
   if m.loginCard <> invalid then m.loginCard.translation = [x, y]
   if m.homeCard <> invalid then m.homeCard.translation = [x, y]
   if m.browseCard <> invalid then m.browseCard.translation = [0, 0]
-  if m.liveCard <> invalid then m.liveCard.translation = [x, 150]
+  if m.liveCard <> invalid then m.liveCard.translation = [0, 0]
 end sub
 
 sub renderForm()
@@ -771,6 +816,12 @@ function _nowMs() as Integer
   dt = CreateObject("roDateTime")
   if dt = invalid then return 0
   return Int(dt.AsSeconds() * 1000)
+end function
+
+function _nowEpochSec() as Integer
+  dt = CreateObject("roDateTime")
+  if dt = invalid then return Int(_nowMs() / 1000)
+  return Int(dt.AsSeconds())
 end function
 
 function _shouldTrackProgress() as Boolean
@@ -1685,6 +1736,10 @@ end function
 
 sub _setBrowseLibraryVisible(open as Boolean)
   showLibrary = (open = true)
+  if m.browseHomeGroup = invalid or m.libraryGroup = invalid then
+    bindUiNodes()
+    _ensureBrowseNodes()
+  end if
   if m.browseHomeGroup <> invalid then m.browseHomeGroup.visible = (showLibrary <> true)
   if m.libraryGroup <> invalid then m.libraryGroup.visible = showLibrary
   if showLibrary then
@@ -1783,6 +1838,27 @@ end sub
 
 sub onDeferredBrowseTimerFire()
   _runDeferredBrowseActions()
+end sub
+
+sub _scheduleLiveLoadRetry()
+  if m.liveLoadRetryTimer <> invalid then
+    m.liveLoadRetryTimer.control = "start"
+  end if
+end sub
+
+sub onLiveLoadRetryFire()
+  if m.pendingLiveLoad <> true then return
+  if m.mode <> "live" then
+    m.pendingLiveLoad = false
+    return
+  end if
+  if m.pendingJob <> "" then
+    print "channels retry wait: pendingJob=" + m.pendingJob
+    _scheduleLiveLoadRetry()
+    return
+  end if
+  print "channels retry: requesting now"
+  loadChannels()
 end sub
 
 function _nodeTranslationY(node as Object, fallback as Integer) as Integer
@@ -3430,7 +3506,7 @@ sub _setBrowseLiveInputEnabled(enabled as Boolean, reason as String)
 end sub
 
 sub showPlayerOverlay()
-  if m.playerOverlay = invalid then return
+  if _ensurePlayerOverlayNodes() <> true then return
   if m.player = invalid or m.player.visible <> true then return
   if m.playbackIsLive = true then m.osdFocus = "TIMELINE"
   m.uiState = "OSD"
@@ -3460,7 +3536,7 @@ sub hidePlayerOverlay()
 end sub
 
 sub showPlayerSettings()
-  if m.playerSettingsModal = invalid then return
+  if _ensurePlayerSettingsNodes() <> true then return
   if m.player = invalid or m.player.visible <> true then return
   if m.playbackIsLive = true then return
   ' Avoid the overlay hint bleeding through behind the modal.
@@ -3478,6 +3554,510 @@ sub showPlayerSettings()
   _setNodeFocus(m.playerSettingsAudioList, "settings.audioList")
   print "[ui] openSettings focusNode=" + _focusNodeLabel()
 end sub
+
+function _ensureBrowseNodes() as Boolean
+  if m.browseCard = invalid then
+    m.browseCard = m.top.findNode("browseCard")
+  end if
+  if m.browseCard <> invalid then
+    if m.browseHomeGroup = invalid then m.browseHomeGroup = m.browseCard.findNode("browseHomeGroup")
+    if m.libraryGroup = invalid then m.libraryGroup = m.browseCard.findNode("libraryGroup")
+    if m.shelvesViewport = invalid then m.shelvesViewport = m.browseCard.findNode("shelvesViewport")
+    if m.shelvesGroup = invalid then m.shelvesGroup = m.browseCard.findNode("shelvesGroup")
+    if m.viewsList = invalid then m.viewsList = m.browseCard.findNode("viewsList")
+    if m.itemsList = invalid then m.itemsList = m.browseCard.findNode("itemsList")
+    if m.continueList = invalid then m.continueList = m.browseCard.findNode("continueList")
+    if m.recentMoviesList = invalid then m.recentMoviesList = m.browseCard.findNode("recentMoviesList")
+    if m.recentSeriesList = invalid then m.recentSeriesList = m.browseCard.findNode("recentSeriesList")
+    if m.libraryTitle = invalid then m.libraryTitle = m.browseCard.findNode("libraryTitle")
+    if m.librarySearchBg = invalid then m.librarySearchBg = m.browseCard.findNode("librarySearchBg")
+    if m.librarySearchText = invalid then m.librarySearchText = m.browseCard.findNode("librarySearchText")
+    if m.libraryItemsList = invalid then m.libraryItemsList = m.browseCard.findNode("libraryItemsList")
+    if m.libraryEmptyLabel = invalid then m.libraryEmptyLabel = m.browseCard.findNode("libraryEmptyLabel")
+    if m.browseEmptyLabel = invalid then m.browseEmptyLabel = m.browseCard.findNode("browseEmptyLabel")
+    if m.viewsTitle = invalid then m.viewsTitle = m.browseCard.findNode("viewsTitle")
+    if m.itemsTitle = invalid then m.itemsTitle = m.browseCard.findNode("itemsTitle")
+    if m.continueTitle = invalid then m.continueTitle = m.browseCard.findNode("continueTitle")
+    if m.recentMoviesTitle = invalid then m.recentMoviesTitle = m.browseCard.findNode("recentMoviesTitle")
+    if m.recentSeriesTitle = invalid then m.recentSeriesTitle = m.browseCard.findNode("recentSeriesTitle")
+    if m.heroPromptBg = invalid then m.heroPromptBg = m.browseCard.findNode("heroPromptBg")
+    if m.heroPromptText = invalid then m.heroPromptText = m.browseCard.findNode("heroPromptText")
+    if m.heroPromptBtnBg = invalid then m.heroPromptBtnBg = m.browseCard.findNode("heroPromptBtnBg")
+    if m.heroPromptBtnText = invalid then m.heroPromptBtnText = m.browseCard.findNode("heroPromptBtnText")
+    if m.heroAvatarBg = invalid then m.heroAvatarBg = m.browseCard.findNode("heroAvatarBg")
+    if m.heroAvatarPhoto = invalid then m.heroAvatarPhoto = m.browseCard.findNode("heroAvatarPhoto")
+    if m.heroAvatarText = invalid then m.heroAvatarText = m.browseCard.findNode("heroAvatarText")
+  end if
+  return (m.browseCard <> invalid and m.viewsList <> invalid)
+end function
+
+function _ensureLiveNodes() as Boolean
+  if m.liveCard = invalid then m.liveCard = m.top.findNode("liveCard")
+  if m.liveCard <> invalid then
+    if m.channelsList = invalid then m.channelsList = m.liveCard.findNode("channelsList")
+    if m.liveEmptyLabel = invalid then m.liveEmptyLabel = m.liveCard.findNode("emptyLabel")
+    if m.liveTitle = invalid then m.liveTitle = m.liveCard.findNode("liveTitle")
+    if m.liveDate = invalid then m.liveDate = m.liveCard.findNode("liveDate")
+    if m.epgGroup = invalid then m.epgGroup = m.liveCard.findNode("epgGroup")
+    if m.epgBg = invalid then m.epgBg = m.liveCard.findNode("epgBg")
+    if m.epgHeader = invalid then m.epgHeader = m.liveCard.findNode("epgHeader")
+    if m.epgHeaderLine = invalid then m.epgHeaderLine = m.liveCard.findNode("epgHeaderLine")
+    if m.epgNowLine = invalid then m.epgNowLine = m.liveCard.findNode("epgNowLine")
+    if m.epgRows = invalid then m.epgRows = m.liveCard.findNode("epgRows")
+  end if
+  return (m.liveCard <> invalid and m.channelsList <> invalid)
+end function
+
+function _ensureLibraryListNodes() as Boolean
+  if m.libraryGroup <> invalid and m.libraryItemsList <> invalid then return true
+  _ensureBrowseNodes()
+  if m.libraryGroup <> invalid and m.libraryItemsList <> invalid then return true
+
+  parent = m.browseCard
+  if parent = invalid then parent = m.top
+  if parent = invalid then return false
+
+  if m.libraryGroup = invalid then
+    g = CreateObject("roSGNode", "Group")
+    if g = invalid then return false
+    g.id = "libraryGroup"
+    g.visible = false
+    parent.appendChild(g)
+    m.libraryGroup = g
+  end if
+
+  if m.libraryTitle = invalid then
+    t = CreateObject("roSGNode", "Label")
+    if t <> invalid then
+      t.id = "libraryTitle"
+      t.translation = [20, 110]
+      t.width = 860
+      t.height = 34
+      t.font = "font:MediumSystemFont"
+      t.color = "0xE6EBF3"
+      t.text = ""
+      m.libraryGroup.appendChild(t)
+      m.libraryTitle = t
+    end if
+  end if
+
+  if m.librarySearchBg = invalid then
+    p = CreateObject("roSGNode", "Poster")
+    if p <> invalid then
+      p.id = "librarySearchBg"
+      p.translation = [20, 148]
+      p.width = 1240
+      p.height = 56
+      p.uri = "pkg:/images/field_normal.png"
+      m.libraryGroup.appendChild(p)
+      m.librarySearchBg = p
+    end if
+  end if
+
+  if m.librarySearchText = invalid then
+    l = CreateObject("roSGNode", "Label")
+    if l <> invalid then
+      l.id = "librarySearchText"
+      l.translation = [42, 164]
+      l.width = 1188
+      l.height = 24
+      l.font = "font:MediumSystemFont"
+      l.color = "0xAAB4C2"
+      l.text = _t("library_search_hint")
+      m.libraryGroup.appendChild(l)
+      m.librarySearchText = l
+    end if
+  end if
+
+  if m.libraryItemsList = invalid then
+    lst = CreateObject("roSGNode", "MarkupGrid")
+    if lst <> invalid then
+      lst.id = "libraryItemsList"
+      lst.translation = [20, 220]
+      lst.itemSize = [400, 120]
+      lst.numColumns = 3
+      lst.numRows = 4
+      lst.drawFocusFeedback = false
+      lst.itemComponentName = "BrowseLibraryRowItem"
+      m.libraryGroup.appendChild(lst)
+      m.libraryItemsList = lst
+    end if
+  end if
+
+  if m.libraryEmptyLabel = invalid then
+    e = CreateObject("roSGNode", "Label")
+    if e <> invalid then
+      e.id = "libraryEmptyLabel"
+      e.translation = [20, 710]
+      e.width = 1240
+      e.height = 30
+      e.font = "font:SmallSystemFont"
+      e.horizAlign = "center"
+      e.color = "0xAAB4C2"
+      e.visible = false
+      e.text = _t("no_items")
+      m.libraryGroup.appendChild(e)
+      m.libraryEmptyLabel = e
+    end if
+  end if
+
+  if m.libraryItemsList <> invalid and (m.libraryItemsObsSetup <> true) then
+    m.libraryItemsList.observeField("itemSelected", "onLibraryItemSelected")
+    m.libraryItemsObsSetup = true
+  end if
+
+  return (m.libraryGroup <> invalid and m.libraryItemsList <> invalid)
+end function
+
+function _ensureLiveListNodes() as Boolean
+  if m.channelsList <> invalid then return true
+  _ensureLiveNodes()
+  if m.channelsList <> invalid then return true
+
+  parent = m.liveCard
+  if parent = invalid then parent = m.top
+  if parent = invalid then return false
+
+  if m.liveCard = invalid then
+    g = CreateObject("roSGNode", "Group")
+    if g = invalid then return false
+    g.id = "liveCard"
+    g.visible = false
+    parent.appendChild(g)
+    m.liveCard = g
+  end if
+
+  if m.channelsList = invalid then
+    lst = CreateObject("roSGNode", "MarkupList")
+    if lst <> invalid then
+      lst.id = "channelsList"
+      lst.translation = [40, 140]
+      lst.itemSize = [360, 80]
+      lst.numRows = 6
+      lst.itemComponentName = "LiveChannelItem"
+      m.liveCard.appendChild(lst)
+      m.channelsList = lst
+    end if
+  end if
+
+  if m.channelsBg = invalid then
+    cb = CreateObject("roSGNode", "Rectangle")
+    if cb <> invalid then
+      cb.id = "channelsBg"
+      cb.translation = [32, 120]
+      cb.width = 376
+      cb.height = 520
+      cb.color = "0x0F1623"
+      cb.visible = false
+      m.liveCard.appendChild(cb)
+      m.channelsBg = cb
+    end if
+  end if
+
+  if m.epgGroup = invalid then
+    g = CreateObject("roSGNode", "Group")
+    if g <> invalid then
+      g.id = "epgGroup"
+      g.translation = [440, 120]
+      m.liveCard.appendChild(g)
+      m.epgGroup = g
+    end if
+  end if
+
+  if m.epgGroup <> invalid and m.epgBg = invalid then
+    bg = CreateObject("roSGNode", "Rectangle")
+    if bg <> invalid then
+      bg.id = "epgBg"
+      bg.translation = [0, 0]
+      bg.width = 820
+      bg.height = 520
+      bg.color = "0x0F1623"
+      bg.visible = false
+      m.epgGroup.appendChild(bg)
+      m.epgBg = bg
+    end if
+  end if
+
+  if m.epgGroup <> invalid and m.epgHeader = invalid then
+    h = CreateObject("roSGNode", "Group")
+    if h <> invalid then
+      h.id = "epgHeader"
+      h.translation = [0, 0]
+      m.epgGroup.appendChild(h)
+      m.epgHeader = h
+    end if
+  end if
+
+  ' Tick labels are rendered dynamically based on the window size.
+
+  if m.epgGroup <> invalid and m.epgHeaderLine = invalid then
+    hl = CreateObject("roSGNode", "Rectangle")
+    if hl <> invalid then
+      hl.id = "epgHeaderLine"
+      hl.translation = [0, 28]
+      hl.width = 820
+      hl.height = 1
+      hl.color = "0x1F2A3B"
+      m.epgGroup.appendChild(hl)
+      m.epgHeaderLine = hl
+    end if
+  end if
+
+  if m.epgGroup <> invalid and m.epgNowLine = invalid then
+    nl = CreateObject("roSGNode", "Rectangle")
+    if nl <> invalid then
+      nl.id = "epgNowLine"
+      nl.translation = [0, 28]
+      nl.width = 2
+      nl.height = 360
+      nl.color = "0xD8B765"
+      m.epgGroup.appendChild(nl)
+      m.epgNowLine = nl
+    end if
+  end if
+
+  if m.epgGroup <> invalid and m.epgRows = invalid then
+    rows = CreateObject("roSGNode", "Group")
+    if rows <> invalid then
+      rows.id = "epgRows"
+      rows.translation = [0, 32]
+      m.epgGroup.appendChild(rows)
+      m.epgRows = rows
+    end if
+  end if
+
+  if m.liveEmptyLabel = invalid then
+    l = CreateObject("roSGNode", "Label")
+    if l <> invalid then
+      l.id = "emptyLabel"
+      l.translation = [40, 360]
+      l.width = 360
+      l.height = 34
+      l.font = "font:SmallSystemFont"
+      l.horizAlign = "center"
+      l.color = "0xAAB4C2"
+      l.visible = false
+      l.text = _t("no_channels")
+      m.liveCard.appendChild(l)
+      m.liveEmptyLabel = l
+    end if
+  end if
+
+  return (m.channelsList <> invalid)
+end function
+
+function _ensurePlayerOverlayNodes() as Boolean
+  if m.playerOverlay <> invalid then return true
+  bindUiNodes()
+  if m.playerOverlay <> invalid then return true
+
+  ov = CreateObject("roSGNode", "Group")
+  if ov = invalid then return false
+  ov.id = "playerOverlay"
+  ov.visible = false
+
+  seekLabel = CreateObject("roSGNode", "Label")
+  if seekLabel <> invalid then
+    seekLabel.id = "osdSeekLabel"
+    seekLabel.translation = [40, 532]
+    seekLabel.width = 1070
+    seekLabel.height = 28
+    seekLabel.font = "font:SmallSystemFont"
+    seekLabel.color = "0xD8B765"
+    seekLabel.visible = false
+    seekLabel.text = ""
+    ov.appendChild(seekLabel)
+    m.osdSeekLabel = seekLabel
+  end if
+
+  timeLabel = CreateObject("roSGNode", "Label")
+  if timeLabel <> invalid then
+    timeLabel.id = "osdTimeLabel"
+    timeLabel.translation = [40, 560]
+    timeLabel.width = 1070
+    timeLabel.height = 28
+    timeLabel.font = "font:SmallSystemFont"
+    timeLabel.color = "0xAAB4C2"
+    timeLabel.text = ""
+    ov.appendChild(timeLabel)
+    m.osdTimeLabel = timeLabel
+  end if
+
+  barBg = CreateObject("roSGNode", "Rectangle")
+  if barBg <> invalid then
+    barBg.id = "osdBarBg"
+    barBg.translation = [40, 595]
+    barBg.width = 1070
+    barBg.height = 10
+    barBg.color = "0x223040"
+    ov.appendChild(barBg)
+    m.osdBarBg = barBg
+  end if
+
+  barFill = CreateObject("roSGNode", "Rectangle")
+  if barFill <> invalid then
+    barFill.id = "osdBarFill"
+    barFill.translation = [40, 595]
+    barFill.width = 0
+    barFill.height = 10
+    barFill.color = "0xD8B765"
+    ov.appendChild(barFill)
+    m.osdBarFill = barFill
+  end if
+
+  hint = CreateObject("roSGNode", "Label")
+  if hint <> invalid then
+    hint.id = "playerOverlayHint"
+    hint.translation = [40, 650]
+    hint.width = 1200
+    hint.height = 30
+    hint.font = "font:SmallSystemFont"
+    hint.color = "0xAAB4C2"
+    hint.text = "OK: confirmar    UP/DOWN: Engrenagem/Barra (VOD)    *: Configuracoes (VOD)    BACK: Fechar"
+    ov.appendChild(hint)
+    m.playerOverlayHint = hint
+  end if
+
+  gearFocus = CreateObject("roSGNode", "Rectangle")
+  if gearFocus <> invalid then
+    gearFocus.id = "osdGearFocus"
+    gearFocus.translation = [1138, 586]
+    gearFocus.width = 108
+    gearFocus.height = 108
+    gearFocus.color = "0x33D8B765"
+    gearFocus.visible = false
+    ov.appendChild(gearFocus)
+    m.osdGearFocus = gearFocus
+  end if
+
+  gearCircle = CreateObject("roSGNode", "Poster")
+  if gearCircle <> invalid then
+    gearCircle.id = "playerOverlayCircle"
+    gearCircle.translation = [1144, 592]
+    gearCircle.width = 96
+    gearCircle.height = 96
+    gearCircle.uri = "pkg:/images/overlay_circle.png"
+    ov.appendChild(gearCircle)
+    m.playerOverlayCircle = gearCircle
+  end if
+
+  gearIcon = CreateObject("roSGNode", "Poster")
+  if gearIcon <> invalid then
+    gearIcon.id = "playerOverlayIcon"
+    gearIcon.translation = [1160, 608]
+    gearIcon.width = 64
+    gearIcon.height = 64
+    gearIcon.uri = "pkg:/images/ico_settings.png"
+    ov.appendChild(gearIcon)
+    m.playerOverlayIcon = gearIcon
+  end if
+
+  m.top.appendChild(ov)
+  m.playerOverlay = ov
+  return true
+end function
+
+function _ensurePlayerSettingsNodes() as Boolean
+  if m.playerSettingsModal <> invalid and m.playerSettingsAudioList <> invalid and m.playerSettingsSubList <> invalid then return true
+  bindUiNodes()
+  if m.playerSettingsModal <> invalid and m.playerSettingsAudioList <> invalid and m.playerSettingsSubList <> invalid then return true
+
+  modal = CreateObject("roSGNode", "Group")
+  if modal = invalid then return false
+  modal.id = "playerSettingsModal"
+  modal.visible = false
+
+  bg = CreateObject("roSGNode", "Poster")
+  if bg <> invalid then
+    bg.id = "playerSettingsBg"
+    bg.translation = [140, 80]
+    bg.width = 1000
+    bg.height = 560
+    bg.uri = "pkg:/images/card.png"
+    modal.appendChild(bg)
+  end if
+
+  title = CreateObject("roSGNode", "Label")
+  if title <> invalid then
+    title.id = "playerSettingsTitle"
+    title.translation = [180, 110]
+    title.width = 920
+    title.height = 34
+    title.font = "font:MediumSystemFont"
+    title.color = "0xD8B765"
+    title.text = "Configuracoes do Player"
+    modal.appendChild(title)
+  end if
+
+  aTitle = CreateObject("roSGNode", "Label")
+  if aTitle <> invalid then
+    aTitle.id = "playerSettingsAudioTitle"
+    aTitle.translation = [180, 160]
+    aTitle.width = 440
+    aTitle.height = 28
+    aTitle.font = "font:SmallSystemFont"
+    aTitle.color = "0xAAB4C2"
+    aTitle.text = "Audio"
+    modal.appendChild(aTitle)
+  end if
+
+  aList = CreateObject("roSGNode", "MarkupList")
+  if aList <> invalid then
+    aList.id = "playerSettingsAudioList"
+    aList.translation = [180, 195]
+    aList.itemSize = [440, 60]
+    aList.numRows = 6
+    aList.itemComponentName = "PlayerSettingItem"
+    modal.appendChild(aList)
+    m.playerSettingsAudioList = aList
+  end if
+
+  sTitle = CreateObject("roSGNode", "Label")
+  if sTitle <> invalid then
+    sTitle.id = "playerSettingsSubTitle"
+    sTitle.translation = [660, 160]
+    sTitle.width = 440
+    sTitle.height = 28
+    sTitle.font = "font:SmallSystemFont"
+    sTitle.color = "0xAAB4C2"
+    sTitle.text = "Legendas"
+    modal.appendChild(sTitle)
+  end if
+
+  sList = CreateObject("roSGNode", "MarkupList")
+  if sList <> invalid then
+    sList.id = "playerSettingsSubList"
+    sList.translation = [660, 195]
+    sList.itemSize = [440, 60]
+    sList.numRows = 6
+    sList.itemComponentName = "PlayerSettingItem"
+    modal.appendChild(sList)
+    m.playerSettingsSubList = sList
+  end if
+
+  footer = CreateObject("roSGNode", "Label")
+  if footer <> invalid then
+    footer.id = "playerSettingsFooter"
+    footer.translation = [180, 590]
+    footer.width = 920
+    footer.height = 28
+    footer.font = "font:SmallSystemFont"
+    footer.color = "0xAAB4C2"
+    footer.text = "LEFT/RIGHT: trocar coluna    OK: selecionar    BACK: fechar"
+    modal.appendChild(footer)
+  end if
+
+  m.top.appendChild(modal)
+  m.playerSettingsModal = modal
+
+  ' Rebind observers for the new lists.
+  if m.playerSettingsAudioList <> invalid and (m.settingsObsSetup <> true) then
+    m.playerSettingsAudioList.observeField("itemSelected", "onSettingsAudioSelected")
+    if m.playerSettingsSubList <> invalid then m.playerSettingsSubList.observeField("itemSelected", "onSettingsSubSelected")
+    m.settingsObsSetup = true
+  end if
+  return true
+end function
 
 sub hidePlayerSettings()
   if m.playerSettingsModal = invalid then return
@@ -4063,32 +4643,32 @@ function _isLiveRoutePath(path as String) as Boolean
 end function
 
 function _resolveLivePathFromItem(it as Object) as String
-  if it = invalid then return "/hls/master.m3u8"
+  if it = invalid then return "/hls/index.m3u8"
 
   p = ""
   if it.hasField("path") then p = it.path
   if p <> invalid then p = p.ToStr().Trim()
   if p <> "" then
-    tgt = parseTarget(p, "/hls/master.m3u8")
+    tgt = parseTarget(p, "/hls/index.m3u8")
     if _isLiveRoutePath(tgt.path) then return p
   end if
 
   id = ""
   if it.hasField("id") then id = it.id
   if id <> invalid then id = id.ToStr().Trim()
-  if id <> "" then return "/hls/channel/" + id + "/master.m3u8"
+  if id <> "" then return "/hls/index.m3u8"
 
-  return "/hls/master.m3u8"
+  return "/hls/index.m3u8"
 end function
 
 sub signAndPlay(rawPath as String, title as String)
-  target = parseTarget(rawPath, "/hls/master.m3u8")
+  target = parseTarget(rawPath, "/hls/index.m3u8")
   p = target.path
   if p = invalid then p = ""
   p = p.ToStr().Trim()
   if p = "" then
-    print "signAndPlay: empty path; fallback to /hls/master.m3u8"
-    target = { path: "/hls/master.m3u8", query: {} }
+    print "signAndPlay: empty path; fallback to /hls/index.m3u8"
+    target = { path: "/hls/index.m3u8", query: {} }
   end if
   beginSign(target.path, target.query, title, "hls", true, "live", "")
 end sub
@@ -4675,6 +5255,7 @@ sub onGatewayTaskStateChanged()
       currentViewId = currentViewId.ToStr().Trim()
 
       if m.browseLibraryOpen = true and reqViewId = currentViewId then
+        _setBrowseLibraryVisible(true)
         m.browseLibraryRawItems = parsed
         _renderBrowseLibraryItems()
       end if
@@ -4859,25 +5440,80 @@ sub onGatewayTaskStateChanged()
 
   if job = "channels" then
     if m.gatewayTask.ok = true then
+      m.pendingLiveLoad = false
+      cfg = loadConfig()
       raw = m.gatewayTask.resultJson
       items = ParseJson(raw)
       if type(items) <> "roArray" then items = []
       print "channels ok count=" + items.Count().ToStr()
 
+      hasNonHdmi = false
+      for each ch in items
+        if ch <> invalid and ch.name <> invalid then
+          n = LCase(ch.name.ToStr().Trim())
+          if n <> "" and Instr(1, n, "hdmi") = 0 then
+            hasNonHdmi = true
+            exit for
+          end if
+        else
+          hasNonHdmi = true
+          exit for
+        end if
+      end for
+
       root = CreateObject("roSGNode", "ContentNode")
       for each ch in items
         if ch <> invalid and ch.name <> invalid then
           chNameLow = LCase(ch.name.ToStr().Trim())
-          if Instr(1, chNameLow, "hdmi") > 0 then
+          if hasNonHdmi = true and Instr(1, chNameLow, "hdmi") > 0 then
             continue for
           end if
         end if
         c = CreateObject("roSGNode", "ContentNode")
+        c.addField("programTitle", "string", false)
+        c.addField("programNextTitle", "string", false)
+        c.addField("logoUrl", "string", false)
         if ch <> invalid then
           if ch.id <> invalid then c.id = ch.id
           if ch.name <> invalid then c.title = ch.name else c.title = ""
           c.addField("path", "string", false)
           if ch.path <> invalid then c.path = ch.path else c.path = ""
+
+          logo = ""
+          basePrev = cfg.apiBase
+          tokenPrev = cfg.jellyfinToken
+          baseNoSlash = basePrev
+          if baseNoSlash = invalid then baseNoSlash = ""
+          baseNoSlash = baseNoSlash.ToStr().Trim()
+          if Right(baseNoSlash, 1) = "/" then baseNoSlash = Left(baseNoSlash, Len(baseNoSlash) - 1)
+
+          if ch.logoPath <> invalid then
+            lp = ch.logoPath.ToStr().Trim()
+            if lp <> "" then
+              if Left(lp, 1) = "/" and baseNoSlash <> "" then
+                logo = baseNoSlash + lp
+              else
+                logo = lp
+              end if
+            end if
+          end if
+          if logo = "" and ch.logoFallbackPath <> invalid then
+            lpf = ch.logoFallbackPath.ToStr().Trim()
+            if lpf <> "" then
+              if Left(lpf, 1) = "/" and baseNoSlash <> "" then
+                logo = baseNoSlash + lpf
+              else
+                logo = lpf
+              end if
+            end if
+          end if
+          if logo = "" then logo = _browseChannelImageUri(c.id, basePrev, tokenPrev, "Logo")
+          if logo = "" then logo = _browseChannelPosterUri(c.id, basePrev, tokenPrev)
+          if logo <> "" and tokenPrev <> invalid and tokenPrev.ToStr().Trim() <> "" and Instr(1, logo, "X-Emby-Token=") = 0 then
+            logo = appendQuery(logo, { "X-Emby-Token": tokenPrev, "X-Jellyfin-Token": tokenPrev })
+          end if
+          if logo = "" then logo = "pkg:/images/logo.png"
+          c.logoUrl = logo
         else
           c.title = ""
           c.addField("path", "string", false)
@@ -4896,6 +5532,13 @@ sub onGatewayTaskStateChanged()
       setStatus("ready")
       if m.mode = "live" and m.channelsList <> invalid then m.channelsList.setFocus(true)
 
+      if m.mode = "live" then
+        print "programs trigger from channels mode=" + m.mode
+        loadLivePrograms()
+      else
+        print "programs skip: mode=" + m.mode
+      end if
+
       if m.devAutoplay = "live" and m.devAutoplayDone <> true then
         ' Helpful for debugging when we can't inject keypress events remotely.
         if root.getChildCount() > 0 then
@@ -4907,7 +5550,8 @@ sub onGatewayTaskStateChanged()
             if firstId <> "" then
               m.devAutoplayDone = true
               print "DEV autoplay LIVE channel id: " + firstId
-              signAndPlay("/hls/channel/" + firstId + "/master.m3u8", first.title)
+              livePath = _resolveLivePathFromItem(first)
+              signAndPlay(livePath, first.title)
             else
               p = ""
               if first.hasField("path") then p = first.path
@@ -4918,14 +5562,15 @@ sub onGatewayTaskStateChanged()
                 signAndPlay(p, first.title)
               else
                 m.devAutoplayDone = true
-                print "DEV autoplay LIVE: missing channel path; fallback to /hls/master.m3u8"
-                signAndPlay("/hls/master.m3u8", first.title)
+                print "DEV autoplay LIVE: missing channel path; fallback to /hls/index.m3u8"
+                signAndPlay("/hls/index.m3u8", first.title)
               end if
             end if
           end if
         end if
       end if
     else
+      m.pendingLiveLoad = false
       err = m.gatewayTask.error
       if err = invalid or err = "" then err = "unknown"
       print "channels failed: " + err
@@ -4944,6 +5589,26 @@ sub onGatewayTaskStateChanged()
         m.liveEmptyLabel.text = _t("channels_failed")
         m.liveEmptyLabel.visible = true
       end if
+    end if
+    return
+  end if
+
+  if job = "programs" then
+    if m.gatewayTask.ok = true then
+      raw = m.gatewayTask.resultJson
+      items = ParseJson(raw)
+      if type(items) <> "roArray" then items = []
+      print "programs ok count=" + items.Count().ToStr()
+      m.livePrograms = items
+      _applyLivePrograms(items)
+      m.liveProgramsLoaded = true
+      _renderLiveTimeline()
+    else
+      m.pendingLiveLoad = false
+      err = m.gatewayTask.error
+      if err = invalid or err = "" then err = "unknown"
+      print "programs failed: " + err
+      setStatus("programs failed: " + err)
     end if
     return
   end if
@@ -5289,6 +5954,10 @@ sub onGatewayTaskStateChanged()
 
       base = cfg.apiBase
       isLive = (m.pendingPlayIsLive = true)
+      if kind <> "" then
+        kLower = LCase(kind)
+        if Instr(1, kLower, "vod") = 1 then isLive = false
+      end if
 
       ' LIVE must always use api.champions.place (Worker live-hls). VOD R2 may
       ' bypass Worker routes via api-vm.champions.place.
@@ -5368,6 +6037,24 @@ end sub
 
 sub startVideo(url as String, title as String, streamFormat as String, isLive as Boolean, kind as String, itemId as String)
   if m.player = invalid then
+    bindUiNodes()
+  end if
+  if m.player = invalid then
+    ' Fallback: create the Video node if it failed to bind from XML.
+    p = CreateObject("roSGNode", "ChampionsVideo")
+    if p <> invalid then
+      p.translation = [0, 0]
+      p.width = 1280
+      p.height = 720
+      p.visible = false
+      m.top.appendChild(p)
+      m.player = p
+      m.playerObsSetup = false
+      bindUiNodes()
+    end if
+  end if
+  if m.player = invalid then
+    print "startVideo abort: player missing"
     setStatus("player: missing node")
     return
   end if
@@ -5632,6 +6319,8 @@ sub stopPlaybackAndReturn(reason as String)
   m.player.control = "stop"
   m.player.visible = false
   m.player.content = invalid
+  ' Ensure focus leaves the Video node after stop (avoid key capture when hidden).
+  _setNodeFocus(m.top, "scene")
 
   m.playbackStarting = false
   _setUiVisibleForPlayback(false)
@@ -6336,6 +7025,18 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     return true
   end if
 
+  if m.mode = "live" then
+    if kl = "left" or kl = "right" then
+      ' Keep navigation intuitive: RIGHT moves timeline to the right on screen.
+      delta = 1
+      if kl = "right" then delta = -1
+      if m.liveEpgOffsetTicks = invalid then m.liveEpgOffsetTicks = 0
+      m.liveEpgOffsetTicks = Int(m.liveEpgOffsetTicks) + delta
+      _renderLiveTimeline()
+      return true
+    end if
+  end if
+
   if kl = "back" then
     if m.mode = "live" then
       enterBrowse()
@@ -6617,6 +7318,11 @@ sub onPlayerStateChanged()
   st = m.player.state
   if st = invalid then return
   m.lastPlayerState = st
+  stLower = LCase(st)
+  if (stLower = "buffering" or stLower = "playing" or stLower = "paused") and m.settingsOpen <> true then
+    ' Some firmwares steal focus when playback starts; re-assert video focus for key handling.
+    _setPlaybackInputFocus()
+  end if
   curPos = m.player.position
   curDur = m.player.duration
   p = 0
@@ -6834,6 +7540,7 @@ sub enterLogin()
   m.mode = "login"
   m.focusIndex = 0
   m.pendingJob = ""
+  m.pendingLiveLoad = false
   m.pendingShelfViewId = ""
   m.queuedShelfViewId = ""
   m.pendingLibraryLoad = false
@@ -6874,6 +7581,7 @@ end sub
 sub enterHome()
   m.mode = "home"
   m.focusIndex = 0
+  m.pendingLiveLoad = false
   if m.logoPoster <> invalid then m.logoPoster.visible = true
   if m.titleLabel <> invalid then m.titleLabel.visible = true
   if m.loginCard <> invalid then m.loginCard.visible = false
@@ -6888,7 +7596,10 @@ sub enterHome()
 end sub
 
 sub enterBrowse()
+  bindUiNodes()
+  _ensureBrowseNodes()
   m.mode = "browse"
+  m.pendingLiveLoad = false
   m.browseFocus = "hero_continue"
   m.heroContinueAutoplayPending = false
   m.browseLibraryOpen = false
@@ -7505,7 +8216,15 @@ function _browseLibraryItemMatches(name as String, queryLower as String) as Bool
 end function
 
 sub _renderBrowseLibraryItems()
-  if m.libraryItemsList = invalid then return
+  if m.libraryItemsList = invalid then
+    bindUiNodes()
+    _ensureBrowseNodes()
+    _ensureLibraryListNodes()
+    if m.libraryItemsList = invalid then
+      print "library render: missing list"
+      return
+    end if
+  end if
 
   src = m.browseLibraryRawItems
   if type(src) <> "roArray" then src = []
@@ -7702,6 +8421,9 @@ sub _promptBrowseLibrarySearch()
 end sub
 
 sub _openBrowseLibrary(viewId as String, collectionType as String, title as String)
+  bindUiNodes()
+  _ensureBrowseNodes()
+  _ensureLibraryListNodes()
   id = viewId
   if id = invalid then id = ""
   id = id.ToStr().Trim()
@@ -8940,6 +9662,10 @@ sub _onBrowseListItemSelected(lst as Object, requiredFocus as String, label as S
   end if
 
   if m.mode <> "browse" then return
+  if requiredFocus = "library_items" and m.browseLibraryOpen = true and m.browseFocus = "library_search" then
+    print "[guard] ignore " + label + " while library search focused"
+    return
+  end if
   if m.browseFocus <> requiredFocus then
     if requiredFocus = "library_items" and m.browseLibraryOpen = true and lst = m.libraryItemsList then
       ' Accept delayed focus transitions while library content is loading.
@@ -8980,8 +9706,11 @@ sub onLibraryItemSelected()
 end sub
 
 sub enterLive()
+  bindUiNodes()
+  _ensureLiveNodes()
   print "enterLive()"
   m.mode = "live"
+  m.pendingLiveLoad = false
   m.seriesDetailOpen = false
   if m.seriesDetailGroup <> invalid then m.seriesDetailGroup.visible = false
   if m.logoPoster <> invalid then m.logoPoster.visible = false
@@ -8990,6 +9719,8 @@ sub enterLive()
   if m.homeCard <> invalid then m.homeCard.visible = false
   if m.browseCard <> invalid then m.browseCard.visible = false
   if m.liveCard <> invalid then m.liveCard.visible = true
+  if m.liveTitle <> invalid then m.liveTitle.text = _t("library_live")
+  if m.liveDate <> invalid then m.liveDate.text = _formatLiveDate()
   if m.hintLabel <> invalid then m.hintLabel.visible = false
   layoutCards()
   applyFocus()
@@ -8998,21 +9729,39 @@ end sub
 
 sub loadChannels()
   if m.gatewayTask = invalid then
+    m.pendingLiveLoad = false
     setStatus("gateway: missing task")
     return
   end if
   if m.channelsList = invalid then
-    setStatus("channels: missing list")
-    return
+    _ensureLiveListNodes()
+    if m.channelsList = invalid then
+      m.pendingLiveLoad = false
+      setStatus("channels: missing list")
+      return
+    end if
   end if
 
-  if m.liveEmptyLabel <> invalid then m.liveEmptyLabel.visible = false
-  m.channelsList.content = CreateObject("roSGNode", "ContentNode")
+  if m.mode <> "live" then
+    m.pendingLiveLoad = false
+    return
+  end if
 
   if m.pendingJob <> "" then
+    m.pendingLiveLoad = true
+    print "channels queued: pendingJob=" + m.pendingJob
     setStatus(_t("please_wait"))
+    _scheduleLiveLoadRetry()
     return
   end if
+
+  m.pendingLiveLoad = false
+  if m.liveEmptyLabel <> invalid then m.liveEmptyLabel.visible = false
+  m.channelsList.content = CreateObject("roSGNode", "ContentNode")
+  m.liveProgramsLoaded = false
+  m.livePrograms = []
+  m.liveEpgOffsetTicks = -2
+  _renderLiveTimeline()
 
   cfg = loadConfig()
   if cfg.apiBase = "" or cfg.appToken = "" or cfg.jellyfinToken = "" then
@@ -9029,6 +9778,453 @@ sub loadChannels()
   m.gatewayTask.appToken = cfg.appToken
   m.gatewayTask.jellyfinToken = cfg.jellyfinToken
   m.gatewayTask.control = "run"
+end sub
+
+sub loadLivePrograms()
+  if m.mode <> "live" then print "programs warn: mode=" + m.mode
+  if m.gatewayTask = invalid then
+    print "programs abort: missing gateway"
+    return
+  end if
+  if m.channelsList = invalid then
+    print "programs abort: missing list"
+    return
+  end if
+  root = m.channelsList.content
+  if root = invalid then
+    print "programs abort: missing content"
+    return
+  end if
+  if root.getChildCount() = 0 then
+    print "programs abort: empty channels"
+    return
+  end if
+  if m.pendingJob <> "" then
+    print "programs abort: pendingJob=" + m.pendingJob
+    return
+  end if
+
+  cfg = loadConfig()
+  if cfg.apiBase = "" or cfg.appToken = "" or cfg.jellyfinToken = "" or cfg.userId = "" then
+    print "programs abort: missing config"
+    return
+  end if
+
+  ids = []
+  for i = 0 to root.getChildCount() - 1
+    c = root.getChild(i)
+    if c = invalid then continue for
+    cid = ""
+    if c.hasField("id") then cid = c.id
+    if cid <> invalid then cid = cid.ToStr().Trim()
+    if cid <> "" then ids.Push(cid)
+  end for
+  if ids.Count() = 0 then return
+
+  idsStr = ""
+  for i = 0 to ids.Count() - 1
+    if i > 0 then idsStr = idsStr + ","
+    idsStr = idsStr + ids[i]
+  end for
+
+  print "programs request channels=" + ids.Count().ToStr()
+  m.pendingJob = "programs"
+  m.gatewayTask.kind = "programs"
+  m.gatewayTask.apiBase = cfg.apiBase
+  m.gatewayTask.appToken = cfg.appToken
+  m.gatewayTask.jellyfinToken = cfg.jellyfinToken
+  m.gatewayTask.userId = cfg.userId
+  m.gatewayTask.channelIds = idsStr
+  m.gatewayTask.startDate = ""
+  m.gatewayTask.endDate = ""
+  m.gatewayTask.control = "run"
+end sub
+
+sub _applyLivePrograms(items as Object)
+  if m.channelsList = invalid then return
+  root = m.channelsList.content
+  if root = invalid then return
+
+  progMap = {}
+  if type(items) = "roArray" then
+    for each it in items
+      if it = invalid then continue for
+      cid = ""
+      if it.channelId <> invalid then cid = it.channelId
+      if cid <> invalid then cid = cid.ToStr().Trim()
+      if cid = "" then continue for
+
+      entry = progMap[cid]
+      titles = []
+      if type(entry) = "roAssociativeArray" and entry.titles <> invalid and type(entry.titles) = "roArray" then
+        titles = entry.titles
+      end if
+      if titles.Count() >= 2 then
+        progMap[cid] = { titles: titles }
+        continue for
+      end if
+
+      t = ""
+      if it.name <> invalid then t = it.name
+      if t = invalid then t = ""
+      t = t.ToStr().Trim()
+      if t = "" and it.episodeTitle <> invalid then
+        t = it.episodeTitle.ToStr().Trim()
+      end if
+      if t = "" then t = "(Sem titulo)"
+
+      titles.Push(t)
+      progMap[cid] = { titles: titles }
+    end for
+  end if
+
+  for i = 0 to root.getChildCount() - 1
+    c = root.getChild(i)
+    if c = invalid then continue for
+    if c.hasField("programTitle") <> true then c.addField("programTitle", "string", false)
+    if c.hasField("programNextTitle") <> true then c.addField("programNextTitle", "string", false)
+
+    cid = ""
+    if c.hasField("id") then cid = c.id
+    if cid <> invalid then cid = cid.ToStr().Trim()
+
+    entry = progMap[cid]
+    nowTitle = ""
+    nextTitle = ""
+    if type(entry) = "roAssociativeArray" and entry.titles <> invalid and type(entry.titles) = "roArray" then
+      titles = entry.titles
+      if titles.Count() > 0 then nowTitle = titles[0]
+      if titles.Count() > 1 then nextTitle = titles[1]
+    end if
+    c.programTitle = nowTitle
+    c.programNextTitle = nextTitle
+  end for
+end sub
+
+function _pad2(v as Integer) as String
+  s = v.ToStr()
+  if Len(s) < 2 then return "0" + s
+  return s
+end function
+
+function _formatTimeLabel(epochSec as Integer) as String
+  dt = CreateObject("roDateTime")
+  if dt = invalid then return ""
+  dt.FromSeconds(epochSec)
+  h = dt.GetHours()
+  m = dt.GetMinutes()
+  return _pad2(h) + ":" + _pad2(m)
+end function
+
+function _formatLiveDate() as String
+  dt = CreateObject("roDateTime")
+  if dt = invalid then return ""
+  day = dt.GetDayOfMonth()
+  month = dt.GetMonth()
+  year = dt.GetYear()
+  dow = dt.GetWeekday()
+
+  monthsPt = ["janeiro","fevereiro","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"]
+  daysPt = ["domingo","segunda-feira","terca-feira","quarta-feira","quinta-feira","sexta-feira","sabado"]
+
+  if day < 1 then day = 1
+  if month < 1 then month = 1
+  if month > 12 then month = 12
+  if type(dow) = "roString" then
+    dowStr = LCase(dow.Trim())
+    if dowStr = "sunday" then
+      dow = 0
+    else if dowStr = "monday" then
+      dow = 1
+    else if dowStr = "tuesday" then
+      dow = 2
+    else if dowStr = "wednesday" then
+      dow = 3
+    else if dowStr = "thursday" then
+      dow = 4
+    else if dowStr = "friday" then
+      dow = 5
+    else if dowStr = "saturday" then
+      dow = 6
+    else
+      dow = 0
+    end if
+  end if
+  if _sceneIntFromAny(dow) < 0 then dow = 0
+  if _sceneIntFromAny(dow) > 6 then dow = 6
+
+  return "Hoje — " + daysPt[dow] + ", " + day.ToStr() + " de " + monthsPt[month - 1] + " de " + year.ToStr()
+end function
+
+function _daysFromCivil(y as Integer, m as Integer, d as Integer) as Integer
+  yy = y
+  mm = m
+  if mm <= 2 then yy = yy - 1
+  era = Int(yy / 400)
+  yoe = yy - (era * 400)
+  mp = mm
+  if mp > 2 then mp = mp - 3 else mp = mp + 9
+  doy = Int((153 * mp + 2) / 5) + d - 1
+  doe = yoe * 365 + Int(yoe / 4) - Int(yoe / 100) + doy
+  return (era * 146097 + doe - 719468)
+end function
+
+function _parseIso8601ToEpochSec(raw as String) as Integer
+  s = raw
+  if s = invalid then return 0
+  s = s.Trim()
+  if Len(s) < 19 then return 0
+
+  y = Int(Val(Mid(s, 1, 4)))
+  m = Int(Val(Mid(s, 6, 2)))
+  d = Int(Val(Mid(s, 9, 2)))
+  hh = Int(Val(Mid(s, 12, 2)))
+  mm = Int(Val(Mid(s, 15, 2)))
+  ss = Int(Val(Mid(s, 18, 2)))
+
+  offsetSec = 0
+  if Instr(1, s, "Z") > 0 then
+    offsetSec = 0
+  else
+    tzPos = 0
+    tzSign = ""
+    tzPlus = Instr(20, s, "+")
+    tzMinus = Instr(20, s, "-")
+    if tzPlus > 0 then
+      tzPos = tzPlus
+      tzSign = "+"
+    end if
+    if tzMinus > 0 and (tzPos = 0 or tzMinus < tzPos) then
+      tzPos = tzMinus
+      tzSign = "-"
+    end if
+    if tzPos > 0 then
+      oh = 0
+      om = 0
+      if Len(s) >= tzPos + 2 then oh = Int(Val(Mid(s, tzPos + 1, 2)))
+      if Len(s) >= tzPos + 5 then om = Int(Val(Mid(s, tzPos + 4, 2)))
+      offsetSec = oh * 3600 + om * 60
+      if tzSign = "+" then
+        offsetSec = offsetSec
+      else if tzSign = "-" then
+        offsetSec = -offsetSec
+      end if
+    end if
+  end if
+
+  days = _daysFromCivil(y, m, d)
+  return days * 86400 + hh * 3600 + mm * 60 + ss - offsetSec
+end function
+
+function _buildLiveProgramMap(items as Object) as Object
+  out = {}
+  if type(items) <> "roArray" then return out
+  for each it in items
+    if it = invalid then continue for
+    cid = ""
+    if it.channelId <> invalid then cid = it.channelId
+    if cid <> invalid then cid = cid.ToStr().Trim()
+    if cid = "" then continue for
+
+    stRaw = ""
+    enRaw = ""
+    if it.startDate <> invalid then stRaw = it.startDate
+    if it.endDate <> invalid then enRaw = it.endDate
+    st = _parseIso8601ToEpochSec(stRaw)
+    en = _parseIso8601ToEpochSec(enRaw)
+    if en <= st then continue for
+
+    title = ""
+    if it.name <> invalid then title = it.name
+    if title = invalid then title = ""
+    title = title.ToStr().Trim()
+    if title = "" and it.episodeTitle <> invalid then title = it.episodeTitle.ToStr().Trim()
+    if title = "" then title = "(Sem titulo)"
+
+    arr = out[cid]
+    if type(arr) <> "roArray" then arr = []
+    arr.Push({ start: st, finish: en, title: title })
+    out[cid] = arr
+  end for
+  return out
+end function
+
+sub _clearChildren(n as Object)
+  if n = invalid then return
+  while n.getChildCount() > 0
+    n.removeChildIndex(0)
+  end while
+end sub
+
+sub _updateEpgHeader(startSec as Integer, tickSec as Integer, windowSec as Integer, width as Integer)
+  if m.epgHeader = invalid then return
+  _clearChildren(m.epgHeader)
+  if tickSec <= 0 or windowSec <= 0 then return
+
+  steps = Int(windowSec / tickSec)
+  if steps < 1 then steps = 1
+  stepPx = width / steps
+
+  for i = 0 to steps
+    lbl = CreateObject("roSGNode", "Label")
+    if lbl = invalid then continue for
+    lbl.translation = [Int(i * stepPx), 0]
+    lbl.width = 70
+    lbl.height = 22
+    lbl.font = "font:SmallSystemFont"
+    lbl.color = "0xAAB4C2"
+    lbl.horizAlign = "center"
+    lbl.text = _formatTimeLabel(startSec + (i * tickSec))
+    m.epgHeader.appendChild(lbl)
+  end for
+end sub
+
+sub _renderLiveTimeline()
+  if m.epgRows = invalid then return
+  if m.channelsList = invalid then return
+  root = m.channelsList.content
+  if root = invalid then return
+
+  width = m.liveEpgWidth
+  if width = invalid or width <= 0 then width = 800
+  rowH = m.liveEpgRowHeight
+  if rowH = invalid or rowH <= 0 then rowH = 72
+  maxRows = m.liveEpgRowsMax
+  if maxRows = invalid or maxRows <= 0 then maxRows = 5
+
+  nowSec = _nowEpochSec()
+  tickMin = m.liveEpgTickMinutes
+  if tickMin = invalid or tickMin <= 0 then tickMin = 30
+  windowMin = m.liveEpgWindowMinutes
+  if windowMin = invalid or windowMin <= 0 then windowMin = 120
+
+  tickSec = tickMin * 60
+  windowSec = windowMin * 60
+  if tickSec <= 0 then tickSec = 1800
+  if windowSec <= 0 then windowSec = 7200
+
+  startSec = nowSec - (nowSec mod tickSec)
+  offsetTicks = m.liveEpgOffsetTicks
+  if offsetTicks = invalid then offsetTicks = 0
+  maxOffset = 8
+  minOffset = -6
+  if offsetTicks > maxOffset then offsetTicks = maxOffset
+  if offsetTicks < minOffset then offsetTicks = minOffset
+  m.liveEpgOffsetTicks = offsetTicks
+  startSec = startSec + (offsetTicks * tickSec)
+  endSec = startSec + windowSec
+  _updateEpgHeader(startSec, tickSec, windowSec, width)
+
+  total = root.getChildCount()
+  rows = total
+  if rows > maxRows then rows = maxRows
+  if rows < 0 then rows = 0
+
+  headerH = 28
+  if m.epgHeaderLine <> invalid then
+    m.epgHeaderLine.width = width
+  end if
+  if m.epgNowLine <> invalid then
+    rel = nowSec - startSec
+    if rel < 0 then rel = 0
+    if rel > windowSec then rel = windowSec
+    nx = Int((rel * width) / windowSec)
+    m.epgNowLine.translation = [nx, headerH]
+    if rows > 0 then
+      m.epgNowLine.height = rows * rowH
+    end if
+  end if
+
+  _clearChildren(m.epgRows)
+
+  progMap = _buildLiveProgramMap(m.livePrograms)
+
+  focusIdx = -1
+  if m.channelsList.itemFocused <> invalid then focusIdx = Int(m.channelsList.itemFocused)
+
+  for i = 0 to rows - 1
+    ch = root.getChild(i)
+    if ch = invalid then continue for
+    row = CreateObject("roSGNode", "Group")
+    row.translation = [0, i * rowH]
+
+    ' Focus highlight handled on channel list; keep timeline clean.
+
+    cid = ""
+    if ch.hasField("id") then cid = ch.id
+    if cid <> invalid then cid = cid.ToStr().Trim()
+
+    programs = progMap[cid]
+    if type(programs) <> "roArray" then programs = []
+
+    cur = invalid
+    nextProg = invalid
+    nextStart = 0
+    for each p in programs
+      if type(p) <> "roAssociativeArray" then continue for
+      st = p.start
+      en = p.finish
+      if nowSec >= st and nowSec < en then
+        cur = p
+        exit for
+      end if
+      if st >= nowSec and (nextProg = invalid or st < nextStart) then
+        nextProg = p
+        nextStart = st
+      end if
+    end for
+    if cur = invalid then cur = nextProg
+    if cur <> invalid then
+      st = cur.start
+      en = cur.finish
+      if en > startSec and st < endSec then
+        segStart = st
+        segEnd = en
+        if segStart < startSec then segStart = startSec
+        if segEnd > endSec then segEnd = endSec
+        segDur = segEnd - segStart
+        if segDur > 0 then
+          x = Int(((segStart - startSec) * width) / windowSec)
+          w = Int((segDur * width) / windowSec)
+          if w < 6 then w = 6
+
+          bar = CreateObject("roSGNode", "Rectangle")
+          if bar <> invalid then
+            bar.translation = [x, 6]
+            bar.width = w
+            bar.height = rowH - 12
+            bar.color = "0xD8B765"
+            row.appendChild(bar)
+          end if
+
+          if w >= 50 then
+            label = CreateObject("roSGNode", "Label")
+            if label <> invalid then
+              label.translation = [x + 6, 10]
+              label.width = w - 12
+              label.height = rowH - 20
+              label.font = "font:SmallSystemFont"
+              label.color = "0xE6EBF3"
+              if cur.title <> invalid then label.text = cur.title else label.text = ""
+              row.appendChild(label)
+            end if
+          end if
+        end if
+      end if
+    end if
+
+    ' Row divider
+    line = CreateObject("roSGNode", "Rectangle")
+    if line <> invalid then
+      line.translation = [0, rowH - 1]
+      line.width = width
+      line.height = 1
+      line.color = "0x1F2A3B"
+      row.appendChild(line)
+    end if
+
+    m.epgRows.appendChild(row)
+  end for
 end sub
 
 sub onChannelSelected()
@@ -9051,6 +10247,11 @@ sub onChannelSelected()
   if item = invalid then return
   livePath = _resolveLivePathFromItem(item)
   signAndPlay(livePath, item.title)
+end sub
+
+sub onChannelFocused()
+  if m.mode <> "live" then return
+  _renderLiveTimeline()
 end sub
 
 sub showTokens()
