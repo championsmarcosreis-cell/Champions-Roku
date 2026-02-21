@@ -11,12 +11,12 @@
 
     <Group
       id="epgHeader"
-      translation="[16, 8]"
+      translation="[6, 8]"
     />
 
     <Rectangle
       id="epgHeaderLine"
-      translation="[16, 50]"
+      translation="[6, 50]"
       width="1208"
       height="1"
       color="0x26364E"
@@ -24,7 +24,7 @@
 
     <Rectangle
       id="epgNowLine"
-      translation="[16, 4]"
+      translation="[6, 4]"
       width="2"
       height="56"
       color="0xD7B25C"

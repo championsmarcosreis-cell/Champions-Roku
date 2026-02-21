@@ -155,6 +155,7 @@
             height="320"
             color="0x0F1726"
             focusable="false"
+            visible="false"
           />
           <Rectangle
             id="channelListFocus"

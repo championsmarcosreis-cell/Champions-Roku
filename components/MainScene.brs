@@ -61,6 +61,7 @@ sub init()
   m.liveGridRows = invalid
   m.liveCursorDesiredSec = 0
   m.liveDebugPrinted = false
+  m.liveLayoutProbePrinted = false
   m.liveInputDebug = false
   m.livePerfDebug = false
   m.liveInputTrace = false
@@ -79,6 +80,7 @@ sub init()
   m.liveLastRenderChannelIndex = -1
   m.liveProgramsVersion = 0
   m.liveDateTextCached = ""
+  m.liveChannelCountHint = 0
   m.liveSelectedDateSec = 0
   m.liveSelectedDateForceToday = true
   m.liveSelectedDateKey = ""
@@ -9153,6 +9155,78 @@ function _compactDialogText(raw as Dynamic, maxChars as Integer) as String
   return Left(s, lim - 3).Trim() + "..."
 end function
 
+function _fitChannelNameText(raw as Dynamic, maxCharsPerLine as Integer, maxLines as Integer) as String
+  s = raw
+  if s = invalid then s = ""
+  s = s.ToStr().Trim()
+  if s = "" then return ""
+
+  lim = maxCharsPerLine
+  if lim < 8 then lim = 8
+
+  linesLimit = maxLines
+  if linesLimit < 1 then linesLimit = 1
+
+  wordsRaw = s.Split(" ")
+  words = []
+  for each w0 in wordsRaw
+    if w0 <> invalid then
+      w = w0.ToStr().Trim()
+      if w <> "" then words.Push(w)
+    end if
+  end for
+
+  if words.Count() = 0 then return s
+
+  lines = []
+  line = ""
+  i = 0
+  while i < words.Count()
+    w = words[i]
+    if line = "" then
+      if Len(w) <= lim then
+        line = w
+        i = i + 1
+      else
+        line = Left(w, lim)
+        remainder = Mid(w, lim + 1)
+        if remainder = "" then
+          i = i + 1
+        else
+          words[i] = remainder
+        end if
+      end if
+    else
+      cand = line + " " + w
+      if Len(cand) <= lim then
+        line = cand
+        i = i + 1
+      else
+        lines.Push(line)
+        line = ""
+        if lines.Count() >= linesLimit then exit while
+      end if
+    end if
+  end while
+
+  if lines.Count() < linesLimit and line <> "" then lines.Push(line)
+
+  hasMore = (i < words.Count())
+  if hasMore and lines.Count() > 0 then
+    lastIdx = lines.Count() - 1
+    last = lines[lastIdx].ToStr().Trim()
+    if lim > 3 and Len(last) > (lim - 3) then last = Left(last, lim - 3).Trim()
+    lines[lastIdx] = last + "..."
+  end if
+
+  out = ""
+  for j = 0 to lines.Count() - 1
+    if j > 0 then out = out + Chr(10)
+    out = out + lines[j].ToStr()
+  end for
+  return out
+end function
+
 function _buildSeriesDetailsMessage(payload as Object) as String
   data = payload
   if type(data) <> "roAssociativeArray" then data = {}
@@ -10115,6 +10189,8 @@ sub enterLive()
   m.liveFocusTarget = "time"
   m.liveHeaderFocusIndex = 0
   m.liveChannelIndex = 0
+  m.liveChannelCountHint = 0
+  m.liveLayoutProbePrinted = false
   m.liveRowStartIndex = 0
   m.liveFocusSec = 0
   m.liveEpgStartSec = 0
@@ -10793,10 +10869,12 @@ function _buildLiveLayoutMetrics() as Object
 
   scale = w / 1920.0
   if scale <= 0 then scale = 1.0
-  safeMargin = Int(60 * scale)
-  if safeMargin < 28 then safeMargin = 28
-  gutter = Int(18 * scale)
-  if gutter < 10 then gutter = 10
+  safeMargin = Int(32 * scale)
+  if safeMargin < 16 then safeMargin = 16
+  if safeMargin > 24 then safeMargin = 24
+  gutter = Int(8 * scale)
+  if gutter < 6 then gutter = 6
+  if gutter > 8 then gutter = 8
 
   headerH = Int(64 * scale)
   if headerH < 44 then headerH = 44
@@ -10804,11 +10882,21 @@ function _buildLiveLayoutMetrics() as Object
   timelineH = Int(52 * scale)
   if timelineH < 36 then timelineH = 36
 
-  rowH = Int(110 * scale)
-  if rowH < 88 then rowH = 88
+  rowH = Int(118 * scale)
+  if rowH < 100 then rowH = 100
 
-  channelW = Int(180 * scale)
-  if channelW < 140 then channelW = 140
+  countHint = m.liveChannelCountHint
+  if countHint = invalid then countHint = 0
+  countHint = Int(countHint)
+  if countHint <= 1 then
+    channelW = Int(222 * scale)
+    if channelW < 150 then channelW = 150
+    if channelW > 176 then channelW = 176
+  else
+    channelW = Int(198 * scale)
+    if channelW < 136 then channelW = 136
+    if channelW > 160 then channelW = 160
+  end if
   trackInset = 0
 
   usableW = w - (safeMargin * 2)
@@ -10841,6 +10929,83 @@ function _buildLiveLayoutMetrics() as Object
     contentH: contentH
   }
 end function
+
+function _liveNodeTx(n as Object) as Integer
+  if n = invalid then return 0
+  if n.hasField("translation") <> true then return 0
+  tr = n.translation
+  if type(tr) <> "roArray" then return 0
+  if tr.Count() < 1 then return 0
+  return Int(tr[0])
+end function
+
+function _liveNodeWidth(n as Object) as Integer
+  if n = invalid then return 0
+  if n.hasField("width") <> true then return 0
+  if n.width = invalid then return 0
+  return Int(n.width)
+end function
+
+function _liveNodeVisible(n as Object) as String
+  if n = invalid then return "invalid"
+  if n.hasField("visible") <> true then return "n/a"
+  if n.visible = true then return "true"
+  return "false"
+end function
+
+function _liveNodeOpacity(n as Object) as String
+  if n = invalid then return "invalid"
+  if n.hasField("opacity") <> true then return "n/a"
+  if n.opacity = invalid then return "n/a"
+  return n.opacity.ToStr()
+end function
+
+sub _disableLiveSpacerNodes()
+  if m.liveContentLayout = invalid then return
+  cnt = m.liveContentLayout.getChildCount()
+  for i = 0 to cnt - 1
+    n = m.liveContentLayout.getChild(i)
+    if n = invalid then continue for
+
+    id = ""
+    if n.hasField("id") and n.id <> invalid then id = n.id.ToStr().Trim()
+    idL = LCase(id)
+    if idL = "" then continue for
+
+    if Instr(1, idL, "spacer") > 0 or Instr(1, idL, "leftpad") > 0 or Instr(1, idL, "detailspanel") > 0 then
+      if n.hasField("width") then n.width = 0
+      if n.hasField("visible") then n.visible = false
+      if n.hasField("opacity") then n.opacity = 0
+      print "live layout spacer disabled id=" + id
+    end if
+  end for
+end sub
+
+sub _printLiveLayoutProbe(channelW as Integer, gutter as Integer, timeRulerX as Integer, trackW as Integer)
+  if m.liveLayoutProbePrinted = true then return
+
+  print "CHANNEL_COL_W=" + channelW.ToStr() + " GUTTER=" + gutter.ToStr()
+  print "timeRulerX=" + timeRulerX.ToStr() + " programTrackX=" + _liveNodeTx(m.programTrack).ToStr() + " trackW=" + trackW.ToStr()
+  print "channelColumn w=" + _liveNodeWidth(m.channelColumn).ToStr() + " tx=" + _liveNodeTx(m.channelColumn).ToStr()
+  print "programTrack tx=" + _liveNodeTx(m.programTrack).ToStr() + " w=" + _liveNodeWidth(m.programTrack).ToStr()
+  print "gridRow children:"
+
+  if m.liveContentLayout <> invalid then
+    cnt = m.liveContentLayout.getChildCount()
+    for i = 0 to cnt - 1
+      child = m.liveContentLayout.getChild(i)
+      if child = invalid then continue for
+
+      cid = ""
+      if child.hasField("id") and child.id <> invalid then cid = child.id.ToStr().Trim()
+      if cid = "" then cid = "child#" + i.ToStr()
+
+      print "  " + cid + " w=" + _liveNodeWidth(child).ToStr() + " tx=" + _liveNodeTx(child).ToStr() + " visible=" + _liveNodeVisible(child) + " opacity=" + _liveNodeOpacity(child)
+    end for
+  end if
+
+  m.liveLayoutProbePrinted = true
+end sub
 
 sub _configureLiveLayout()
   m.liveLayout = _buildLiveLayoutMetrics()
@@ -10971,6 +11136,8 @@ sub _configureLiveLayout()
     if colBg <> invalid then
       colBg.width = channelW
       colBg.height = contentH
+      if colBg.hasField("visible") then colBg.visible = false
+      if colBg.hasField("opacity") then colBg.opacity = 0
     end if
   end if
   if m.epgBg <> invalid then
@@ -10996,8 +11163,30 @@ sub _configureLiveLayout()
     if cbg <> invalid then
       cbg.width = channelW
       cbg.height = contentH
+      if cbg.hasField("visible") then cbg.visible = false
+      if cbg.hasField("opacity") then cbg.opacity = 0
     end if
   end if
+
+  if m.dayStripPanel <> invalid then
+    panelX = safeMargin + timelineX
+    panelY = safeMargin + contentY + rowH + gutter
+    panelH = 120
+    if m.dayStripBg <> invalid and m.dayStripBg.height <> invalid then panelH = Int(m.dayStripBg.height)
+    if panelH < 80 then panelH = 80
+    maxPanelY = m.liveLayout.height - safeMargin - panelH
+    if panelY > maxPanelY then panelY = maxPanelY
+    minPanelY = safeMargin + contentY + rowH
+    if panelY < minPanelY then panelY = minPanelY
+    m.dayStripPanel.translation = [panelX, panelY]
+  end if
+  if m.dayStripBg <> invalid then
+    m.dayStripBg.width = trackW
+  end if
+
+  _disableLiveSpacerNodes()
+  _printLiveLayoutProbe(channelW, gutter, timelineX, trackW)
+
   if m.agendaButton <> invalid then
     scale = 1.0
     if m.liveLayout.scale <> invalid then scale = m.liveLayout.scale
@@ -12202,6 +12391,17 @@ sub _renderLiveTimeline()
   root = m.channelsList.content
   if root = invalid then return
 
+  totalHint = root.getChildCount()
+  if totalHint < 0 then totalHint = 0
+  prevHint = m.liveChannelCountHint
+  if prevHint = invalid then prevHint = -1
+  prevHint = Int(prevHint)
+  if prevHint <> totalHint then
+    m.liveChannelCountHint = totalHint
+    m.liveLayoutProbePrinted = false
+    _configureLiveLayout()
+  end if
+
   nowSec = _nowEpochSec()
   dateText = _formatLiveDate()
   if m.liveDateTextCached = invalid then m.liveDateTextCached = ""
@@ -12424,13 +12624,29 @@ sub _renderLiveTimeline()
     if rowAA.chBg <> invalid then
       rowAA.chBg.width = channelW
       rowAA.chBg.height = rowH
-      rowAA.chBg.color = "0x101827"
+      rowAA.chBg.color = "0x00000000"
+      rowAA.chBg.visible = false
     end if
-    logoSize = Int(48 * uiScale)
-    if logoSize < 36 then logoSize = 36
-    logoX = Int(12 * uiScale)
-    if logoX < 8 then logoX = 8
-    logoY = Int((rowH - logoSize) / 2)
+    padLeft = Int(4 * uiScale)
+    if padLeft < 2 then padLeft = 2
+    padTop = Int(6 * uiScale)
+    if padTop < 4 then padTop = 4
+    padRight = Int(4 * uiScale)
+    if padRight < 2 then padRight = 2
+    padBottom = Int(6 * uiScale)
+    if padBottom < 4 then padBottom = 4
+    gap = Int(4 * uiScale)
+    if gap < 3 then gap = 3
+    nameMinH = Int(28 * uiScale)
+    if nameMinH < 22 then nameMinH = 22
+
+    logoSize = Int(62 * uiScale)
+    if logoSize < 44 then logoSize = 44
+    maxLogo = rowH - (padTop + gap + padBottom + nameMinH)
+    if maxLogo < 28 then maxLogo = 28
+    if logoSize > maxLogo then logoSize = maxLogo
+    logoX = padLeft
+    logoY = padTop
     if rowAA.chLogo <> invalid then
       rowAA.chLogo.translation = [logoX, logoY]
       rowAA.chLogo.width = logoSize
@@ -12447,10 +12663,23 @@ sub _renderLiveTimeline()
       end if
     end if
     if rowAA.chName <> invalid then
-      rowAA.chName.translation = [logoX + logoSize + 10, Int((rowH - 28) / 2)]
-      rowAA.chName.width = channelW - (logoX + logoSize + 18)
-      if rowAA.chName.width < 80 then rowAA.chName.width = 80
-      rowAA.chName.height = 28
+      nameX = padLeft
+      nameY = logoY + logoSize + gap
+      nameW = channelW - padLeft - padRight
+      if nameW < 60 then nameW = 60
+      nameH = rowH - nameY - padBottom
+      if nameH < nameMinH then nameH = nameMinH
+      if nameY + nameH > rowH then nameY = rowH - nameH
+      if nameY < 0 then nameY = 0
+      rowAA.chName.translation = [nameX, nameY]
+      rowAA.chName.width = nameW
+      rowAA.chName.height = nameH
+      rowAA.chName.font = "font:SmallestSystemFont"
+      if rowAA.chName.hasField("scale") then rowAA.chName.scale = [0.9, 0.9]
+      rowAA.chName.horizAlign = "left"
+      rowAA.chName.wrap = true
+      rowAA.chName.numLines = 2
+      if rowAA.chName.hasField("maxLines") then rowAA.chName.maxLines = 2
       if selectedRow then
         rowAA.chName.color = "0xF2F5FA"
       else
@@ -12459,6 +12688,9 @@ sub _renderLiveTimeline()
       nm = ""
       if ch.title <> invalid then nm = ch.title.ToStr().Trim()
       if nm = "" then nm = "Live TV"
+      charsPerLine = Int(nameW / (7.8 * uiScale))
+      if charsPerLine < 10 then charsPerLine = 10
+      nm = _fitChannelNameText(nm, charsPerLine, 2)
       rowAA.chName.text = nm
     end if
 
@@ -12663,16 +12895,17 @@ sub _ensureLiveGridNodes()
       chBg.translation = [0, 0]
       chBg.width = 140
       chBg.height = 90
-      chBg.color = "0x101827"
+      chBg.color = "0x00000000"
+      chBg.visible = false
       if chBg.hasField("focusable") then chBg.focusable = false
       if chGroup <> invalid then chGroup.appendChild(chBg)
     end if
 
     chLogo = CreateObject("roSGNode", "Poster")
     if chLogo <> invalid then
-      chLogo.translation = [8, 8]
-      chLogo.width = 40
-      chLogo.height = 40
+      chLogo.translation = [2, 4]
+      chLogo.width = 44
+      chLogo.height = 44
       chLogo.loadDisplayMode = "scaleToFit"
       if chLogo.hasField("focusable") then chLogo.focusable = false
       if chGroup <> invalid then chGroup.appendChild(chLogo)
@@ -12680,10 +12913,15 @@ sub _ensureLiveGridNodes()
 
     chName = CreateObject("roSGNode", "Label")
     if chName <> invalid then
-      chName.translation = [60, 10]
-      chName.width = 140
-      chName.height = 28
-      chName.font = "font:MediumSystemFont"
+      chName.translation = [2, 52]
+      chName.width = 124
+      chName.height = 42
+      chName.font = "font:SmallestSystemFont"
+      if chName.hasField("scale") then chName.scale = [0.9, 0.9]
+      chName.wrap = true
+      chName.numLines = 2
+      if chName.hasField("maxLines") then chName.maxLines = 2
+      chName.horizAlign = "left"
       chName.color = "0xC8D3E2"
       if chName.hasField("focusable") then chName.focusable = false
       if chGroup <> invalid then chGroup.appendChild(chName)

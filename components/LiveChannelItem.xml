@@ -20,6 +20,7 @@
       width="66"
       height="66"
       color="0x1F2A3B"
+      visible="false"
     />
 
     <Rectangle
@@ -28,6 +29,7 @@
       width="64"
       height="64"
       color="0x0F1623"
+      visible="false"
     />
 
     <Poster

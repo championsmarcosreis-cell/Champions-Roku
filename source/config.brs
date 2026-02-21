@@ -87,6 +87,40 @@ sub clearAuthSession()
   sec.Flush()
 end sub
 
+' Persist login form values locally (device registry).
+sub saveLoginCreds(username as String, password as String)
+  sec = _cfgSection()
+  u = ""
+  if username <> invalid then u = username.ToStr().Trim()
+  p = ""
+  if password <> invalid then p = password.ToStr()
+
+  if u = "" then
+    sec.Delete("login_user")
+  else
+    sec.Write("login_user", u)
+  end if
+
+  if p = "" then
+    sec.Delete("login_pass")
+  else
+    sec.Write("login_pass", p)
+  end if
+
+  sec.Flush()
+end sub
+
+function loadLoginCreds() as Object
+  sec = _cfgSection()
+  u = _readOrEmpty(sec, "login_user")
+  p = _readOrEmpty(sec, "login_pass")
+  if u = "" and p = "" then return invalid
+  return {
+    username: u
+    password: p
+  }
+end function
+
 ' VOD player preferences (audio/subtitles). Stored per-device.
 ' ExoPlayer-like behavior: prefer language and persist choices across items.
 '

@@ -33,6 +33,7 @@
       width="92"
       height="92"
       color="0x0B1220"
+      visible="false"
     />
 
     <Poster
