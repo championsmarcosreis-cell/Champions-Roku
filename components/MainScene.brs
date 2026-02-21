@@ -429,6 +429,7 @@ sub bindUiNodes()
   m.seriesDetailContent = m.top.findNode("seriesDetailContent")
   m.seriesDetailBackFocus = m.top.findNode("seriesDetailBackFocus")
   m.seriesDetailBack = m.top.findNode("seriesDetailBack")
+  m.seriesDetailBackBtn = m.top.findNode("seriesDetailBackBtn")
   m.seriesDetailHero = m.top.findNode("seriesDetailHero")
   m.seriesDetailPosterGlow = m.top.findNode("seriesDetailPosterGlow")
   m.seriesDetailPoster = m.top.findNode("seriesDetailPoster")
@@ -669,6 +670,10 @@ sub bindUiNodes()
   if m.seriesDetailCastList <> invalid and (m.seriesDetailCastObsSetup <> true) then
     m.seriesDetailCastList.observeField("itemSelected", "onSeriesCastSelected")
     m.seriesDetailCastObsSetup = true
+  end if
+  if m.seriesDetailBackBtn <> invalid and (m.seriesDetailBackObsSetup <> true) then
+    m.seriesDetailBackBtn.observeField("buttonSelected", "onSeriesDetailBackSelected")
+    m.seriesDetailBackObsSetup = true
   end if
 end sub
 
@@ -2372,11 +2377,17 @@ sub _playSeriesDetailPrimary()
 end sub
 
 sub _applySeriesDetailBackFocus()
-  if m.seriesDetailBackFocus = invalid then return
   focus = m.seriesDetailFocus
   if focus = invalid then focus = ""
   isBack = (m.seriesDetailOpen = true and LCase(focus.ToStr()) = "back")
-  m.seriesDetailBackFocus.visible = isBack
+  if m.seriesDetailBackFocus <> invalid then m.seriesDetailBackFocus.visible = false
+  if m.seriesDetailBack <> invalid then
+    if isBack then
+      m.seriesDetailBack.color = "0xD7B25C"
+    else
+      m.seriesDetailBack.color = "0xFFFFFF"
+    end if
+  end if
 end sub
 
 sub _setSeriesDetailScroll(targetY as Integer)
@@ -7065,17 +7076,25 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
       end if
     end if
     if kl = "ok" then
-      if m.seriesDetailFocus = "back" then
+      focusKey = ""
+      if m.seriesDetailFocus <> invalid then focusKey = LCase(m.seriesDetailFocus.ToStr().Trim())
+      if focusKey = "back" then
         _closeSeriesDetail()
         return true
-      else if m.seriesDetailFocus = "header" then
+      else if focusKey = "header" then
         if m.seriesDetailActionFocus = 1 and m.seriesDetailHasTrailer = true then
           _openTrailerFromSeries()
           return true
         end if
         _playSeriesDetailPrimary()
         return true
+      else if focusKey = "seasons" or focusKey = "episodes" or focusKey = "cast" then
+        return false
       end if
+      ' Fallback for mouse/click focus drift: consume and close instead of leaking
+      ' the click to background browse lists.
+      _closeSeriesDetail()
+      return true
     end if
     if kl = "options" or kl = "info" then
       return true
@@ -7590,7 +7609,11 @@ sub applyFocus()
       focusTarget = "header"
     end if
     if focusTarget = "back" then
-      if m.top <> invalid then m.top.setFocus(true)
+      if m.seriesDetailBackBtn <> invalid then
+        m.seriesDetailBackBtn.setFocus(true)
+      else if m.top <> invalid then
+        m.top.setFocus(true)
+      end if
       _setSeriesDetailScroll(0)
     else if focusTarget = "header" then
       if m.top <> invalid then m.top.setFocus(true)
@@ -10505,6 +10528,11 @@ sub _exitEpisodeDetail()
   _setSeriesDetailScroll(0)
   m.seriesDetailFocus = "header"
   applyFocus()
+end sub
+
+sub onSeriesDetailBackSelected()
+  if m.seriesDetailOpen <> true then return
+  _closeSeriesDetail()
 end sub
 
 sub onSeriesSeasonSelected()
