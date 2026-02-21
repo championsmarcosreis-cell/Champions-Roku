@@ -39,17 +39,19 @@ sub init()
   m.liveFallbackAttempted = false
   m.liveProgramsLoaded = false
   m.livePrograms = []
+  m.liveProgramMap = {}
+  m.liveChannelIndex = 0
   m.liveEpgWindowMinutes = 360
   m.liveEpgTickMinutes = 30
   m.liveEpgMinorTickMinutes = 30
-  m.liveEpgWidth = 1240
-  m.liveEpgGutter = 380
-  m.liveEpgRowHeight = 92
-  m.liveEpgRowsMax = 5
+  m.liveEpgWidth = 1208
+  m.liveEpgGutter = 0
+  m.liveEpgRowHeight = 150
+  m.liveEpgRowsMax = 1
   m.liveEpgOffsetTicks = 0
   m.liveEpgStartSec = 0
   m.liveFocusSec = 0
-  m.liveFocusTarget = "channels"
+  m.liveFocusTarget = "cta" ' cta | track
   m.lastPlayerState = ""
   m.devAutoplay = ""
   m.devAutoplayDone = false
@@ -141,6 +143,7 @@ sub init()
   m.lastHandledPlaybackKeyMs = 0
   m.lastHandledPlaybackState = ""
   m.appStartMs = _nowMs()
+  m.liveLayout = _buildLiveLayoutMetrics()
   ' Player UX state machine.
   m.uiState = "IDLE" ' IDLE | PLAYING | OSD | SETTINGS
   m.osdFocus = "TIMELINE" ' TIMELINE | GEAR
@@ -415,6 +418,12 @@ sub bindUiNodes()
     if m.shelvesViewport.hasField("clipChildren") then m.shelvesViewport.clipChildren = true
   end if
   m.liveCard = m.top.findNode("liveCard")
+  m.liveHeader = m.top.findNode("liveHeader")
+  m.liveTimeline = m.top.findNode("liveTimeline")
+  m.liveChannelCard = m.top.findNode("liveChannelCard")
+  m.liveTrackFocus = m.top.findNode("liveTrackFocus")
+  m.liveTrackTitle = m.top.findNode("liveTrackTitle")
+  m.liveCta = m.top.findNode("liveCta")
   m.channelsList = m.top.findNode("channelsList")
   m.liveEmptyLabel = m.top.findNode("emptyLabel")
   m.channelsBg = m.top.findNode("channelsBg")
@@ -1605,6 +1614,7 @@ sub applyLocalization()
   if m.continueTitle <> invalid then m.continueTitle.text = _t("resume_title")
   if m.recentMoviesTitle <> invalid then m.recentMoviesTitle.text = _t("recent_movies")
   if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.text = _t("recent_series")
+  if m.liveTrackTitle <> invalid then m.liveTrackTitle.text = "Programacao ao vivo"
   if m.seriesDetailBack <> invalid then m.seriesDetailBack.text = "< " + _t("detail_back")
   if m.seriesDetailSynopsisTitle <> invalid then m.seriesDetailSynopsisTitle.text = _t("detail_synopsis")
   if m.seriesDetailSeasonsTitle <> invalid then m.seriesDetailSeasonsTitle.text = _t("series_seasons")
@@ -3600,6 +3610,12 @@ end function
 function _ensureLiveNodes() as Boolean
   if m.liveCard = invalid then m.liveCard = m.top.findNode("liveCard")
   if m.liveCard <> invalid then
+    if m.liveHeader = invalid then m.liveHeader = m.liveCard.findNode("liveHeader")
+    if m.liveTimeline = invalid then m.liveTimeline = m.liveCard.findNode("liveTimeline")
+    if m.liveChannelCard = invalid then m.liveChannelCard = m.liveCard.findNode("liveChannelCard")
+    if m.liveTrackFocus = invalid then m.liveTrackFocus = m.liveCard.findNode("liveTrackFocus")
+    if m.liveTrackTitle = invalid then m.liveTrackTitle = m.liveCard.findNode("liveTrackTitle")
+    if m.liveCta = invalid then m.liveCta = m.liveCard.findNode("liveCta")
     if m.channelsList = invalid then m.channelsList = m.liveCard.findNode("channelsList")
     if m.liveEmptyLabel = invalid then m.liveEmptyLabel = m.liveCard.findNode("emptyLabel")
     if m.liveTitle = invalid then m.liveTitle = m.liveCard.findNode("liveTitle")
@@ -5563,8 +5579,11 @@ sub onGatewayTaskStateChanged()
         m.liveEmptyLabel.visible = (root.getChildCount() = 0)
       end if
 
+      m.liveChannelIndex = 0
+      _refreshLiveHero(_liveSelectedChannel())
+      _renderLiveTimeline()
       setStatus("ready")
-      if m.mode = "live" and m.channelsList <> invalid then m.channelsList.setFocus(true)
+      if m.mode = "live" then applyFocus()
 
       if m.mode = "live" then
         print "programs trigger from channels mode=" + m.mode
@@ -6394,11 +6413,7 @@ sub stopPlaybackAndReturn(reason as String)
   if m.osdGearFocus <> invalid then m.osdGearFocus.visible = false
 
   _setBrowseLiveInputEnabled(true, "playback_stop")
-  if m.mode = "live" and m.channelsList <> invalid then
-    m.channelsList.setFocus(true)
-  else
-    applyFocus()
-  end if
+  applyFocus()
 end sub
 
 sub onSigCheckTimerFire()
@@ -7011,29 +7026,32 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
   end if
 
   if m.mode = "live" then
-    if kl = "up" then
-      if m.liveFocusTarget <> "timeline" then _setLiveFocus("timeline")
+    if kl = "left" then
+      _setLiveFocus("track")
       return true
     end if
+
+    if kl = "right" then
+      _setLiveFocus("cta")
+      return true
+    end if
+
+    if kl = "up" then
+      _moveLiveChannel(-1)
+      return true
+    end if
+
     if kl = "down" then
-      if m.liveFocusTarget = "timeline" then
-        _setLiveFocus("channels")
-        return true
-      end if
-      ' Allow list to handle DOWN while focused on channels.
+      _moveLiveChannel(1)
+      return true
     end if
-    if kl = "left" or kl = "right" then
-      if m.liveFocusTarget = "timeline" then
-        if kl = "left" then
-          _shiftLiveFocusTicks(-1)
-        else
-          _shiftLiveFocusTicks(1)
-        end if
-        return true
+
+    if kl = "ok" then
+      if m.liveFocusTarget = "track" then
+        showLiveProgramDetails()
+      else
+        playSelectedLiveChannel()
       end if
-    end if
-    if kl = "ok" and m.liveFocusTarget = "timeline" then
-      _setLiveFocus("channels")
       return true
     end if
   end if
@@ -7085,14 +7103,6 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
       end if
     end if
     return true
-  end if
-
-  if m.mode = "live" then
-    if kl = "left" or kl = "right" then
-      ' Keep focus on the channel list (avoid losing highlight).
-      if m.channelsList <> invalid then m.channelsList.setFocus(true)
-      return true
-    end if
   end if
 
   if kl = "back" then
@@ -7187,17 +7197,13 @@ sub applyFocus()
   end if
 
   if m.mode = "live" then
-    if m.liveFocusTarget = "timeline" then
-      if m.channelsList <> invalid and m.channelsList.hasField("focusable") then
-        m.channelsList.focusable = false
-      end if
-      if m.top <> invalid then m.top.setFocus(true)
-    else
-      if m.channelsList <> invalid then
-        if m.channelsList.hasField("focusable") then m.channelsList.focusable = true
-        m.channelsList.setFocus(true)
-      end if
+    if m.top <> invalid then m.top.setFocus(true)
+    trackFocused = (m.liveFocusTarget = "track")
+    if m.liveTrackFocus <> invalid then m.liveTrackFocus.visible = trackFocused
+    if m.liveCta <> invalid and m.liveCta.hasField("ctaFocused") then
+      m.liveCta.ctaFocused = (trackFocused <> true)
     end if
+    _renderLiveTimeline()
     return
   end if
 
@@ -9778,7 +9784,8 @@ sub enterLive()
   _ensureLiveNodes()
   print "enterLive()"
   m.mode = "live"
-  m.liveFocusTarget = "channels"
+  m.liveFocusTarget = "cta"
+  m.liveChannelIndex = 0
   m.liveFocusSec = 0
   m.liveEpgStartSec = 0
   m.pendingLiveLoad = false
@@ -9790,8 +9797,18 @@ sub enterLive()
   if m.homeCard <> invalid then m.homeCard.visible = false
   if m.browseCard <> invalid then m.browseCard.visible = false
   if m.liveCard <> invalid then m.liveCard.visible = true
+  _configureLiveLayout()
+  if m.liveHeader <> invalid then
+    if m.liveHeader.hasField("titleText") then m.liveHeader.titleText = _t("library_live")
+    if m.liveHeader.hasField("dateText") then m.liveHeader.dateText = _formatLiveDate()
+  end if
   if m.liveTitle <> invalid then m.liveTitle.text = _t("library_live")
   if m.liveDate <> invalid then m.liveDate.text = _formatLiveDate()
+  if m.liveTrackTitle <> invalid then m.liveTrackTitle.text = "Programacao ao vivo"
+  if m.liveCta <> invalid then
+    if m.liveCta.hasField("badgeText") then m.liveCta.badgeText = "AO VIVO"
+    if m.liveCta.hasField("ctaFocused") then m.liveCta.ctaFocused = true
+  end if
   if m.hintLabel <> invalid then m.hintLabel.visible = false
   layoutCards()
   applyFocus()
@@ -9802,19 +9819,250 @@ sub _setLiveFocus(target as String)
   t = target
   if t = invalid then t = ""
   t = LCase(t.ToStr().Trim())
-  if t <> "timeline" then t = "channels"
+  if t <> "track" then t = "cta"
   m.liveFocusTarget = t
+  if m.top <> invalid then m.top.setFocus(true)
+  applyFocus()
+end sub
 
-  if m.channelsList <> invalid and m.channelsList.hasField("focusable") then
-    m.channelsList.focusable = (t = "channels")
-  end if
+sub _moveLiveChannel(delta as Integer)
+  if m.mode <> "live" then return
+  if m.channelsList = invalid then return
+  root = m.channelsList.content
+  if root = invalid then return
+  total = root.getChildCount()
+  if total <= 0 then return
 
-  if t = "channels" then
-    if m.channelsList <> invalid then m.channelsList.setFocus(true)
-  else
-    if m.top <> invalid then m.top.setFocus(true)
-  end if
+  idx = m.liveChannelIndex
+  if idx = invalid then idx = 0
+  idx = Int(idx) + Int(delta)
+  if idx < 0 then idx = 0
+  if idx > (total - 1) then idx = total - 1
+  m.liveChannelIndex = idx
   _renderLiveTimeline()
+end sub
+
+sub playSelectedLiveChannel()
+  if m.mode <> "live" then return
+  if m.channelsList = invalid then return
+  root = m.channelsList.content
+  if root = invalid then return
+  total = root.getChildCount()
+  if total <= 0 then return
+
+  idx = m.liveChannelIndex
+  if idx = invalid then idx = 0
+  idx = Int(idx)
+  if idx < 0 then idx = 0
+  if idx > (total - 1) then idx = total - 1
+
+  item = root.getChild(idx)
+  if item = invalid then return
+  m.liveFallbackAttempted = false
+  livePath = _resolveLivePathFromItem(item)
+  signAndPlay(livePath, item.title)
+end sub
+
+sub showLiveProgramDetails()
+  if m.mode <> "live" then return
+  if m.pendingDialog <> invalid then return
+  if m.channelsList = invalid then return
+  root = m.channelsList.content
+  if root = invalid then return
+  total = root.getChildCount()
+  if total <= 0 then return
+
+  idx = m.liveChannelIndex
+  if idx = invalid then idx = 0
+  idx = Int(idx)
+  if idx < 0 then idx = 0
+  if idx > (total - 1) then idx = total - 1
+  item = root.getChild(idx)
+  if item = invalid then return
+
+  title = ""
+  if item.programTitle <> invalid then title = item.programTitle.ToStr().Trim()
+  if title = "" then title = "Sem programacao"
+
+  tm = ""
+  if item.programTimeLabel <> invalid then tm = item.programTimeLabel.ToStr().Trim()
+  if tm = "" then tm = "--:-- - --:--"
+
+  nextTxt = ""
+  if item.programNextTitle <> invalid then nextTxt = item.programNextTitle.ToStr().Trim()
+  if nextTxt = "" then nextTxt = "-"
+
+  chName = ""
+  if item.title <> invalid then chName = item.title.ToStr().Trim()
+  if chName = "" then chName = "Live TV"
+
+  msg = chName + Chr(10) + title + Chr(10) + tm + Chr(10) + "Proximo: " + nextTxt
+  dlg = CreateObject("roSGNode", "Dialog")
+  dlg.title = "Detalhes"
+  dlg.message = msg
+  dlg.buttons = ["Assistir", "Voltar"]
+  dlg.observeField("buttonSelected", "onLiveProgramDetailsDone")
+  dlg.addField("liveIndex", "integer", false)
+  dlg.liveIndex = idx
+  m.pendingDialog = dlg
+  m.top.dialog = dlg
+  dlg.setFocus(true)
+end sub
+
+sub onLiveProgramDetailsDone()
+  dlg = m.pendingDialog
+  if dlg = invalid then return
+  idx = dlg.buttonSelected
+  playIdx = -1
+  if dlg.hasField("liveIndex") then playIdx = dlg.liveIndex
+  m.top.dialog = invalid
+  m.pendingDialog = invalid
+
+  if idx = 0 then
+    if playIdx >= 0 then m.liveChannelIndex = playIdx
+    playSelectedLiveChannel()
+  else
+    applyFocus()
+  end if
+end sub
+
+function _liveSelectedChannel() as Object
+  if m.channelsList = invalid then return invalid
+  root = m.channelsList.content
+  if root = invalid then return invalid
+  total = root.getChildCount()
+  if total <= 0 then return invalid
+
+  idx = m.liveChannelIndex
+  if idx = invalid then idx = 0
+  idx = Int(idx)
+  if idx < 0 then idx = 0
+  if idx > (total - 1) then idx = total - 1
+  m.liveChannelIndex = idx
+  return root.getChild(idx)
+end function
+
+sub _refreshLiveHero(ch as Object)
+  if ch = invalid then
+    if m.liveChannelCard <> invalid then
+      if m.liveChannelCard.hasField("channelName") then m.liveChannelCard.channelName = "Live TV"
+      if m.liveChannelCard.hasField("programTitle") then m.liveChannelCard.programTitle = "Sem programacao"
+      if m.liveChannelCard.hasField("programTime") then m.liveChannelCard.programTime = "--:-- - --:--"
+      if m.liveChannelCard.hasField("nextTitle") then m.liveChannelCard.nextTitle = "Proximo: -"
+      if m.liveChannelCard.hasField("logoUri") then m.liveChannelCard.logoUri = "pkg:/images/logo.png"
+    end if
+    if m.liveCta <> invalid then
+      if m.liveCta.hasField("channelName") then m.liveCta.channelName = "Live TV"
+      if m.liveCta.hasField("logoUri") then m.liveCta.logoUri = "pkg:/images/logo.png"
+      if m.liveCta.hasField("badgeText") then m.liveCta.badgeText = "AO VIVO"
+    end if
+    return
+  end if
+
+  logo = ""
+  if ch.logoUrl <> invalid then logo = ch.logoUrl.ToStr().Trim()
+  if logo = "" and ch.hdPosterUrl <> invalid then logo = ch.hdPosterUrl.ToStr().Trim()
+  if logo = "" and ch.posterUrl <> invalid then logo = ch.posterUrl.ToStr().Trim()
+  if logo = "" then logo = "pkg:/images/logo.png"
+
+  chName = ""
+  if ch.title <> invalid then chName = ch.title.ToStr().Trim()
+  if chName = "" then chName = "Live TV"
+
+  nowTitle = ""
+  if ch.programTitle <> invalid then nowTitle = ch.programTitle.ToStr().Trim()
+  if nowTitle = "" then nowTitle = "Sem programacao"
+
+  timeLabel = ""
+  if ch.programTimeLabel <> invalid then timeLabel = ch.programTimeLabel.ToStr().Trim()
+  if timeLabel = "" then timeLabel = "--:-- - --:--"
+
+  nextTitle = ""
+  if ch.programNextTitle <> invalid then nextTitle = ch.programNextTitle.ToStr().Trim()
+  if nextTitle = "" then nextTitle = "-"
+
+  if m.liveChannelCard <> invalid then
+    if m.liveChannelCard.hasField("channelName") then m.liveChannelCard.channelName = chName
+    if m.liveChannelCard.hasField("programTitle") then m.liveChannelCard.programTitle = nowTitle
+    if m.liveChannelCard.hasField("programTime") then m.liveChannelCard.programTime = timeLabel
+    if m.liveChannelCard.hasField("nextTitle") then m.liveChannelCard.nextTitle = "Proximo: " + nextTitle
+    if m.liveChannelCard.hasField("logoUri") then m.liveChannelCard.logoUri = logo
+  end if
+
+  if m.liveCta <> invalid then
+    if m.liveCta.hasField("channelName") then m.liveCta.channelName = chName
+    if m.liveCta.hasField("logoUri") then m.liveCta.logoUri = logo
+    if m.liveCta.hasField("badgeText") then m.liveCta.badgeText = "AO VIVO"
+  end if
+end sub
+
+function _buildLiveLayoutMetrics() as Object
+  w = 1280
+  h = 720
+  di = CreateObject("roDeviceInfo")
+  if di <> invalid then
+    ds = di.GetDisplaySize()
+    if type(ds) = "roAssociativeArray" then
+      if ds.w <> invalid then w = Int(ds.w)
+      if ds.width <> invalid then w = Int(ds.width)
+      if ds.h <> invalid then h = Int(ds.h)
+      if ds.height <> invalid then h = Int(ds.height)
+    end if
+  end if
+
+  scale = w / 1280.0
+  if scale <= 0 then scale = 1.0
+  return {
+    width: w
+    height: h
+    scale: scale
+    safeMargin: Int(20 * scale)
+    headerH: Int(100 * scale)
+    timelineH: Int(66 * scale)
+  }
+end function
+
+sub _configureLiveLayout()
+  m.liveLayout = _buildLiveLayoutMetrics()
+  if m.liveLayout = invalid then return
+  if type(m.liveLayout) <> "roAssociativeArray" then return
+
+  safeMargin = Int(m.liveLayout.safeMargin)
+  if safeMargin < 16 then safeMargin = 16
+  headerH = Int(m.liveLayout.headerH)
+  if headerH < 88 then headerH = 88
+  timelineH = Int(m.liveLayout.timelineH)
+  if timelineH < 56 then timelineH = 56
+
+  contentW = 1280 - (safeMargin * 2)
+  if contentW < 1120 then contentW = 1120
+  m.liveEpgWidth = contentW - 32
+  trackW = contentW - 320 - 244 - 40
+  if trackW < 520 then trackW = 520
+
+  liveLayout = m.top.findNode("liveLayout")
+  if liveLayout <> invalid then liveLayout.translation = [safeMargin, safeMargin]
+
+  if m.liveHeader <> invalid then
+    hdrBg = m.liveHeader.findNode("bg")
+    if hdrBg <> invalid then hdrBg.width = contentW
+    if hdrBg <> invalid then hdrBg.height = headerH
+  end if
+  if m.liveTimeline <> invalid then
+    tlBg = m.liveTimeline.findNode("timelineBg")
+    if tlBg <> invalid then tlBg.width = contentW
+    if tlBg <> invalid then tlBg.height = timelineH
+    tlLine = m.liveTimeline.findNode("epgHeaderLine")
+    if tlLine <> invalid then
+      tlLine.translation = [16, timelineH - 16]
+      tlLine.width = contentW - 32
+    end if
+    nowLine = m.liveTimeline.findNode("epgNowLine")
+    if nowLine <> invalid then nowLine.height = timelineH - 10
+  end if
+  if m.epgBg <> invalid then m.epgBg.width = trackW
+  if m.liveTrackFocus <> invalid then m.liveTrackFocus.width = trackW + 8
+  if m.liveTrackTitle <> invalid then m.liveTrackTitle.width = trackW - 40
 end sub
 
 sub _shiftLiveFocusTicks(delta as Integer)
@@ -9862,6 +10110,8 @@ sub loadChannels()
   m.channelsList.content = CreateObject("roSGNode", "ContentNode")
   m.liveProgramsLoaded = false
   m.livePrograms = []
+  m.liveProgramMap = {}
+  m.liveChannelIndex = 0
   m.liveEpgOffsetTicks = 0
   m.liveFocusSec = 0
   m.liveEpgStartSec = 0
@@ -9950,6 +10200,7 @@ sub _applyLivePrograms(items as Object)
   if root = invalid then return
 
   progMap = _buildLiveProgramMap(items)
+  m.liveProgramMap = progMap
   focusSec = m.liveFocusSec
   if focusSec = invalid or focusSec <= 0 then focusSec = _nowEpochSec()
 
@@ -10002,6 +10253,8 @@ sub _applyLivePrograms(items as Object)
     if c.hasField("programTimeLabel") then c.programTimeLabel = timeLabel
     if c.hasField("programProgress") then c.programProgress = prog
   end for
+
+  _refreshLiveHero(_liveSelectedChannel())
 end sub
 
 function _pad2(v as Integer) as String
@@ -10188,9 +10441,9 @@ sub _updateEpgHeader(startSec as Integer, tickSec as Integer, windowSec as Integ
     if lbl <> invalid then
       lbl.translation = [x, 0]
       lbl.width = w
-      lbl.height = 22
-      lbl.font = "font:SmallSystemFont"
-      lbl.color = "0xAAB4C2"
+      lbl.height = 30
+      lbl.font = "font:MediumSystemFont"
+      lbl.color = "0xC6D2E4"
       lbl.horizAlign = "left"
       lbl.text = _formatTimeLabel(t)
       m.epgHeader.appendChild(lbl)
@@ -10205,109 +10458,184 @@ sub _renderLiveTimeline()
   if root = invalid then return
 
   width = m.liveEpgWidth
-  if m.epgBg <> invalid and m.epgBg.width <> invalid and m.epgBg.width > 0 then width = m.epgBg.width
-  if width = invalid or width <= 0 then width = 800
-  gutter = m.liveEpgGutter
-  if gutter = invalid then gutter = 0
-  gutter = Int(gutter)
-  if gutter < 0 then gutter = 0
-  if gutter > width - 60 then gutter = width - 60
-  timelineW = width - gutter
-  rowH = m.liveEpgRowHeight
-  if rowH = invalid or rowH <= 0 then rowH = 72
-  maxRows = m.liveEpgRowsMax
-  if maxRows = invalid or maxRows <= 0 then maxRows = 5
+  if m.epgHeaderLine <> invalid and m.epgHeaderLine.width <> invalid and m.epgHeaderLine.width > 0 then width = Int(m.epgHeaderLine.width)
+  if width = invalid or width <= 0 then width = 1208
+  if m.epgHeaderLine <> invalid then m.epgHeaderLine.width = width
 
   nowSec = _nowEpochSec()
+  if m.liveHeader <> invalid and m.liveHeader.hasField("dateText") then
+    m.liveHeader.dateText = _formatLiveDate()
+  end if
+  if m.liveDate <> invalid then m.liveDate.text = _formatLiveDate()
   tickMin = m.liveEpgTickMinutes
   if tickMin = invalid or tickMin <= 0 then tickMin = 30
   windowMin = m.liveEpgWindowMinutes
-  if windowMin = invalid or windowMin <= 0 then windowMin = 120
+  if windowMin = invalid or windowMin <= 0 then windowMin = 360
 
   tickSec = tickMin * 60
   windowSec = windowMin * 60
   if tickSec <= 0 then tickSec = 1800
-  if windowSec <= 0 then windowSec = 7200
+  if windowSec <= 0 then windowSec = 21600
 
-  startSec = m.liveEpgStartSec
-  if startSec = invalid or startSec <= 0 then
-    startSec = nowSec - (nowSec mod tickSec)
-  end if
-  startSec = startSec - (startSec mod tickSec)
-
-  focusSec = m.liveFocusSec
-  if focusSec = invalid or focusSec <= 0 then focusSec = nowSec
-
-  endSec = startSec + windowSec
-  if focusSec < startSec then
-    startSec = focusSec - (focusSec mod tickSec)
-    endSec = startSec + windowSec
-  else if focusSec > endSec then
-    startSec = focusSec - windowSec
-    startSec = startSec - (startSec mod tickSec)
-    endSec = startSec + windowSec
-  end if
+  startSec = nowSec - (nowSec mod tickSec)
   m.liveEpgStartSec = startSec
-  m.liveFocusSec = focusSec
+  m.liveFocusSec = nowSec
 
-  _updateEpgHeader(startSec, tickSec, windowSec, timelineW, gutter)
+  _updateEpgHeader(startSec, tickSec, windowSec, width, 0)
 
-  total = root.getChildCount()
-  rows = total
-  if rows > maxRows then rows = maxRows
-  if rows < 0 then rows = 0
-
-  headerH = 28
-  if m.epgHeaderLine <> invalid then
-    m.epgHeaderLine.translation = [gutter, headerH]
-    m.epgHeaderLine.width = timelineW
-  end if
   if m.epgNowLine <> invalid then
-    rel = focusSec - startSec
-    if rel < 0 then rel = 0
-    if rel > windowSec then rel = windowSec
-    nx = Int((rel * timelineW) / windowSec)
-    m.epgNowLine.translation = [gutter + nx, headerH]
-    if rows > 0 then
-      m.epgNowLine.height = rows * rowH
+    relNow = nowSec - startSec
+    if relNow < 0 then relNow = 0
+    if relNow > windowSec then relNow = windowSec
+    nx = Int((relNow * width) / windowSec)
+    xNow = 16
+    if m.epgHeaderLine <> invalid then
+      trHdr = m.epgHeaderLine.translation
+      if type(trHdr) = "roArray" and trHdr.Count() >= 2 then xNow = Int(trHdr[0])
     end if
-    if m.liveFocusTarget = "timeline" then
-      m.epgNowLine.color = "0xD7B25C"
-    else
-      m.epgNowLine.color = "0x6F7A8A"
-    end if
+    trNow = m.epgNowLine.translation
+    yNow = 4
+    if type(trNow) = "roArray" and trNow.Count() >= 2 then yNow = Int(trNow[1])
+    m.epgNowLine.translation = [xNow + nx, yNow]
+    m.epgNowLine.color = "0xD7B25C"
   end if
 
   _clearChildren(m.epgRows)
   _applyLivePrograms(m.livePrograms)
+  selected = _liveSelectedChannel()
+  _refreshLiveHero(selected)
 
-  focusIdx = -1
-  if m.channelsList.itemFocused <> invalid then focusIdx = Int(m.channelsList.itemFocused)
+  if selected = invalid then return
 
-  for i = 0 to rows - 1
-    ch = root.getChild(i)
-    if ch = invalid then continue for
-    row = CreateObject("roSGNode", "Group")
-    row.translation = [0, i * rowH]
+  programs = []
+  cid = ""
+  if selected.hasField("id") then cid = selected.id
+  if cid <> invalid then cid = cid.ToStr().Trim()
+  if cid <> "" and type(m.liveProgramMap) = "roAssociativeArray" then
+    p = m.liveProgramMap[cid]
+    if type(p) = "roArray" then programs = p
+  end if
 
-    ' Focus highlight handled on channel list; keep timeline clean.
+  trackW = width
+  if m.epgBg <> invalid and m.epgBg.width <> invalid then
+    trackW = Int(m.epgBg.width) - 40
+    if trackW < 320 then trackW = width
+  end if
+  trackH = 190
 
-    cid = ""
-    if ch.hasField("id") then cid = ch.id
-    if cid <> invalid then cid = cid.ToStr().Trim()
+  row = CreateObject("roSGNode", "Group")
+  row.translation = [0, 0]
 
-    ' Row divider
-    line = CreateObject("roSGNode", "Rectangle")
-    if line <> invalid then
-      line.translation = [gutter, rowH - 1]
-      line.width = timelineW
-      line.height = 1
-      line.color = "0x1F2A3B"
-      row.appendChild(line)
+  bg = CreateObject("roSGNode", "Rectangle")
+  if bg <> invalid then
+    bg.translation = [0, 0]
+    bg.width = trackW
+    bg.height = trackH
+    bg.color = "0x0D1524"
+    row.appendChild(bg)
+  end if
+
+  label = CreateObject("roSGNode", "Label")
+  if label <> invalid then
+    label.translation = [16, 12]
+    label.width = trackW - 32
+    label.height = 26
+    label.font = "font:SmallSystemFont"
+    label.color = "0xC5D1E2"
+    curTxt = ""
+    if selected.programTitle <> invalid then curTxt = selected.programTitle.ToStr().Trim()
+    if curTxt = "" then curTxt = "Sem programacao"
+    label.text = curTxt
+    row.appendChild(label)
+  end if
+
+  barY = 50
+  barH = 102
+  barBg = CreateObject("roSGNode", "Rectangle")
+  if barBg <> invalid then
+    barBg.translation = [12, barY]
+    barBg.width = trackW - 24
+    barBg.height = barH
+    barBg.color = "0x121E30"
+    row.appendChild(barBg)
+  end if
+
+  for each prog in programs
+    if type(prog) <> "roAssociativeArray" then continue for
+    st = Int(prog.start)
+    en = Int(prog.finish)
+    if en <= st then continue for
+    if en <= startSec then continue for
+    if st >= (startSec + windowSec) then continue for
+
+    drawStart = st
+    if drawStart < startSec then drawStart = startSec
+    drawEnd = en
+    if drawEnd > (startSec + windowSec) then drawEnd = startSec + windowSec
+    if drawEnd <= drawStart then continue for
+
+    pxStart = Int(((drawStart - startSec) * (trackW - 24)) / windowSec)
+    pxW = Int(((drawEnd - drawStart) * (trackW - 24)) / windowSec)
+    if pxW < 8 then pxW = 8
+
+    block = CreateObject("roSGNode", "Rectangle")
+    if block <> invalid then
+      block.translation = [12 + pxStart, barY + 8]
+      block.width = pxW
+      block.height = barH - 16
+      isCurrent = (nowSec >= st and nowSec < en)
+      if isCurrent then
+        block.color = "0x2A3B56"
+      else
+        block.color = "0x1C2B42"
+      end if
+      row.appendChild(block)
     end if
 
-    m.epgRows.appendChild(row)
+    txt = ""
+    if prog.title <> invalid then txt = prog.title.ToStr().Trim()
+    if txt = "" then txt = "(Sem titulo)"
+    lbl = CreateObject("roSGNode", "Label")
+    if lbl <> invalid then
+      lbl.translation = [16 + pxStart, barY + 16]
+      lbl.width = pxW - 8
+      if lbl.width < 20 then lbl.width = 20
+      lbl.height = 58
+      lbl.font = "font:SmallSystemFont"
+      lbl.wrap = true
+      lbl.numLines = 2
+      lbl.color = "0xE3EBF7"
+      lbl.text = txt
+      row.appendChild(lbl)
+    end if
+
+    if nowSec >= st and nowSec < en then
+      pct = 0.0
+      if en > st then pct = (nowSec - st) / (en - st)
+      if pct < 0 then pct = 0
+      if pct > 1 then pct = 1
+
+      progFill = CreateObject("roSGNode", "Rectangle")
+      if progFill <> invalid then
+        progFill.translation = [12 + pxStart, barY + barH - 8]
+        progFill.width = Int(pxW * pct)
+        if progFill.width < 4 then progFill.width = 4
+        if progFill.width > pxW then progFill.width = pxW
+        progFill.height = 4
+        progFill.color = "0xD7B25C"
+        row.appendChild(progFill)
+      end if
+    end if
   end for
+
+  if m.liveTrackFocus <> invalid then
+    m.liveTrackFocus.visible = (m.liveFocusTarget = "track")
+  end if
+  if m.liveCta <> invalid and m.liveCta.hasField("ctaFocused") then
+    m.liveCta.ctaFocused = (m.liveFocusTarget <> "track")
+  end if
+
+  m.epgRows.appendChild(row)
 end sub
 
 sub onChannelSelected()
@@ -10317,23 +10645,15 @@ sub onChannelSelected()
   end if
 
   if m.mode <> "live" then return
-  if m.channelsList = invalid then return
-  m.liveFallbackAttempted = false
-
-  idx = m.channelsList.itemSelected
-  if idx = invalid or idx < 0 then return
-
-  root = m.channelsList.content
-  if root = invalid then return
-
-  item = root.getChild(idx)
-  if item = invalid then return
-  livePath = _resolveLivePathFromItem(item)
-  signAndPlay(livePath, item.title)
+  playSelectedLiveChannel()
 end sub
 
 sub onChannelFocused()
   if m.mode <> "live" then return
+  if m.channelsList <> invalid and m.channelsList.itemFocused <> invalid then
+    idx = Int(m.channelsList.itemFocused)
+    if idx >= 0 then m.liveChannelIndex = idx
+  end if
   _renderLiveTimeline()
 end sub
 

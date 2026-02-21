@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="LiveTvChannelCard" extends="Group">
+  <interface>
+    <field id="channelName" type="string" onChange="onFieldsChanged" />
+    <field id="programTitle" type="string" onChange="onFieldsChanged" />
+    <field id="programTime" type="string" onChange="onFieldsChanged" />
+    <field id="nextTitle" type="string" onChange="onFieldsChanged" />
+    <field id="logoUri" type="string" onChange="onFieldsChanged" />
+  </interface>
+
+  <children>
+    <Rectangle
+      id="cardBg"
+      translation="[0, 0]"
+      width="320"
+      height="330"
+      color="0x121C2D"
+    />
+
+    <Rectangle
+      id="cardBorder"
+      translation="[0, 0]"
+      width="320"
+      height="330"
+      color="0x26354B"
+      opacity="0.45"
+    />
+
+    <Rectangle
+      id="logoFrame"
+      translation="[22, 24]"
+      width="92"
+      height="92"
+      color="0x0B1220"
+    />
+
+    <Poster
+      id="logo"
+      translation="[30, 32]"
+      width="76"
+      height="76"
+      loadDisplayMode="scaleToFit"
+      uri=""
+    />
+
+    <Label
+      id="channelNameLabel"
+      translation="[126, 38]"
+      width="176"
+      height="30"
+      font="font:MediumSystemFont"
+      color="0xF2F5FA"
+      text="HDMI 1"
+    />
+
+    <Label
+      id="programTitleLabel"
+      translation="[24, 142]"
+      width="272"
+      height="60"
+      font="font:MediumSystemFont"
+      wrap="true"
+      numLines="2"
+      color="0xE6EDF7"
+      text="Sem programacao"
+    />
+
+    <Label
+      id="programTimeLabel"
+      translation="[24, 206]"
+      width="272"
+      height="24"
+      font="font:SmallSystemFont"
+      color="0xAFBDD1"
+      text="--:-- - --:--"
+    />
+
+    <Label
+      id="nextLabel"
+      translation="[24, 240]"
+      width="272"
+      height="62"
+      font="font:SmallSystemFont"
+      wrap="true"
+      numLines="3"
+      color="0xC7D4E8"
+      text="Proximo: -"
+    />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/LiveTvChannelCard.brs" />
+</component>

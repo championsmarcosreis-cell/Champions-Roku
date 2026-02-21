@@ -1,91 +1,113 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component name="LiveCard" extends="Group">
   <children>
-    <!-- Larger card for channel browsing -->
-    <Poster
-      id="cardBg"
+    <Rectangle
+      id="liveBgTop"
       translation="[0, 0]"
       width="1280"
       height="720"
-      uri="pkg:/images/card.png"
+      color="0x0A111D"
+    />
+
+    <Group
+      id="liveBgGlow"
+      translation="[80, 30]"
+    >
+      <Rectangle
+        id="liveGlowRect"
+        translation="[0, 0]"
+        width="1120"
+        height="640"
+        color="0x171F2F"
+        opacity="0.18"
+      />
+    </Group>
+
+    <LayoutGroup
+      id="liveLayout"
+      translation="[20, 20]"
+      layoutDirection="vert"
+      itemSpacings="[0, 16]"
+    >
+      <LiveTvHeader id="liveHeader" />
+      <LiveTvTimeline id="liveTimeline" />
+
+      <LayoutGroup
+        id="liveContentLayout"
+        layoutDirection="horiz"
+        itemSpacings="[20, 0]"
+      >
+        <LiveTvChannelCard id="liveChannelCard" />
+
+        <Group
+          id="liveTrackColumn"
+          translation="[0, 0]"
+        >
+          <children>
+            <Rectangle
+              id="epgBg"
+              translation="[0, 0]"
+              width="650"
+              height="330"
+              color="0x111A2A"
+            />
+
+            <Rectangle
+              id="liveTrackFocus"
+              translation="[-4, -4]"
+              width="658"
+              height="338"
+              color="0x2FD7B25C"
+              visible="false"
+            />
+
+            <Label
+              id="liveTrackTitle"
+              translation="[20, 18]"
+              width="610"
+              height="28"
+              font="font:MediumSystemFont"
+              color="0xDCE6F4"
+              text="Programacao"
+            />
+
+            <Group
+              id="epgGroup"
+              translation="[20, 56]"
+            >
+              <Group id="epgRows" translation="[0, 0]" />
+            </Group>
+          </children>
+        </Group>
+
+        <LiveTvLiveCta id="liveCta" />
+      </LayoutGroup>
+    </LayoutGroup>
+
+    <MarkupList
+      id="channelsList"
+      translation="[-2000, -2000]"
+      width="1"
+      height="1"
+      itemSize="[360, 92]"
+      numRows="5"
+      itemComponentName="LiveChannelItem"
       visible="false"
     />
 
     <Rectangle
       id="channelsBg"
-      translation="[12, 110]"
-      width="376"
-      height="470"
-      color="0x0F1623"
+      translation="[-2000, -2000]"
+      width="1"
+      height="1"
+      color="0x00000000"
       visible="false"
     />
 
     <Label
-      id="liveTitle"
-      translation="[20, 16]"
-      width="520"
-      height="36"
-      font="font:LargeSystemFont"
-      color="0xE6EBF3"
-      text="Live TV"
-    />
-
-    <Label
-      id="liveDate"
-      translation="[20, 58]"
-      width="700"
-      height="24"
-      font="font:SmallSystemFont"
-      color="0xAAB4C2"
-      text=""
-    />
-
-    <MarkupList
-      id="channelsList"
-      translation="[20, 120]"
-      itemSize="[360, 92]"
-      numRows="5"
-      itemComponentName="LiveChannelItem"
-    />
-
-    <Group
-      id="epgGroup"
-      translation="[20, 88]"
-    >
-      <Rectangle
-        id="epgBg"
-        translation="[0, 0]"
-        width="1240"
-        height="452"
-        color="0x0F1623"
-        visible="false"
-      />
-
-      <Group id="epgHeader" translation="[0, 0]" />
-
-      <Rectangle
-        id="epgHeaderLine"
-        translation="[0, 28]"
-        width="1240"
-        height="1"
-        color="0x1F2A3B"
-      />
-
-      <Rectangle
-        id="epgNowLine"
-        translation="[0, 28]"
-        width="1"
-        height="400"
-        color="0xFFFFFF"
-      />
-
-      <Group id="epgRows" translation="[0, 32]" />
-    </Group>
-
-    <Label
       id="emptyLabel"
-      translation="[20, 330]"
-      width="360"
+      translation="[20, 660]"
+      width="1240"
       height="34"
       font="font:SmallSystemFont"
       horizAlign="center"

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="LiveTvHeader" extends="Group">
+  <interface>
+    <field id="titleText" type="string" onChange="onFieldsChanged" />
+    <field id="dateText" type="string" onChange="onFieldsChanged" />
+    <field id="rightText" type="string" onChange="onFieldsChanged" />
+  </interface>
+
+  <children>
+    <Rectangle
+      id="bg"
+      translation="[0, 0]"
+      width="1240"
+      height="100"
+      color="0x111B2B"
+    />
+
+    <LayoutGroup
+      id="row"
+      translation="[28, 18]"
+      layoutDirection="horiz"
+      itemSpacings="[20, 0]"
+    >
+      <Group id="leftGroup">
+        <Label
+          id="liveTitle"
+          translation="[0, 0]"
+          width="320"
+          height="48"
+          font="font:LargeBoldSystemFont"
+          color="0xF3F6FB"
+          text="Live TV"
+        />
+      </Group>
+
+      <Group id="centerGroup">
+        <Label
+          id="liveDate"
+          translation="[0, 10]"
+          width="620"
+          height="32"
+          font="font:MediumSystemFont"
+          horizAlign="center"
+          color="0xC7D2E2"
+          text=""
+        />
+      </Group>
+
+      <Group id="rightGroup">
+        <Rectangle
+          id="calendarBg"
+          translation="[0, 6]"
+          width="220"
+          height="54"
+          color="0x1A273A"
+        />
+        <Label
+          id="calendarIcon"
+          translation="[22, 22]"
+          width="20"
+          height="20"
+          font="font:SmallSystemFont"
+          color="0xD7B25C"
+          text="+"
+        />
+        <Label
+          id="calendarLabel"
+          translation="[52, 20]"
+          width="148"
+          height="24"
+          font="font:SmallSystemFont"
+          color="0xD9E2EF"
+          text="Agenda"
+        />
+      </Group>
+    </LayoutGroup>
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/LiveTvHeader.brs" />
+</component>

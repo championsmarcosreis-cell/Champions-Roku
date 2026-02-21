@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="LiveTvTimeline" extends="Group">
+  <children>
+    <Rectangle
+      id="timelineBg"
+      translation="[0, 0]"
+      width="1240"
+      height="66"
+      color="0x0F1726"
+    />
+
+    <Group
+      id="epgHeader"
+      translation="[16, 8]"
+    />
+
+    <Rectangle
+      id="epgHeaderLine"
+      translation="[16, 50]"
+      width="1208"
+      height="1"
+      color="0x26364E"
+    />
+
+    <Rectangle
+      id="epgNowLine"
+      translation="[16, 4]"
+      width="2"
+      height="56"
+      color="0xD7B25C"
+    />
+  </children>
+</component>

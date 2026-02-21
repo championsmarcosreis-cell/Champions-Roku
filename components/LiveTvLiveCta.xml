@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="LiveTvLiveCta" extends="Group">
+  <interface>
+    <field id="channelName" type="string" onChange="onFieldsChanged" />
+    <field id="logoUri" type="string" onChange="onFieldsChanged" />
+    <field id="badgeText" type="string" onChange="onFieldsChanged" />
+    <field id="ctaFocused" type="boolean" onChange="onFieldsChanged" />
+  </interface>
+
+  <children>
+    <Rectangle
+      id="focusRing"
+      translation="[-4, -4]"
+      width="252"
+      height="338"
+      color="0x2FD7B25C"
+      visible="false"
+    />
+
+    <Rectangle
+      id="tileBg"
+      translation="[0, 0]"
+      width="244"
+      height="330"
+      color="0x131F31"
+    />
+
+    <Rectangle
+      id="tileBorder"
+      translation="[0, 0]"
+      width="244"
+      height="330"
+      color="0x334962"
+      opacity="0.55"
+    />
+
+    <Rectangle
+      id="logoFrame"
+      translation="[62, 24]"
+      width="120"
+      height="120"
+      color="0x0A1220"
+    />
+
+    <Poster
+      id="logo"
+      translation="[74, 36]"
+      width="96"
+      height="96"
+      loadDisplayMode="scaleToFit"
+      uri=""
+    />
+
+    <Label
+      id="channelLabel"
+      translation="[18, 160]"
+      width="206"
+      height="30"
+      font="font:SmallSystemFont"
+      horizAlign="center"
+      color="0xDCE5F2"
+      text="Canal ao vivo"
+    />
+
+    <Rectangle
+      id="liveBadge"
+      translation="[62, 198]"
+      width="120"
+      height="34"
+      color="0xD04848"
+    />
+
+    <Label
+      id="liveBadgeText"
+      translation="[62, 206]"
+      width="120"
+      height="20"
+      font="font:SmallSystemFont"
+      horizAlign="center"
+      color="0xFFFFFF"
+      text="AO VIVO"
+    />
+
+    <Rectangle
+      id="playCircle"
+      translation="[82, 248]"
+      width="80"
+      height="60"
+      color="0x1E2D44"
+    />
+
+    <Label
+      id="playIcon"
+      translation="[82, 264]"
+      width="80"
+      height="28"
+      font="font:MediumSystemFont"
+      horizAlign="center"
+      color="0xF2F6FC"
+      text=">"
+    />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/LiveTvLiveCta.brs" />
+</component>
