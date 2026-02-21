@@ -33,6 +33,45 @@
     />
 
     <Rectangle
+      id="progressBg"
+      translation="[14, 103]"
+      width="68"
+      height="3"
+      color="0x253247"
+      visible="false"
+    />
+
+    <Rectangle
+      id="progressFill"
+      translation="[14, 103]"
+      width="0"
+      height="3"
+      color="0x3FD97C"
+      visible="false"
+    />
+
+    <Rectangle
+      id="completeBadgeBg"
+      translation="[66, 10]"
+      width="20"
+      height="20"
+      color="0x33C86B"
+      visible="false"
+    />
+
+    <Label
+      id="completeBadgeText"
+      translation="[66, 12]"
+      width="20"
+      height="16"
+      font="font:SmallestSystemFont"
+      horizAlign="center"
+      color="0xFFFFFF"
+      text="v"
+      visible="false"
+    />
+
+    <Rectangle
       id="accent"
       translation="[92, 24]"
       width="4"

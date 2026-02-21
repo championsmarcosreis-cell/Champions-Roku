@@ -1,11 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component name="BrowseCard" extends="Group">
   <children>
+    <Label
+      id="browseHeaderTitle"
+      translation="[20, 10]"
+      width="420"
+      height="38"
+      font="font:LargeSystemFont"
+      color="0xE6EBF3"
+      text="Champions"
+    />
+
+    <Poster
+      id="browseLogoutBg"
+      translation="[1202, 10]"
+      width="46"
+      height="40"
+      uri="pkg:/images/field_normal.png"
+    />
+
+    <Poster
+      id="browseLogoutIcon"
+      translation="[1216, 21]"
+      width="18"
+      height="18"
+      uri="pkg:/images/icon_logout.png"
+    />
+
     <Group id="browseHomeGroup">
       <children>
         <Poster
           id="heroPromptBg"
-          translation="[20, 16]"
+          translation="[20, 54]"
           width="1240"
           height="80"
           uri="pkg:/images/field_normal.png"
@@ -13,7 +39,7 @@
 
         <Poster
           id="heroAvatarBg"
-          translation="[30, 26]"
+          translation="[30, 64]"
           width="60"
           height="60"
           uri="pkg:/images/overlay_circle.png"
@@ -21,7 +47,7 @@
 
         <Poster
           id="heroAvatarPhoto"
-          translation="[40, 36]"
+          translation="[40, 74]"
           width="40"
           height="40"
           uri=""
@@ -30,7 +56,7 @@
 
         <Label
           id="heroAvatarText"
-          translation="[30, 44]"
+          translation="[30, 82]"
           width="60"
           height="24"
           font="font:MediumSystemFont"
@@ -41,7 +67,7 @@
 
         <Label
           id="heroPromptText"
-          translation="[102, 44]"
+          translation="[102, 82]"
           width="930"
           height="28"
           font="font:MediumSystemFont"
@@ -51,7 +77,7 @@
 
         <Poster
           id="heroPromptBtnBg"
-          translation="[1086, 30]"
+          translation="[1086, 68]"
           width="162"
           height="52"
           uri="pkg:/images/button_focus.png"
@@ -59,7 +85,7 @@
 
         <Label
           id="heroPromptBtnText"
-          translation="[1086, 44]"
+          translation="[1086, 82]"
           width="162"
           height="24"
           font="font:MediumSystemFont"
@@ -70,7 +96,7 @@
 
         <Label
           id="viewsTitle"
-          translation="[20, 110]"
+          translation="[20, 148]"
           width="540"
           height="32"
           font="font:MediumSystemFont"
@@ -80,7 +106,7 @@
 
         <MarkupGrid
           id="viewsList"
-          translation="[20, 146]"
+          translation="[20, 184]"
           itemSize="[200, 60]"
           numColumns="3"
           numRows="1"

@@ -156,6 +156,7 @@ sub init()
   m.pendingShelfViewId = ""
   m.queuedShelfViewId = ""
   m.shelfCache = {}
+  m.resumeStateById = {}
   m.playbackSignPath = ""
   m.playbackSignExtraQuery = {}
   m.playbackStreamFormat = ""
@@ -213,6 +214,7 @@ sub init()
   m.pendingProgressPosMs = -1
   m.pendingProgressDurMs = -1
   m.pendingProgressPercent = -1
+  m.pendingProgressItemId = ""
   m.pendingProgressPlayed = false
   m.pendingProgressReason = ""
   m.nextStartResumeMs = 0
@@ -225,6 +227,10 @@ sub init()
   m.lastHeroContinueMs = 0
   m.lastBrowseOpenMs = 0
   m.lastBrowseOpenItemId = ""
+  m.lastViewSelectMs = 0
+  m.lastViewSelectId = ""
+  m.lastLogoutMs = 0
+  m.exitSeq = 0
 
   cfg0 = loadConfig()
   m.apiBase = cfg0.apiBase
@@ -407,6 +413,10 @@ sub bindUiNodes()
   m.recentSeriesTitle = m.top.findNode("recentSeriesTitle")
   m.recentMoviesMore = m.top.findNode("recentMoviesMore")
   m.recentSeriesMore = m.top.findNode("recentSeriesMore")
+  m.browseHeaderTitle = m.top.findNode("browseHeaderTitle")
+  m.browseLogoutBg = m.top.findNode("browseLogoutBg")
+  m.browseLogoutIcon = m.top.findNode("browseLogoutIcon")
+  m.browseLogoutText = m.top.findNode("browseLogoutText")
   m.heroPromptBg = m.top.findNode("heroPromptBg")
   m.heroPromptText = m.top.findNode("heroPromptText")
   m.heroPromptBtnBg = m.top.findNode("heroPromptBtnBg")
@@ -1066,6 +1076,7 @@ function _sendProgressReport(reason as String, forcePlayed as Boolean, forceSend
   m.pendingProgressPosMs = posMs
   m.pendingProgressDurMs = durMs
   m.pendingProgressPercent = pct
+  m.pendingProgressItemId = itemId
   m.pendingProgressPlayed = played
   r = reason
   if r = invalid then r = ""
@@ -1716,6 +1727,8 @@ sub applyLocalization()
   if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.text = _t("recent_series")
   if m.recentMoviesMore <> invalid then m.recentMoviesMore.text = _t("view_all")
   if m.recentSeriesMore <> invalid then m.recentSeriesMore.text = _t("view_all")
+  if m.browseHeaderTitle <> invalid then m.browseHeaderTitle.text = "Champions"
+  if m.browseLogoutText <> invalid then m.browseLogoutText.text = _t("home_logout")
   if m.seriesDetailBack <> invalid then m.seriesDetailBack.text = "< " + _t("detail_back")
   if m.seriesDetailSynopsisTitle <> invalid then m.seriesDetailSynopsisTitle.text = _t("detail_synopsis")
   if m.seriesDetailSeasonsTitle <> invalid then m.seriesDetailSeasonsTitle.text = _t("series_seasons")
@@ -2067,7 +2080,7 @@ sub _triggerHeroContinue()
     if root <> invalid and root.getChildCount() > 0 then
       first = root.getChild(0)
       if first <> invalid then
-        _playBrowseItemNode(first)
+        _playBrowseItemNode(first, "hero_continue")
         return
       end if
     end if
@@ -3731,6 +3744,10 @@ function _ensureBrowseNodes() as Boolean
     if m.recentSeriesTitle = invalid then m.recentSeriesTitle = m.browseCard.findNode("recentSeriesTitle")
     if m.recentMoviesMore = invalid then m.recentMoviesMore = m.browseCard.findNode("recentMoviesMore")
     if m.recentSeriesMore = invalid then m.recentSeriesMore = m.browseCard.findNode("recentSeriesMore")
+    if m.browseHeaderTitle = invalid then m.browseHeaderTitle = m.browseCard.findNode("browseHeaderTitle")
+    if m.browseLogoutBg = invalid then m.browseLogoutBg = m.browseCard.findNode("browseLogoutBg")
+    if m.browseLogoutIcon = invalid then m.browseLogoutIcon = m.browseCard.findNode("browseLogoutIcon")
+    if m.browseLogoutText = invalid then m.browseLogoutText = m.browseCard.findNode("browseLogoutText")
     if m.heroPromptBg = invalid then m.heroPromptBg = m.browseCard.findNode("heroPromptBg")
     if m.heroPromptText = invalid then m.heroPromptText = m.browseCard.findNode("heroPromptText")
     if m.heroPromptBtnBg = invalid then m.heroPromptBtnBg = m.browseCard.findNode("heroPromptBtnBg")
@@ -5155,6 +5172,9 @@ sub onGatewayTaskStateChanged()
   m.pendingJob = ""
 
   if job = "progress_write" then
+    itemId = m.pendingProgressItemId
+    if itemId = invalid then itemId = ""
+    itemId = itemId.ToStr().Trim()
     posMs = Int(m.pendingProgressPosMs)
     durMs = Int(m.pendingProgressDurMs)
     pct = Int(m.pendingProgressPercent)
@@ -5165,15 +5185,33 @@ sub onGatewayTaskStateChanged()
     m.pendingProgressPosMs = -1
     m.pendingProgressDurMs = -1
     m.pendingProgressPercent = -1
+    m.pendingProgressItemId = ""
     m.pendingProgressPlayed = false
     m.pendingProgressReason = ""
 
     if m.gatewayTask.ok = true then
       m.progressLastSentAtMs = _nowMs()
       if posMs >= 0 then m.progressLastSentPosMs = posMs
+      pctLocal = pct
+      if pctLocal < 0 and durMs > 0 and posMs >= 0 then
+        pctLocal = Int((posMs * 100.0) / durMs)
+      end if
+      if pctLocal < 0 then pctLocal = 0
+      if pctLocal > 100 then pctLocal = 100
+      if played = true and pctLocal < 100 then pctLocal = 100
+      _rememberResumeState(itemId, {
+        percent: pctLocal
+        positionMs: posMs
+        durationMs: durMs
+        played: played
+      })
       print "progress write ok posMs=" + posMs.ToStr() + " durMs=" + durMs.ToStr() + " pct=" + pct.ToStr() + " played=" + played.ToStr() + " reason=" + reason
       if m.progressPendingFlush = true or m.progressPendingPlayed = true then
         ignore = _sendProgressReport("drain", m.progressPendingPlayed, true)
+      end if
+      _refreshVisibleResumeState()
+      if played = true and m.mode = "browse" and m.browseLibraryOpen <> true and m.pendingJob = "" then
+        _loadBrowseHomeShelves()
       end if
     else
       errProg = m.gatewayTask.error
@@ -6569,6 +6607,19 @@ sub stopPlaybackAndReturn(reason as String)
   playedStop = false
   rr = LCase(r.Trim())
   if rr = "finished" then playedStop = true
+  snapStop = _currentProgressSnapshot()
+  if type(snapStop) = "roAssociativeArray" and snapStop.ok = true then
+    snapPct = Int(snapStop.percent)
+    if snapPct < 0 then snapPct = 0
+    if snapPct > 100 then snapPct = 100
+    if playedStop = true and snapPct < 100 then snapPct = 100
+    _rememberResumeState(snapStop.itemId, {
+      percent: snapPct
+      positionMs: Int(snapStop.positionMs)
+      durationMs: Int(snapStop.durationMs)
+      played: playedStop
+    })
+  end if
   ignore = _sendProgressReport("stop_" + rr, playedStop, true)
 
   if m.playTimeoutTimer <> invalid then m.playTimeoutTimer.control = "stop"
@@ -6618,6 +6669,10 @@ sub stopPlaybackAndReturn(reason as String)
   if m.osdGearFocus <> invalid then m.osdGearFocus.visible = false
 
   _setBrowseLiveInputEnabled(true, "playback_stop")
+  _refreshVisibleResumeState()
+  if rr = "finished" and m.mode = "browse" and m.browseLibraryOpen <> true and m.pendingJob = "" then
+    _loadBrowseHomeShelves()
+  end if
   applyFocus()
 end sub
 
@@ -7119,6 +7174,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         m.browseFocus = "hero_logout"
         applyFocus()
         return true
+      else if m.browseFocus = "hero_logout" then
+        return true
       end if
     end if
 
@@ -7147,6 +7204,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         m.browseFocus = "hero_continue"
         applyFocus()
         return true
+      else if m.browseFocus = "hero_continue" then
+        return true
       else if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
         return false
       end if
@@ -7156,7 +7215,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
       if m.browseFocus = "views" then
         vIdx = _browseListFocusedIndex(m.viewsList)
         if vIdx < _browseViewCols() then
-          m.browseFocus = "hero_logout"
+          m.browseFocus = "hero_continue"
           applyFocus()
           return true
         end if
@@ -7169,14 +7228,18 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         end if
         applyFocus()
         return true
-      else if m.browseFocus = "hero_logout" or m.browseFocus = "hero_continue" then
+      else if m.browseFocus = "hero_continue" then
+        m.browseFocus = "hero_logout"
+        applyFocus()
+        return true
+      else if m.browseFocus = "hero_logout" then
         return true
       end if
     end if
 
     if kl = "down" then
       if m.browseFocus = "hero_logout" then
-        m.browseFocus = "views"
+        m.browseFocus = "hero_continue"
         applyFocus()
         return true
       else if m.browseFocus = "hero_continue" then
@@ -7553,9 +7616,17 @@ sub applyFocus()
   end if
 
   if m.mode = "browse" then
+    if m.top <> invalid and m.top.hasField("browseFocusVisual") then
+      bfv = m.browseFocus
+      if bfv = invalid then bfv = ""
+      m.top.browseFocusVisual = bfv
+    end if
+
     if m.browseLibraryOpen = true then
       _setBrowseLibraryVisible(true)
       _refreshBrowseLibraryHeader()
+      if m.browseLogoutBg <> invalid then m.browseLogoutBg.uri = "pkg:/images/field_normal.png"
+      if m.browseLogoutText <> invalid then m.browseLogoutText.color = "0xD0D6E0"
       searchFocused = (m.browseFocus = "library_search")
       if m.librarySearchBg <> invalid then
         if searchFocused then
@@ -7575,7 +7646,14 @@ sub applyFocus()
     _setBrowseLibraryVisible(false)
     profileFocused = (m.browseFocus = "hero_logout")
     continueFocused = (m.browseFocus = "hero_continue")
+    heroFocused = (profileFocused or continueFocused)
     _syncHeroAvatarVisual()
+
+    if m.viewsList <> invalid and m.viewsList.hasField("focusable") then m.viewsList.focusable = (heroFocused <> true)
+    if m.itemsList <> invalid and m.itemsList.hasField("focusable") then m.itemsList.focusable = (heroFocused <> true)
+    if m.continueList <> invalid and m.continueList.hasField("focusable") then m.continueList.focusable = (heroFocused <> true)
+    if m.recentMoviesList <> invalid and m.recentMoviesList.hasField("focusable") then m.recentMoviesList.focusable = (heroFocused <> true)
+    if m.recentSeriesList <> invalid and m.recentSeriesList.hasField("focusable") then m.recentSeriesList.focusable = (heroFocused <> true)
 
     if m.heroPromptBg <> invalid then
       m.heroPromptBg.uri = "pkg:/images/field_normal.png"
@@ -7584,10 +7662,20 @@ sub applyFocus()
       m.heroAvatarBg.uri = "pkg:/images/overlay_circle.png"
     end if
     if m.heroAvatarText <> invalid then
+      m.heroAvatarText.color = "0xE6EBF3"
+    end if
+    if m.browseLogoutBg <> invalid then
       if profileFocused then
-        m.heroAvatarText.color = "0xD7B25C"
+        m.browseLogoutBg.uri = "pkg:/images/field_focus.png"
       else
-        m.heroAvatarText.color = "0xE6EBF3"
+        m.browseLogoutBg.uri = "pkg:/images/field_normal.png"
+      end if
+    end if
+    if m.browseLogoutText <> invalid then
+      if profileFocused then
+        m.browseLogoutText.color = "0xFFFFFF"
+      else
+        m.browseLogoutText.color = "0xD0D6E0"
       end if
     end if
     if m.heroPromptBtnBg <> invalid then
@@ -7870,13 +7958,34 @@ sub clearSaved()
 end sub
 
 sub doLogout()
+  nowMs = _nowMs()
+  if nowMs - Int(m.lastLogoutMs) < 1200 then
+    print "logout debounce"
+    return
+  end if
+  m.lastLogoutMs = nowMs
+
+  print "logout action: exit channel to Roku Home"
   exitApp()
 end sub
 
 sub exitApp()
-  if m.top <> invalid and m.top.hasField("exitChannel") then
-    m.top.exitChannel = true
+  if m.top = invalid then return
+
+  if m.top.hasField("requestExitSeq") then
+    m.exitSeq = Int(m.exitSeq) + 1
+    if m.exitSeq < 1 then m.exitSeq = 1
+    m.top.requestExitSeq = Int(m.exitSeq)
+    print "exitApp: requestExitSeq=" + m.exitSeq.ToStr()
   end if
+
+  if m.top.hasField("requestExit") then
+    ' Always toggle to guarantee a notification to source/main.brs.
+    m.top.requestExit = false
+    m.top.requestExit = true
+    print "exitApp: requestExit=true"
+  end if
+
 end sub
 
 sub promptKeyboard(kind as String, title as String, initial as String, secure as Boolean)
@@ -8087,6 +8196,7 @@ sub enterBrowse()
   m.browseMoviesViewId = ""
   m.browseSeriesViewId = ""
   m.shelfCache = {}
+  m.resumeStateById = {}
 
   if m.viewsList <> invalid then m.viewsList.content = CreateObject("roSGNode", "ContentNode")
   if m.itemsList <> invalid then m.itemsList.content = CreateObject("roSGNode", "ContentNode")
@@ -8239,6 +8349,15 @@ sub onViewSelected()
   if v.id <> invalid then viewId = v.id
   if viewId = invalid then viewId = ""
   viewId = viewId.ToStr().Trim()
+  if viewId <> "" then
+    nowMs = _nowMs()
+    if m.lastViewSelectId = viewId and (nowMs - Int(m.lastViewSelectMs)) < 900 then
+      print "view select debounce id=" + viewId
+      return
+    end if
+    m.lastViewSelectId = viewId
+    m.lastViewSelectMs = nowMs
+  end if
   viewTitle = ""
   if v.title <> invalid then viewTitle = v.title
   if viewTitle = invalid then viewTitle = ""
@@ -8588,6 +8707,213 @@ function _shelfBuildImageUrls(it as Object, itemId as String, apiBase as String,
   }
 end function
 
+function _resumeMapKey(itemId as String) as String
+  id = itemId
+  if id = invalid then id = ""
+  return LCase(id.ToStr().Trim())
+end function
+
+function _resumeBoolFromAny(v as Dynamic) as Boolean
+  if v = invalid then return false
+  t = type(v)
+  if t = "roBoolean" then return (v = true)
+  s = LCase(v.ToStr().Trim())
+  if s = "true" or s = "1" or s = "yes" or s = "y" then return true
+  return false
+end function
+
+function _resumeStateFromRawItem(it as Object) as Object
+  st = {
+    percent: 0
+    positionMs: 0
+    durationMs: 0
+    played: false
+  }
+  if type(it) <> "roAssociativeArray" then return st
+
+  posMs = -1
+  vPos = _aaGetCi(it, "positionMs")
+  if vPos = invalid then vPos = _aaGetCi(it, "position_ms")
+  if vPos <> invalid then posMs = _sceneIntFromAny(vPos)
+  if posMs < 0 then posMs = 0
+  st.positionMs = posMs
+
+  durMs = -1
+  vDur = _aaGetCi(it, "durationMs")
+  if vDur = invalid then vDur = _aaGetCi(it, "duration_ms")
+  if vDur <> invalid then durMs = _sceneIntFromAny(vDur)
+  if durMs < 0 then durMs = 0
+  st.durationMs = durMs
+
+  pct = -1
+  vPct = _aaGetCi(it, "percent")
+  if vPct <> invalid then pct = _sceneIntFromAny(vPct)
+  if pct < 0 and durMs > 0 and posMs > 0 then
+    pct = Int((posMs * 100.0) / durMs)
+  end if
+  if pct < 0 then pct = 0
+  if pct > 100 then pct = 100
+
+  played = false
+  vPlayed = _aaGetCi(it, "played")
+  if vPlayed = invalid then vPlayed = _aaGetCi(it, "isPlayed")
+  if vPlayed = invalid then vPlayed = _aaGetCi(it, "completed")
+  if vPlayed = invalid then vPlayed = _aaGetCi(it, "finished")
+  if vPlayed <> invalid then played = _resumeBoolFromAny(vPlayed)
+  vStatus = _aaGetCi(it, "status")
+  if vStatus <> invalid then
+    stxt = LCase(vStatus.ToStr().Trim())
+    if stxt = "played" or stxt = "finished" or stxt = "completed" then played = true
+  end if
+  if pct >= 98 then played = true
+  if played = true and pct < 100 then pct = 100
+  st.percent = pct
+  st.played = played
+  return st
+end function
+
+function _resumeStateFromNode(n as Object) as Object
+  st = {
+    percent: 0
+    positionMs: 0
+    durationMs: 0
+    played: false
+  }
+  if n = invalid then return st
+
+  pct = -1
+  if n.hasField("resumePercent") then pct = _sceneIntFromAny(n.resumePercent)
+  if pct < 0 and n.hasField("percent") then pct = _sceneIntFromAny(n.percent)
+  if pct < 0 then pct = 0
+  if pct > 100 then pct = 100
+  st.percent = pct
+
+  posMs = 0
+  if n.hasField("resumePositionMs") then posMs = _sceneIntFromAny(n.resumePositionMs)
+  if posMs < 0 then posMs = 0
+  st.positionMs = posMs
+
+  durMs = 0
+  if n.hasField("resumeDurationMs") then durMs = _sceneIntFromAny(n.resumeDurationMs)
+  if durMs < 0 then durMs = 0
+  st.durationMs = durMs
+
+  played = false
+  if n.hasField("played") then played = (n.played = true)
+  if pct >= 98 then played = true
+  if played = true and st.percent < 100 then st.percent = 100
+  st.played = played
+  return st
+end function
+
+function _resumeStateHasSignal(st as Object) as Boolean
+  if type(st) <> "roAssociativeArray" then return false
+  pct = Int(st.percent)
+  if pct > 0 then return true
+  if st.played = true then return true
+  if Int(st.positionMs) > 0 then return true
+  return false
+end function
+
+function _resumeStateForItem(itemId as String) as Object
+  key = _resumeMapKey(itemId)
+  if key = "" then return invalid
+  if type(m.resumeStateById) <> "roAssociativeArray" then m.resumeStateById = {}
+  return m.resumeStateById[key]
+end function
+
+sub _rememberResumeState(itemId as String, st as Object)
+  key = _resumeMapKey(itemId)
+  if key = "" then return
+  if type(st) <> "roAssociativeArray" then return
+  if type(m.resumeStateById) <> "roAssociativeArray" then m.resumeStateById = {}
+
+  pct = Int(st.percent)
+  if pct < 0 then pct = 0
+  if pct > 100 then pct = 100
+  played = (st.played = true)
+  if pct >= 98 then played = true
+  if played = true and pct < 100 then pct = 100
+
+  posMs = Int(st.positionMs)
+  durMs = Int(st.durationMs)
+  if posMs < 0 then posMs = 0
+  if durMs < 0 then durMs = 0
+
+  m.resumeStateById[key] = {
+    percent: pct
+    positionMs: posMs
+    durationMs: durMs
+    played: played
+  }
+end sub
+
+function _mergeResumeState(primary as Object, fallback as Object) as Object
+  if type(primary) <> "roAssociativeArray" then
+    primary = {
+      percent: 0
+      positionMs: 0
+      durationMs: 0
+      played: false
+    }
+  end if
+  if type(fallback) <> "roAssociativeArray" then return primary
+
+  if _resumeStateHasSignal(primary) = true then
+    return primary
+  end if
+  return fallback
+end function
+
+sub _applyResumeStateToNode(n as Object)
+  if n = invalid then return
+  id = ""
+  if n.id <> invalid then id = n.id.ToStr().Trim()
+  merged = _mergeResumeState(_resumeStateFromNode(n), _resumeStateForItem(id))
+
+  pct = Int(merged.percent)
+  posMs = Int(merged.positionMs)
+  durMs = Int(merged.durationMs)
+  played = (merged.played = true)
+  if pct >= 98 then played = true
+  if played = true and pct < 100 then pct = 100
+
+  if n.hasField("resumePercent") then n.resumePercent = pct
+  if n.hasField("resumePositionMs") then n.resumePositionMs = posMs
+  if n.hasField("resumeDurationMs") then n.resumeDurationMs = durMs
+  if n.hasField("played") then n.played = played
+end sub
+
+sub _applyResumeStateToRoot(root as Object)
+  if root = invalid then return
+  cnt = root.getChildCount()
+  for i = 0 to cnt - 1
+    n = root.getChild(i)
+    if n = invalid then continue for
+    _applyResumeStateToNode(n)
+  end for
+end sub
+
+sub _refreshVisibleResumeState()
+  if m.mode <> "browse" then return
+  if m.pendingJob <> "" then return
+  if _isPlaybackVisible() then return
+
+  if m.continueList <> invalid and m.continueList.content <> invalid then
+    _applyResumeStateToRoot(m.continueList.content)
+  end if
+  if m.recentMoviesList <> invalid and m.recentMoviesList.content <> invalid then
+    _applyResumeStateToRoot(m.recentMoviesList.content)
+  end if
+  if m.recentSeriesList <> invalid and m.recentSeriesList.content <> invalid then
+    _applyResumeStateToRoot(m.recentSeriesList.content)
+  end if
+
+  if m.browseLibraryOpen = true then
+    _renderBrowseLibraryItems()
+  end if
+end sub
+
 function _buildShelfContent(raw as String, rankEnabled as Boolean, section as String) as Object
   items = ParseJson(raw)
   if type(items) <> "roArray" then items = []
@@ -8634,6 +8960,7 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
     c.addField("resumePositionMs", "integer", false)
     c.addField("resumeDurationMs", "integer", false)
     c.addField("resumePercent", "integer", false)
+    c.addField("played", "boolean", false)
     c.addField("rank", "integer", false)
     c.addField("posterMode", "string", false)
     c.addField("hdPosterUrl", "string", false)
@@ -8657,26 +8984,26 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
       c.wideUrl = wideUri
       c.posterMode = "zoomToFill"
 
-      rPos = -1
-      if it.positionMs <> invalid then rPos = _sceneIntFromAny(it.positionMs)
-      if rPos < 0 and it.position_ms <> invalid then rPos = _sceneIntFromAny(it.position_ms)
-      if rPos < 0 then rPos = 0
-      c.resumePositionMs = rPos
+      resumeRaw = _resumeStateFromRawItem(it)
+      if _resumeStateHasSignal(resumeRaw) then _rememberResumeState(c.id, resumeRaw)
+      resume = _mergeResumeState(resumeRaw, _resumeStateForItem(c.id))
 
-      rDur = -1
-      if it.durationMs <> invalid then rDur = _sceneIntFromAny(it.durationMs)
-      if rDur < 0 and it.duration_ms <> invalid then rDur = _sceneIntFromAny(it.duration_ms)
-      if rDur < 0 then rDur = 0
-      c.resumeDurationMs = rDur
+      c.resumePositionMs = Int(resume.positionMs)
+      c.resumeDurationMs = Int(resume.durationMs)
+      c.resumePercent = Int(resume.percent)
+      c.played = (resume.played = true)
 
-      rPct = -1
-      if it.percent <> invalid then rPct = _sceneIntFromAny(it.percent)
-      if rPct < 0 then rPct = 0
-      c.resumePercent = rPct
+      if sec = "continue" and c.played = true then
+        continue for
+      end if
 
       if rankEnabled then
         rank = rank + 1
-        c.rank = rank
+        if rank <= 10 then
+          c.rank = rank
+        else
+          c.rank = 0
+        end if
       else
         c.rank = 0
       end if
@@ -8687,6 +9014,7 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
       c.resumePositionMs = 0
       c.resumeDurationMs = 0
       c.resumePercent = 0
+      c.played = false
       c.rank = 0
       c.posterMode = "zoomToFill"
       c.hdPosterUrl = ""
@@ -8897,6 +9225,7 @@ sub _renderBrowseLibraryItems()
     c.addField("resumePositionMs", "integer", false)
     c.addField("resumeDurationMs", "integer", false)
     c.addField("resumePercent", "integer", false)
+    c.addField("played", "boolean", false)
     c.addField("rank", "integer", false)
     c.addField("posterMode", "string", false)
     c.addField("hdPosterUrl", "string", false)
@@ -8916,22 +9245,13 @@ sub _renderBrowseLibraryItems()
       c.posterUrl = posterUri
       c.posterMode = "zoomToFill"
 
-      rPos = -1
-      if it.positionMs <> invalid then rPos = _sceneIntFromAny(it.positionMs)
-      if rPos < 0 and it.position_ms <> invalid then rPos = _sceneIntFromAny(it.position_ms)
-      if rPos < 0 then rPos = 0
-      c.resumePositionMs = rPos
-
-      rDur = -1
-      if it.durationMs <> invalid then rDur = _sceneIntFromAny(it.durationMs)
-      if rDur < 0 and it.duration_ms <> invalid then rDur = _sceneIntFromAny(it.duration_ms)
-      if rDur < 0 then rDur = 0
-      c.resumeDurationMs = rDur
-
-      rPct = -1
-      if it.percent <> invalid then rPct = _sceneIntFromAny(it.percent)
-      if rPct < 0 then rPct = 0
-      c.resumePercent = rPct
+      resumeRaw = _resumeStateFromRawItem(it)
+      if _resumeStateHasSignal(resumeRaw) then _rememberResumeState(c.id, resumeRaw)
+      resume = _mergeResumeState(resumeRaw, _resumeStateForItem(c.id))
+      c.resumePositionMs = Int(resume.positionMs)
+      c.resumeDurationMs = Int(resume.durationMs)
+      c.resumePercent = Int(resume.percent)
+      c.played = (resume.played = true)
       c.rank = 0
     else
       c.title = ""
@@ -8940,6 +9260,7 @@ sub _renderBrowseLibraryItems()
       c.resumePositionMs = 0
       c.resumeDurationMs = 0
       c.resumePercent = 0
+      c.played = false
       c.rank = 0
       c.posterMode = "zoomToFill"
       c.hdPosterUrl = ""
@@ -9163,6 +9484,7 @@ sub renderShelfItems(raw as String)
     c.addField("resumePositionMs", "integer", false)
     c.addField("resumeDurationMs", "integer", false)
     c.addField("resumePercent", "integer", false)
+    c.addField("played", "boolean", false)
     c.addField("rank", "integer", false)
     c.addField("posterMode", "string", false)
     c.addField("hdPosterUrl", "string", false)
@@ -9184,22 +9506,13 @@ sub renderShelfItems(raw as String)
       c.posterUrl = posterUri
       c.wideUrl = wideUri
       c.posterMode = "zoomToFill"
-      rPos = -1
-      if it.positionMs <> invalid then rPos = _sceneIntFromAny(it.positionMs)
-      if rPos < 0 and it.position_ms <> invalid then rPos = _sceneIntFromAny(it.position_ms)
-      if rPos < 0 then rPos = 0
-      c.resumePositionMs = rPos
-
-      rDur = -1
-      if it.durationMs <> invalid then rDur = _sceneIntFromAny(it.durationMs)
-      if rDur < 0 and it.duration_ms <> invalid then rDur = _sceneIntFromAny(it.duration_ms)
-      if rDur < 0 then rDur = 0
-      c.resumeDurationMs = rDur
-
-      rPct = -1
-      if it.percent <> invalid then rPct = _sceneIntFromAny(it.percent)
-      if rPct < 0 then rPct = 0
-      c.resumePercent = rPct
+      resumeRaw = _resumeStateFromRawItem(it)
+      if _resumeStateHasSignal(resumeRaw) then _rememberResumeState(c.id, resumeRaw)
+      resume = _mergeResumeState(resumeRaw, _resumeStateForItem(c.id))
+      c.resumePositionMs = Int(resume.positionMs)
+      c.resumeDurationMs = Int(resume.durationMs)
+      c.resumePercent = Int(resume.percent)
+      c.played = (resume.played = true)
       if isTop10 then
         rank = rank + 1
         c.rank = rank
@@ -9213,6 +9526,7 @@ sub renderShelfItems(raw as String)
       c.resumePositionMs = 0
       c.resumeDurationMs = 0
       c.resumePercent = 0
+      c.played = false
       c.rank = 0
       c.posterMode = "zoomToFill"
       c.hdPosterUrl = ""
@@ -9230,7 +9544,7 @@ sub renderShelfItems(raw as String)
       if root.getChildCount() > 0 then
         firstContinue = root.getChild(0)
         if firstContinue <> invalid then
-          _playBrowseItemNode(firstContinue)
+          _playBrowseItemNode(firstContinue, "continue")
           return
         end if
       end if
@@ -10305,8 +10619,11 @@ sub onSeriesDetailDone()
   applyFocus()
 end sub
 
-sub _playBrowseItemNode(it as Object)
+sub _playBrowseItemNode(it as Object, sourceSection as String)
   if it = invalid then return
+  src = sourceSection
+  if src = invalid then src = ""
+  src = LCase(src.ToStr().Trim())
   itemId = ""
   if it.id <> invalid then itemId = it.id
   if itemId = invalid then itemId = ""
@@ -10334,8 +10651,9 @@ sub _playBrowseItemNode(it as Object)
     return
   end if
 
+  allowResumeFlow = (src = "continue" or src = "hero_continue")
   resumeMs = _nodeResumePositionMs(it)
-  if resumeMs > 5000 then
+  if allowResumeFlow = true and resumeMs > 5000 then
     showResumeDialog(it.id, it.title, resumeMs)
     return
   end if
@@ -10345,7 +10663,11 @@ sub _playBrowseItemNode(it as Object)
     return
   end if
 
-  requestResumeProbe(it.id, it.title)
+  if allowResumeFlow = true then
+    requestResumeProbe(it.id, it.title)
+  else
+    playVodById(it.id, it.title)
+  end if
 end sub
 
 sub _onBrowseListItemSelected(lst as Object, requiredFocus as String, label as String)
@@ -10375,7 +10697,7 @@ sub _onBrowseListItemSelected(lst as Object, requiredFocus as String, label as S
   if root = invalid then return
   it = root.getChild(idx)
   if it = invalid then return
-  _playBrowseItemNode(it)
+  _playBrowseItemNode(it, requiredFocus)
 end sub
 
 sub onItemSelected()

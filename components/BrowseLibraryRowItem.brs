@@ -5,6 +5,10 @@ sub init()
   m.accent = m.top.findNode("accent")
   m.title = m.top.findNode("title")
   m.meta = m.top.findNode("meta")
+  m.progressBg = m.top.findNode("progressBg")
+  m.progressFill = m.top.findNode("progressFill")
+  m.completeBadgeBg = m.top.findNode("completeBadgeBg")
+  m.completeBadgeText = m.top.findNode("completeBadgeText")
 end sub
 
 sub onItemContentChanged()
@@ -13,6 +17,10 @@ sub onItemContentChanged()
     if m.cover <> invalid then m.cover.uri = ""
     if m.title <> invalid then m.title.text = ""
     if m.meta <> invalid then m.meta.text = ""
+    if m.progressBg <> invalid then m.progressBg.visible = false
+    if m.progressFill <> invalid then m.progressFill.visible = false
+    if m.completeBadgeBg <> invalid then m.completeBadgeBg.visible = false
+    if m.completeBadgeText <> invalid then m.completeBadgeText.visible = false
     if m.focusRing <> invalid then m.focusRing.visible = false
     return
   end if
@@ -31,6 +39,28 @@ sub onItemContentChanged()
   if poster = "" and c.posterUrl <> invalid then poster = c.posterUrl.ToStr().Trim()
   if poster = "" then poster = "pkg:/images/logo.png"
   if m.cover <> invalid then m.cover.uri = poster
+
+  pct = 0
+  if c.resumePercent <> invalid then
+    pct = Int(Val(c.resumePercent.ToStr()))
+  else if c.percent <> invalid then
+    pct = Int(Val(c.percent.ToStr()))
+  end if
+  played = false
+  if c.played <> invalid then played = (c.played = true)
+  if pct < 0 then pct = 0
+  if pct > 100 then pct = 100
+  if pct >= 98 then played = true
+  if played = true and pct < 100 then pct = 100
+
+  showProgress = (pct > 0 and played <> true)
+  if m.progressBg <> invalid then m.progressBg.visible = showProgress
+  if m.progressFill <> invalid then
+    m.progressFill.visible = showProgress
+    if showProgress then m.progressFill.width = Int(0.68 * pct)
+  end if
+  if m.completeBadgeBg <> invalid then m.completeBadgeBg.visible = played
+  if m.completeBadgeText <> invalid then m.completeBadgeText.visible = played
 
   applyStyle()
 end sub
@@ -68,6 +98,13 @@ sub applyStyle()
       m.accent.color = "0xD7B25C"
     else
       m.accent.color = "0x2B3950"
+    end if
+  end if
+  if m.completeBadgeBg <> invalid and m.completeBadgeBg.visible = true then
+    if focused then
+      m.completeBadgeBg.color = "0x41D983"
+    else
+      m.completeBadgeBg.color = "0x33C86B"
     end if
   end if
 end sub

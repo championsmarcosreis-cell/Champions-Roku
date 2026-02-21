@@ -12,73 +12,83 @@
       width="568"
       height="326"
       uri="pkg:/images/card.png"
+      visible="false"
     />
 
     <Poster
       id="focusRing"
-      translation="[10, 1]"
-      width="580"
-      height="338"
-      uri="pkg:/images/field_focus.png"
+      translation="[19, 9]"
+      width="562"
+      height="322"
+      uri="pkg:/images/banner_focus_thin.png"
       visible="false"
     />
 
     <Poster
       id="cover"
-      translation="[22, 14]"
-      width="556"
-      height="313"
+      translation="[20, 11]"
+      width="560"
+      height="318"
       loadDisplayMode="zoomToFill"
       uri=""
     />
 
     <Rectangle
       id="overlayFadeA"
-      translation="[22, 214]"
-      width="556"
+      translation="[20, 216]"
+      width="560"
       height="50"
       color="0x400A111D"
     />
     <Rectangle
       id="overlayFadeB"
-      translation="[22, 250]"
-      width="556"
+      translation="[20, 252]"
+      width="560"
       height="44"
       color="0x7E0A111D"
     />
     <Rectangle
       id="overlayFadeC"
-      translation="[22, 286]"
-      width="556"
+      translation="[20, 288]"
+      width="560"
       height="41"
       color="0xB40A111D"
     />
 
     <Rectangle
       id="rankBadgeBorder"
-      translation="[32, 21]"
-      width="106"
-      height="36"
+      translation="[30, 21]"
+      width="112"
+      height="34"
       color="0x2D3A4E"
       visible="false"
     />
 
     <Rectangle
       id="rankBadgeBg"
-      translation="[35, 24]"
-      width="100"
-      height="30"
+      translation="[31, 22]"
+      width="110"
+      height="32"
       color="0xD7B25C"
+      visible="false"
+    />
+
+    <Poster
+      id="rankBadgeIcon"
+      translation="[40, 32]"
+      width="12"
+      height="12"
+      uri="pkg:/images/icon_trophy.png"
       visible="false"
     />
 
     <Label
       id="rankBadgeText"
-      translation="[35, 30]"
-      width="100"
+      translation="[56, 30]"
+      width="80"
       height="18"
       font="font:SmallSystemFont"
-      horizAlign="center"
+      horizAlign="left"
       color="0x0B0F16"
       text=""
       visible="false"
@@ -86,8 +96,8 @@
 
     <Rectangle
       id="progressBg"
-      translation="[22, 323]"
-      width="556"
+      translation="[20, 325]"
+      width="560"
       height="4"
       color="0x253247"
       visible="false"
@@ -95,10 +105,10 @@
 
     <Rectangle
       id="progressFill"
-      translation="[22, 323]"
+      translation="[20, 325]"
       width="0"
       height="4"
-      color="0xD8B765"
+      color="0x3FD97C"
       visible="false"
     />
 

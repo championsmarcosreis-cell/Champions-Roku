@@ -2,6 +2,10 @@ sub init()
   m.bg = m.top.findNode("bg")
   m.accent = m.top.findNode("accent")
   m.label = m.top.findNode("label")
+  m.scene = m.top.getScene()
+  if m.scene <> invalid and m.scene.hasField("browseFocusVisual") then
+    m.scene.observeField("browseFocusVisual", "onBrowseFocusVisualChanged")
+  end if
 end sub
 
 sub onItemContentChanged()
@@ -25,8 +29,19 @@ sub onItemHasFocusChanged()
   applyStyle()
 end sub
 
+sub onBrowseFocusVisualChanged()
+  applyStyle()
+end sub
+
 sub applyStyle()
   focused = (m.top.itemHasFocus = true)
+  if focused and m.scene <> invalid and m.scene.hasField("browseFocusVisual") then
+    mode = m.scene.browseFocusVisual
+    if mode = invalid then mode = ""
+    mode = LCase(mode.ToStr().Trim())
+    focused = (mode = "views")
+  end if
+
   if m.bg <> invalid then
     if focused then
       m.bg.uri = "pkg:/images/field_focus.png"

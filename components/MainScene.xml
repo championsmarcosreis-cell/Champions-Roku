@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component name="MainScene" extends="Scene">
+  <interface>
+    <field id="browseFocusVisual" type="string" alwaysNotify="true" />
+    <field id="requestExit" type="boolean" alwaysNotify="true" />
+    <field id="requestExitSeq" type="integer" alwaysNotify="true" />
+  </interface>
+
   <!-- Bring shared helpers into this component's namespace -->
   <script type="text/brightscript" uri="pkg:/source/secrets.brs" />
   <script type="text/brightscript" uri="pkg:/source/config.brs" />

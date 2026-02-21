@@ -11,6 +11,7 @@ sub init()
   m.progressFill = m.top.findNode("progressFill")
   m.rankBadgeBorder = m.top.findNode("rankBadgeBorder")
   m.rankBadgeBg = m.top.findNode("rankBadgeBg")
+  m.rankBadgeIcon = m.top.findNode("rankBadgeIcon")
   m.rankBadgeText = m.top.findNode("rankBadgeText")
   m.rankValue = 0
   m.lastCoverUri = ""
@@ -34,6 +35,7 @@ sub onItemContentChanged()
     if m.progressFill <> invalid then m.progressFill.visible = false
     if m.rankBadgeBorder <> invalid then m.rankBadgeBorder.visible = false
     if m.rankBadgeBg <> invalid then m.rankBadgeBg.visible = false
+    if m.rankBadgeIcon <> invalid then m.rankBadgeIcon.visible = false
     if m.rankBadgeText <> invalid then m.rankBadgeText.visible = false
     m.rankValue = 0
     return
@@ -87,22 +89,33 @@ sub onItemContentChanged()
   if m.progressBg <> invalid then m.progressBg.visible = (pct > 0)
   if m.progressFill <> invalid then
     m.progressFill.visible = (pct > 0)
-    if pct > 0 then m.progressFill.width = Int(5.56 * pct)
+    if pct > 0 then m.progressFill.width = Int(5.60 * pct)
   end if
 
   rank = 0
   if c.rank <> invalid then rank = Int(Val(c.rank.ToStr()))
   m.rankValue = rank
-  if rank > 0 and rank <= 3 then
+  showRank = (rank > 0 and rank <= 10)
+  if showRank then
     if m.rankBadgeBorder <> invalid then m.rankBadgeBorder.visible = true
     if m.rankBadgeBg <> invalid then m.rankBadgeBg.visible = true
+    if m.rankBadgeIcon <> invalid then m.rankBadgeIcon.visible = (rank <= 3)
     if m.rankBadgeText <> invalid then
       m.rankBadgeText.visible = true
-      m.rankBadgeText.text = "TOP " + rank.ToStr()
+      if rank <= 3 then
+        m.rankBadgeText.text = "TOP " + rank.ToStr()
+        m.rankBadgeText.translation = [56, 30]
+        m.rankBadgeText.width = 80
+      else
+        m.rankBadgeText.text = "#" + rank.ToStr()
+        m.rankBadgeText.translation = [44, 30]
+        m.rankBadgeText.width = 90
+      end if
     end if
   else
     if m.rankBadgeBorder <> invalid then m.rankBadgeBorder.visible = false
     if m.rankBadgeBg <> invalid then m.rankBadgeBg.visible = false
+    if m.rankBadgeIcon <> invalid then m.rankBadgeIcon.visible = false
     if m.rankBadgeText <> invalid then m.rankBadgeText.visible = false
   end if
 
@@ -148,7 +161,10 @@ end sub
 
 sub applyStyle()
   focused = (m.top.itemHasFocus = true)
-  if m.cardBg <> invalid then m.cardBg.uri = "pkg:/images/card.png"
+  if m.cardBg <> invalid then
+    m.cardBg.uri = "pkg:/images/card.png"
+    m.cardBg.visible = false
+  end if
   if m.focusRing <> invalid then m.focusRing.visible = focused
 
   fadeA = "0x400A111D"
