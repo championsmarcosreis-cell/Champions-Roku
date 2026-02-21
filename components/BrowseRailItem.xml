@@ -8,42 +8,43 @@
   <children>
     <Poster
       id="cardBg"
-      translation="[10, 8]"
-      width="188"
-      height="220"
+      translation="[22, 8]"
+      width="126"
+      height="182"
       uri="pkg:/images/card.png"
+      visible="false"
     />
 
     <Poster
       id="focusRing"
-      translation="[6, 4]"
-      width="196"
-      height="228"
+      translation="[18, 4]"
+      width="134"
+      height="190"
       uri="pkg:/images/field_focus.png"
       visible="false"
     />
 
     <Poster
       id="cover"
-      translation="[16, 14]"
-      width="176"
-      height="162"
+      translation="[26, 12]"
+      width="118"
+      height="176"
       loadDisplayMode="zoomToFill"
       uri=""
     />
 
     <Rectangle
       id="textOverlay"
-      translation="[16, 116]"
-      width="176"
-      height="60"
-      color="0xB00A111D"
+      translation="[26, 148]"
+      width="118"
+      height="40"
+      color="0x00000000"
     />
 
     <Rectangle
       id="progressBg"
-      translation="[16, 176]"
-      width="176"
+      translation="[26, 186]"
+      width="118"
       height="3"
       color="0x253247"
       visible="false"
@@ -51,7 +52,7 @@
 
     <Rectangle
       id="progressFill"
-      translation="[16, 176]"
+      translation="[26, 186]"
       width="0"
       height="3"
       color="0xD8B765"
@@ -60,9 +61,9 @@
 
     <Label
       id="title"
-      translation="[20, 122]"
-      width="166"
-      height="30"
+      translation="[16, 196]"
+      width="140"
+      height="40"
       font="font:SmallSystemFont"
       color="0xE6EBF3"
       wrap="true"
@@ -72,12 +73,13 @@
 
     <Label
       id="meta"
-      translation="[20, 152]"
-      width="166"
+      translation="[16, 236]"
+      width="140"
       height="18"
       font="font:SmallSystemFont"
       color="0x9FB0C5"
       text=""
+      visible="false"
     />
   </children>
 

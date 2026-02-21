@@ -115,7 +115,7 @@
                   numColumns="2"
                   numRows="1"
                   drawFocusFeedback="false"
-                  itemComponentName="BrowsePosterItem"
+                  itemComponentName="HighlightBannerItem"
                 />
 
                 <Label
@@ -131,7 +131,7 @@
                 <MarkupGrid
                   id="continueList"
                   translation="[0, 426]"
-                  itemSize="[208, 236]"
+                  itemSize="[170, 252]"
                   numColumns="3"
                   numRows="1"
                   drawFocusFeedback="false"
@@ -140,7 +140,7 @@
 
                 <Label
                   id="recentMoviesTitle"
-                  translation="[0, 676]"
+                  translation="[0, 694]"
                   width="620"
                   height="34"
                   font="font:MediumSystemFont"
@@ -148,10 +148,22 @@
                   text="Filmes recentes"
                 />
 
+                <Label
+                  id="recentMoviesMore"
+                  translation="[1020, 698]"
+                  width="220"
+                  height="24"
+                  font="font:SmallSystemFont"
+                  horizAlign="right"
+                  color="0x4D5B87"
+                  text="Ver tudo"
+                  visible="false"
+                />
+
                 <MarkupGrid
                   id="recentMoviesList"
-                  translation="[0, 712]"
-                  itemSize="[208, 236]"
+                  translation="[0, 730]"
+                  itemSize="[170, 252]"
                   numColumns="3"
                   numRows="1"
                   drawFocusFeedback="false"
@@ -160,7 +172,7 @@
 
                 <Label
                   id="recentSeriesTitle"
-                  translation="[0, 962]"
+                  translation="[0, 998]"
                   width="620"
                   height="34"
                   font="font:MediumSystemFont"
@@ -168,10 +180,22 @@
                   text="Series recentes"
                 />
 
+                <Label
+                  id="recentSeriesMore"
+                  translation="[1020, 1002]"
+                  width="220"
+                  height="24"
+                  font="font:SmallSystemFont"
+                  horizAlign="right"
+                  color="0x4D5B87"
+                  text="Ver tudo"
+                  visible="false"
+                />
+
                 <MarkupGrid
                   id="recentSeriesList"
-                  translation="[0, 998]"
-                  itemSize="[208, 236]"
+                  translation="[0, 1034]"
+                  itemSize="[170, 252]"
                   numColumns="3"
                   numRows="1"
                   drawFocusFeedback="false"

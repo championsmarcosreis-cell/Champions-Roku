@@ -31,6 +31,7 @@ sub onItemContentChanged()
   itemType = ""
   if c.itemType <> invalid then itemType = c.itemType.ToStr().Trim()
   if m.meta <> invalid then m.meta.text = friendlyType(itemType)
+  if m.meta <> invalid then m.meta.visible = false
 
   poster = ""
   if c.hdPosterUrl <> invalid then poster = c.hdPosterUrl.ToStr().Trim()
@@ -53,7 +54,7 @@ sub onItemContentChanged()
   if m.progressBg <> invalid then m.progressBg.visible = (pct > 0)
   if m.progressFill <> invalid then
     m.progressFill.visible = (pct > 0)
-    if pct > 0 then m.progressFill.width = Int(1.76 * pct)
+    if pct > 0 then m.progressFill.width = Int(1.18 * pct)
   end if
 
   applyStyle()
@@ -67,11 +68,7 @@ sub applyStyle()
   focused = (m.top.itemHasFocus = true)
   if m.focusRing <> invalid then m.focusRing.visible = focused
   if m.textOverlay <> invalid then
-    if focused then
-      m.textOverlay.color = "0xD20A111D"
-    else
-      m.textOverlay.color = "0xB00A111D"
-    end if
+    m.textOverlay.color = "0x00000000"
   end if
   if m.title <> invalid then
     if focused then

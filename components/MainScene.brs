@@ -405,6 +405,8 @@ sub bindUiNodes()
   m.continueTitle = m.top.findNode("continueTitle")
   m.recentMoviesTitle = m.top.findNode("recentMoviesTitle")
   m.recentSeriesTitle = m.top.findNode("recentSeriesTitle")
+  m.recentMoviesMore = m.top.findNode("recentMoviesMore")
+  m.recentSeriesMore = m.top.findNode("recentSeriesMore")
   m.heroPromptBg = m.top.findNode("heroPromptBg")
   m.heroPromptText = m.top.findNode("heroPromptText")
   m.heroPromptBtnBg = m.top.findNode("heroPromptBtnBg")
@@ -1410,6 +1412,7 @@ function _t(key as String) as String
         top10: "Highlights"
         recent_movies: "Recent Movies"
         recent_series: "Recent Series"
+        view_all: "See all"
         recent_live: "Live Now"
         loading: "Loading..."
         no_items: "No items"
@@ -1483,6 +1486,7 @@ function _t(key as String) as String
         top10: "Destaques"
         recent_movies: "Filmes recentes"
         recent_series: "Series recentes"
+        view_all: "Ver tudo"
         recent_live: "Ao vivo agora"
         loading: "Carregando..."
         no_items: "Sem itens"
@@ -1556,6 +1560,7 @@ function _t(key as String) as String
         top10: "Destacados"
         recent_movies: "Peliculas recientes"
         recent_series: "Series recientes"
+        view_all: "Ver todo"
         recent_live: "En vivo ahora"
         loading: "Cargando..."
         no_items: "Sin elementos"
@@ -1629,6 +1634,7 @@ function _t(key as String) as String
         top10: "In evidenza"
         recent_movies: "Film recenti"
         recent_series: "Serie recenti"
+        view_all: "Vedi tutto"
         recent_live: "In diretta ora"
         loading: "Caricamento..."
         no_items: "Nessun elemento"
@@ -1708,6 +1714,8 @@ sub applyLocalization()
   if m.continueTitle <> invalid then m.continueTitle.text = _t("resume_title")
   if m.recentMoviesTitle <> invalid then m.recentMoviesTitle.text = _t("recent_movies")
   if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.text = _t("recent_series")
+  if m.recentMoviesMore <> invalid then m.recentMoviesMore.text = _t("view_all")
+  if m.recentSeriesMore <> invalid then m.recentSeriesMore.text = _t("view_all")
   if m.seriesDetailBack <> invalid then m.seriesDetailBack.text = "< " + _t("detail_back")
   if m.seriesDetailSynopsisTitle <> invalid then m.seriesDetailSynopsisTitle.text = _t("detail_synopsis")
   if m.seriesDetailSeasonsTitle <> invalid then m.seriesDetailSeasonsTitle.text = _t("series_seasons")
@@ -2117,6 +2125,38 @@ function _browseBackdropUri(itemId as String, apiBase as String, jellyfinToken a
   u = base + "/jellyfin/Items/" + id + "/Images/Backdrop/0"
   q = {
     maxWidth: "1280"
+    quality: "85"
+  }
+  tg = tag
+  if tg = invalid then tg = ""
+  tg = tg.ToStr().Trim()
+  if tg <> "" then q["tag"] = tg
+
+  tok = jellyfinToken
+  if tok = invalid then tok = ""
+  tok = tok.ToStr().Trim()
+  if tok <> "" then
+    q["X-Emby-Token"] = tok
+    q["X-Jellyfin-Token"] = tok
+  end if
+  return appendQuery(u, q)
+end function
+
+function _browseShelfBackdropUri(itemId as String, apiBase as String, jellyfinToken as String, tag as String) as String
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return ""
+
+  base = apiBase
+  if base = invalid then base = ""
+  base = base.ToStr().Trim()
+  if base = "" then return ""
+  if Right(base, 1) = "/" then base = Left(base, Len(base) - 1)
+
+  u = base + "/jellyfin/Items/" + id + "/Images/Backdrop/0"
+  q = {
+    maxWidth: "960"
     quality: "85"
   }
   tg = tag
@@ -3689,6 +3729,8 @@ function _ensureBrowseNodes() as Boolean
     if m.continueTitle = invalid then m.continueTitle = m.browseCard.findNode("continueTitle")
     if m.recentMoviesTitle = invalid then m.recentMoviesTitle = m.browseCard.findNode("recentMoviesTitle")
     if m.recentSeriesTitle = invalid then m.recentSeriesTitle = m.browseCard.findNode("recentSeriesTitle")
+    if m.recentMoviesMore = invalid then m.recentMoviesMore = m.browseCard.findNode("recentMoviesMore")
+    if m.recentSeriesMore = invalid then m.recentSeriesMore = m.browseCard.findNode("recentSeriesMore")
     if m.heroPromptBg = invalid then m.heroPromptBg = m.browseCard.findNode("heroPromptBg")
     if m.heroPromptText = invalid then m.heroPromptText = m.browseCard.findNode("heroPromptText")
     if m.heroPromptBtnBg = invalid then m.heroPromptBtnBg = m.browseCard.findNode("heroPromptBtnBg")
@@ -5282,6 +5324,8 @@ sub onGatewayTaskStateChanged()
       if m.continueTitle <> invalid then m.continueTitle.visible = false
       if m.recentMoviesTitle <> invalid then m.recentMoviesTitle.visible = false
       if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.visible = false
+      if m.recentMoviesMore <> invalid then m.recentMoviesMore.visible = false
+      if m.recentSeriesMore <> invalid then m.recentSeriesMore.visible = false
       if m.browseEmptyLabel <> invalid then
         m.browseEmptyLabel.text = _t("no_items")
         m.browseEmptyLabel.visible = true
@@ -8054,6 +8098,8 @@ sub enterBrowse()
   if m.continueTitle <> invalid then m.continueTitle.visible = false
   if m.recentMoviesTitle <> invalid then m.recentMoviesTitle.visible = false
   if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.visible = false
+  if m.recentMoviesMore <> invalid then m.recentMoviesMore.visible = false
+  if m.recentSeriesMore <> invalid then m.recentSeriesMore.visible = false
   _setBrowseLibraryVisible(false)
   _refreshBrowseLibraryHeader()
   if m.browseEmptyLabel <> invalid then
@@ -8391,6 +8437,157 @@ sub loadLivePreview()
   m.gatewayTask.control = "run"
 end sub
 
+function _shelfTrimString(v as Dynamic) as String
+  s = v
+  if s = invalid then s = ""
+  return s.ToStr().Trim()
+end function
+
+function _shelfNormalizeMediaUrl(raw as Dynamic, baseNoSlash as String) as String
+  u = _shelfTrimString(raw)
+  if u = "" then return ""
+
+  ul = LCase(u)
+  if Left(ul, 6) = "pkg:/" then return u
+  if Instr(1, ul, "://") > 0 then return u
+
+  base = _shelfTrimString(baseNoSlash)
+  if Right(base, 1) = "/" then base = Left(base, Len(base) - 1)
+
+  if Left(u, 1) = "/" then
+    if base <> "" then return base + u
+    return u
+  end if
+
+  if base <> "" then return base + "/" + u
+  return u
+end function
+
+function _shelfAppendMediaAuth(url as String, jellyfinToken as String, appToken as String) as String
+  u = _shelfTrimString(url)
+  if u = "" then return ""
+
+  ul = LCase(u)
+  if Left(ul, 6) = "pkg:/" then return u
+
+  needsAuth = false
+  if Left(u, 1) = "/" then needsAuth = true
+  if Instr(1, ul, "/jellyfin/") > 0 then needsAuth = true
+  if needsAuth <> true then return u
+
+  q = {}
+  tok = _shelfTrimString(jellyfinToken)
+  if tok <> "" then
+    if Instr(1, ul, "api_key=") = 0 then q["api_key"] = tok
+    if Instr(1, ul, "x-emby-token=") = 0 then q["X-Emby-Token"] = tok
+    if Instr(1, ul, "x-jellyfin-token=") = 0 then q["X-Jellyfin-Token"] = tok
+  end if
+
+  appTok = _shelfTrimString(appToken)
+  if appTok <> "" then
+    if Instr(1, ul, "app_token=") = 0 and Instr(1, ul, "apptoken=") = 0 then q["app_token"] = appTok
+  end if
+
+  if q.Count() > 0 then return appendQuery(u, q)
+  return u
+end function
+
+function _shelfItemUrlByKeys(it as Object, keys as Object, baseNoSlash as String, jellyfinToken as String, appToken as String) as String
+  if type(it) <> "roAssociativeArray" then return ""
+  if type(keys) <> "roArray" then return ""
+
+  for each key in keys
+    if key = invalid then continue for
+    raw = _aaGetCi(it, key.ToStr())
+    u = _shelfNormalizeMediaUrl(raw, baseNoSlash)
+    if u = "" then continue for
+    u = _shelfAppendMediaAuth(u, jellyfinToken, appToken)
+    if u <> "" then return u
+  end for
+
+  return ""
+end function
+
+function _shelfBackdropTagFromItem(it as Object) as String
+  if type(it) <> "roAssociativeArray" then return ""
+
+  directKeys = [
+    "backdropTag"
+    "BackdropTag"
+    "backdropImageTag"
+    "BackdropImageTag"
+    "backdrop_tag"
+    "backdropImage"
+  ]
+  for each key in directKeys
+    v = _shelfTrimString(_aaGetCi(it, key))
+    if v <> "" then return v
+  end for
+
+  arrKeys = [
+    "backdropTags"
+    "BackdropTags"
+    "BackdropImageTags"
+    "ParentBackdropImageTags"
+  ]
+  for each key in arrKeys
+    arr = _aaGetCi(it, key)
+    if type(arr) = "roArray" then
+      for each tag in arr
+        t = _shelfTrimString(tag)
+        if t <> "" then return t
+      end for
+    end if
+  end for
+
+  imageTags = _aaGetCi(it, "imageTags")
+  if type(imageTags) = "roAssociativeArray" then
+    t = _shelfTrimString(_aaGetCi(imageTags, "Backdrop"))
+    if t <> "" then return t
+  end if
+
+  return ""
+end function
+
+function _shelfBuildImageUrls(it as Object, itemId as String, apiBase as String, jellyfinToken as String, appToken as String, preferWide as Boolean) as Object
+  baseNoSlash = _shelfTrimString(apiBase)
+  if Right(baseNoSlash, 1) = "/" then baseNoSlash = Left(baseNoSlash, Len(baseNoSlash) - 1)
+
+  posterUri = _browsePosterUri(itemId, apiBase, jellyfinToken)
+  if posterUri = "" then posterUri = _browseChannelPosterUri(itemId, apiBase, jellyfinToken)
+  if posterUri = "" then posterUri = _browseChannelImageUri(itemId, apiBase, jellyfinToken, "Logo")
+  if posterUri = "" then
+    posterUri = _shelfItemUrlByKeys(it, ["posterUrl", "poster", "primaryUrl", "thumbUrl", "imageUrl", "posterPath", "imagePath"], baseNoSlash, jellyfinToken, appToken)
+  end if
+  if posterUri = "" then posterUri = "pkg:/images/logo.png"
+
+  wideUri = posterUri
+  if preferWide = true then
+    wideUri = _shelfItemUrlByKeys(it, ["bannerUrl", "backdropUrl", "thumbWideUrl"], baseNoSlash, jellyfinToken, appToken)
+    if wideUri = "" then
+      wideUri = _shelfItemUrlByKeys(it, ["wideUrl", "landscapeUrl", "heroUrl", "backdrop"], baseNoSlash, jellyfinToken, appToken)
+    end if
+    if wideUri = "" then
+      wideUri = _shelfItemUrlByKeys(it, ["bannerPath", "backdropPath", "thumbWidePath", "widePath", "landscapePath", "heroPath"], baseNoSlash, jellyfinToken, appToken)
+    end if
+    if wideUri = "" then
+      backdropTag = _shelfBackdropTagFromItem(it)
+      if backdropTag <> "" then
+        wideUri = _browseShelfBackdropUri(itemId, apiBase, jellyfinToken, backdropTag)
+      end if
+      if wideUri = "" then
+        wideUri = _browseShelfBackdropUri(itemId, apiBase, jellyfinToken, "")
+      end if
+    end if
+    if wideUri = "" then wideUri = posterUri
+  end if
+
+  return {
+    posterUrl: posterUri
+    wideUrl: wideUri
+  }
+end function
+
 function _buildShelfContent(raw as String, rankEnabled as Boolean, section as String) as Object
   items = ParseJson(raw)
   if type(items) <> "roArray" then items = []
@@ -8398,9 +8595,11 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
   cfg = loadConfig()
   posterBase = cfg.apiBase
   posterToken = cfg.jellyfinToken
+  appToken = cfg.appToken
   sec = section
   if sec = invalid then sec = ""
   sec = LCase(sec.Trim())
+  preferWide = (sec = "items")
 
   root = CreateObject("roSGNode", "ContentNode")
   rank = 0
@@ -8439,16 +8638,23 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
     c.addField("posterMode", "string", false)
     c.addField("hdPosterUrl", "string", false)
     c.addField("posterUrl", "string", false)
+    c.addField("wideUrl", "string", false)
 
     if it <> invalid then
       if it.id <> invalid then c.id = it.id
       c.title = name0
       c.itemType = typ0
       c.path = path0
-      posterUri = _browsePosterUri(c.id, posterBase, posterToken)
-      if posterUri = "" then posterUri = _browseChannelPosterUri(c.id, posterBase, posterToken)
-      c.hdPosterUrl = posterUri
+      imgs = _shelfBuildImageUrls(it, c.id, posterBase, posterToken, appToken, preferWide)
+      posterUri = imgs.posterUrl
+      wideUri = imgs.wideUrl
+      if preferWide then
+        c.hdPosterUrl = wideUri
+      else
+        c.hdPosterUrl = posterUri
+      end if
       c.posterUrl = posterUri
+      c.wideUrl = wideUri
       c.posterMode = "zoomToFill"
 
       rPos = -1
@@ -8485,6 +8691,7 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
       c.posterMode = "zoomToFill"
       c.hdPosterUrl = ""
       c.posterUrl = ""
+      c.wideUrl = ""
     end if
     root.appendChild(c)
   end for
@@ -8525,10 +8732,14 @@ sub _renderHomeShelf(section as String, raw as String)
     if m.continueTitle <> invalid then m.continueTitle.visible = (root.getChildCount() > 0)
   else if sec = "movies" then
     if m.recentMoviesList <> invalid then m.recentMoviesList.content = root
-    if m.recentMoviesTitle <> invalid then m.recentMoviesTitle.visible = (root.getChildCount() > 0)
+    hasRows = (root.getChildCount() > 0)
+    if m.recentMoviesTitle <> invalid then m.recentMoviesTitle.visible = hasRows
+    if m.recentMoviesMore <> invalid then m.recentMoviesMore.visible = hasRows
   else if sec = "series" then
     if m.recentSeriesList <> invalid then m.recentSeriesList.content = root
-    if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.visible = (root.getChildCount() > 0)
+    hasRows = (root.getChildCount() > 0)
+    if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.visible = hasRows
+    if m.recentSeriesMore <> invalid then m.recentSeriesMore.visible = hasRows
   end if
 
   _updateBrowseEmptyState()
@@ -8910,6 +9121,7 @@ sub renderShelfItems(raw as String)
   cfg = loadConfig()
   posterBase = cfg.apiBase
   posterToken = cfg.jellyfinToken
+  appToken = cfg.appToken
 
   ctype = ""
   if m.activeViewCollection <> invalid then ctype = m.activeViewCollection
@@ -8955,17 +9167,22 @@ sub renderShelfItems(raw as String)
     c.addField("posterMode", "string", false)
     c.addField("hdPosterUrl", "string", false)
     c.addField("posterUrl", "string", false)
+    c.addField("wideUrl", "string", false)
     if it <> invalid then
       if it.id <> invalid then c.id = it.id
       c.title = name0
       c.itemType = typ0
       c.path = path0
-      posterUri = _browsePosterUri(c.id, posterBase, posterToken)
-      if posterUri = "" then posterUri = _browseChannelPosterUri(c.id, posterBase, posterToken)
-      if posterUri = "" then posterUri = _browseChannelImageUri(c.id, posterBase, posterToken, "Logo")
-      if posterUri = "" then posterUri = "pkg:/images/logo.png"
-      c.hdPosterUrl = posterUri
+      imgs = _shelfBuildImageUrls(it, c.id, posterBase, posterToken, appToken, isTop10)
+      posterUri = imgs.posterUrl
+      wideUri = imgs.wideUrl
+      if isTop10 then
+        c.hdPosterUrl = wideUri
+      else
+        c.hdPosterUrl = posterUri
+      end if
       c.posterUrl = posterUri
+      c.wideUrl = wideUri
       c.posterMode = "zoomToFill"
       rPos = -1
       if it.positionMs <> invalid then rPos = _sceneIntFromAny(it.positionMs)
@@ -9000,6 +9217,7 @@ sub renderShelfItems(raw as String)
       c.posterMode = "zoomToFill"
       c.hdPosterUrl = ""
       c.posterUrl = ""
+      c.wideUrl = ""
     end if
     root.appendChild(c)
   end for
