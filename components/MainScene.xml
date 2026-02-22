@@ -78,7 +78,7 @@
       <Group
         id="seriesDetailViewport"
         translation="[0, 0]"
-        clippingRect="[0, 58, 1280, 662]"
+        clippingRect="[0, 0, 1280, 720]"
       >
         <children>
           <Group
@@ -388,49 +388,46 @@
               />
             </children>
           </Group>
+          <Group id="seriesDetailBackGroup">
+            <children>
+              <Rectangle
+                id="seriesDetailTopBar"
+                translation="[0, 0]"
+                width="1280"
+                height="64"
+                color="0x0A1524"
+              />
+              <Rectangle
+                id="seriesDetailBackFocus"
+                translation="[44, 10]"
+                width="200"
+                height="40"
+                color="0x332F3C4C"
+                visible="false"
+              />
+              <!-- Invisible click target so mouse/touch can activate "back" reliably. -->
+              <Button
+                id="seriesDetailBackBtn"
+                translation="[42, 8]"
+                minWidth="220"
+                maxWidth="220"
+                text=""
+                showFocusFootprint="false"
+                opacity="0.0"
+              />
+              <Label
+                id="seriesDetailBack"
+                translation="[58, 18]"
+                width="300"
+                height="24"
+                font="font:SmallSystemFont"
+                color="0xFFFFFF"
+                text="< Detalhe"
+              />
+            </children>
+          </Group>
         </children>
       </Group>
-      <Rectangle
-        id="seriesDetailTopBar"
-        translation="[0, 0]"
-        width="1280"
-        height="104"
-        color="0x0A1524"
-      />
-      <Rectangle
-        id="seriesDetailBackPlate"
-        translation="[46, 12]"
-        width="196"
-        height="36"
-        color="0x223344"
-      />
-      <Rectangle
-        id="seriesDetailBackFocus"
-        translation="[44, 10]"
-        width="200"
-        height="40"
-        color="0x332F3C4C"
-        visible="false"
-      />
-      <!-- Invisible click target so mouse/touch can activate "back" reliably. -->
-      <Button
-        id="seriesDetailBackBtn"
-        translation="[42, 8]"
-        minWidth="220"
-        maxWidth="220"
-        text=""
-        showFocusFootprint="false"
-        opacity="0.0"
-      />
-      <Label
-        id="seriesDetailBack"
-        translation="[58, 18]"
-        width="300"
-        height="24"
-        font="font:SmallSystemFont"
-        color="0xFFFFFF"
-        text="< Detalhe"
-      />
     </Group>
 
     <ChampionsVideo
