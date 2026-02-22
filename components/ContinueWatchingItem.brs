@@ -10,7 +10,10 @@ end sub
 sub onItemContentChanged()
   c = m.top.itemContent
   if c = invalid then
-    if m.cover <> invalid then m.cover.uri = ""
+    if m.cover <> invalid then
+      if m.cover.hasField("loadDisplayMode") then m.cover.loadDisplayMode = "zoomToFill"
+      m.cover.uri = ""
+    end if
     if m.title <> invalid then m.title.text = ""
     if m.subtitle <> invalid then
       m.subtitle.text = ""
@@ -39,7 +42,21 @@ sub onItemContentChanged()
   if art = "" and c.hdPosterUrl <> invalid then art = c.hdPosterUrl.ToStr().Trim()
   if art = "" and c.HDPosterUrl <> invalid then art = c.HDPosterUrl.ToStr().Trim()
   if art = "" then art = "pkg:/images/logo.png"
-  if m.cover <> invalid then m.cover.uri = art
+
+  mode = "zoomToFill"
+  if c.posterMode <> invalid then
+    tmpMode = c.posterMode.ToStr().Trim()
+    if tmpMode <> "" then mode = tmpMode
+  end if
+  modeL = LCase(mode)
+  if modeL <> "zoomtofill" and modeL <> "scaletofit" and modeL <> "scaletofill" then
+    mode = "zoomToFill"
+  end if
+
+  if m.cover <> invalid then
+    if m.cover.hasField("loadDisplayMode") then m.cover.loadDisplayMode = mode
+    m.cover.uri = art
+  end if
 
   ratio = _resumeRatio(c)
   showProgress = (ratio > 0)

@@ -8769,6 +8769,101 @@ function _shelfBuildImageUrls(it as Object, itemId as String, apiBase as String,
   }
 end function
 
+function _continueWatchingJellyfinImageUrl(baseNoSlash as String, itemId as String, imageType as String, extraPath as String, tag as String, maxWidth as Integer, jellyfinToken as String) as String
+  base = _shelfTrimString(baseNoSlash)
+  id = _shelfTrimString(itemId)
+  if base = "" or id = "" then return ""
+  if Right(base, 1) = "/" then base = Left(base, Len(base) - 1)
+
+  imgType = _shelfTrimString(imageType)
+  if imgType = "" then return ""
+
+  u = base + "/jellyfin/Items/" + id + "/Images/" + imgType
+  ex = _shelfTrimString(extraPath)
+  if ex <> "" then u = u + ex
+
+  w = maxWidth
+  if w <= 0 then w = 560
+
+  q = {
+    maxWidth: w.ToStr()
+    quality: "90"
+  }
+
+  tg = _shelfTrimString(tag)
+  if tg <> "" then q["tag"] = tg
+
+  tok = _shelfTrimString(jellyfinToken)
+  if tok <> "" then q["api_key"] = tok
+
+  return appendQuery(u, q)
+end function
+
+function _continueWatchingImageUrlFromCfg(it as Object, maxWidth as Integer, apiBase as String, jellyfinToken as String) as Object
+  out = {
+    url: ""
+    kind: "primary"
+    mode: "scaleToFit"
+  }
+  if type(it) <> "roAssociativeArray" then return out
+
+  itemId = _shelfTrimString(_aaGetCi(it, "id"))
+  if itemId = "" then itemId = _shelfTrimString(_aaGetCi(it, "Id"))
+  if itemId = "" then return out
+
+  imgTags = _aaGetCi(it, "ImageTags")
+  if type(imgTags) <> "roAssociativeArray" then imgTags = _aaGetCi(it, "imageTags")
+  if type(imgTags) <> "roAssociativeArray" then imgTags = invalid
+
+  thumbTag = ""
+  primaryTag = ""
+  if imgTags <> invalid then
+    thumbTag = _shelfTrimString(_aaGetCi(imgTags, "Thumb"))
+    primaryTag = _shelfTrimString(_aaGetCi(imgTags, "Primary"))
+  end if
+
+  backdropTag = ""
+  backdropTags = _aaGetCi(it, "BackdropImageTags")
+  if type(backdropTags) <> "roArray" then backdropTags = _aaGetCi(it, "backdropImageTags")
+  if type(backdropTags) = "roArray" then
+    for each t in backdropTags
+      tmpTag = _shelfTrimString(t)
+      if tmpTag <> "" then
+        backdropTag = tmpTag
+        exit for
+      end if
+    end for
+  end if
+  if backdropTag = "" then
+    backdropTag = _shelfTrimString(_aaGetCi(it, "BackdropImageTag"))
+    if backdropTag = "" then backdropTag = _shelfTrimString(_aaGetCi(it, "backdropImageTag"))
+  end if
+
+  if thumbTag <> "" then
+    out.url = _continueWatchingJellyfinImageUrl(apiBase, itemId, "Thumb", "", thumbTag, maxWidth, jellyfinToken)
+    out.kind = "thumb"
+    out.mode = "zoomToFill"
+    return out
+  end if
+
+  if backdropTag <> "" then
+    out.url = _continueWatchingJellyfinImageUrl(apiBase, itemId, "Backdrop", "/0", backdropTag, maxWidth, jellyfinToken)
+    out.kind = "backdrop"
+    out.mode = "zoomToFill"
+    return out
+  end if
+
+  out.url = _continueWatchingJellyfinImageUrl(apiBase, itemId, "Primary", "", primaryTag, maxWidth, jellyfinToken)
+  out.kind = "primary"
+  out.mode = "scaleToFit"
+  return out
+end function
+
+function getContinueWatchingImageUrl(item as Object, W as Integer) as Object
+  cfg = loadConfig()
+  return _continueWatchingImageUrlFromCfg(item, W, cfg.apiBase, cfg.jellyfinToken)
+end function
+
 function _resumeMapKey(itemId as String) as String
   id = itemId
   if id = invalid then id = ""
@@ -9125,6 +9220,18 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
       imgs = _shelfBuildImageUrls(it, c.id, posterBase, posterToken, appToken, preferWide)
       posterUri = imgs.posterUrl
       wideUri = imgs.wideUrl
+      mode = "zoomToFill"
+
+      if sec = "continue" then
+        cimg = _continueWatchingImageUrlFromCfg(it, 560, posterBase, posterToken)
+        if type(cimg) = "roAssociativeArray" then
+          cu = _shelfTrimString(cimg.url)
+          if cu <> "" then wideUri = cu
+          cm = _shelfTrimString(cimg.mode)
+          if cm <> "" then mode = cm
+        end if
+      end if
+
       if preferWide then
         c.hdPosterUrl = wideUri
       else
@@ -9132,7 +9239,7 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
       end if
       c.posterUrl = posterUri
       c.wideUrl = wideUri
-      c.posterMode = "zoomToFill"
+      c.posterMode = mode
 
       resumeRaw = _resumeStateFromRawItem(it)
       if _resumeStateHasSignal(resumeRaw) then _rememberResumeState(c.id, resumeRaw)
