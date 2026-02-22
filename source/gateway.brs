@@ -1817,6 +1817,11 @@ function gatewayContinueWatchingShelf(apiBase as String, appToken as String, jel
         name: got.name
         type: got.type
         path: got.path
+        collectionType: got.collectionType
+        seriesId: got.seriesId
+        BackdropImageTags: got.BackdropImageTags
+        ParentBackdropImageTags: got.ParentBackdropImageTags
+        imageTags: got.imageTags
       }
 
       pinfo = progressById[iid]
