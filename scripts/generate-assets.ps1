@@ -507,6 +507,7 @@ try {
   Make-NeonFocusRingPng (Join-Path $imagesDir 'banner_focus_neon.png') 570 328 24 '#E3C06A' 8 36 4 120 2 220 1 255
   Make-NeonFocusRingPng (Join-Path $imagesDir 'overlay_focus_banner_560x318.png') 560 318 18 '#E3C06A' 8 36 4 120 2 220 1 255
   Make-NeonFocusRingPng (Join-Path $imagesDir 'overlay_focus_continue_248x140.png') 248 140 12 '#E3C06A' 6 36 3 125 2 220 1 255
+  Make-NeonFocusRingPng (Join-Path $imagesDir 'overlay_focus_detail_340x190.png') 340 190 12 '#E3C06A' 6 36 3 125 2 220 1 255
   Make-NeonFocusRingPng (Join-Path $imagesDir 'overlay_focus_rail_124x182.png') 124 182 10 '#E3C06A' 5 42 3 145 1 235 1 255
   Make-NeonFocusRingPng (Join-Path $imagesDir 'overlay_focus_library_68x92.png') 68 92 8 '#E3C06A' 5 42 2 150 1 235 1 255
 

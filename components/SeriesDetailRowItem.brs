@@ -1,5 +1,6 @@
 sub init()
   m.cardBg = m.top.findNode("cardBg")
+  m.selectedRing = m.top.findNode("selectedRing")
   m.focusRing = m.top.findNode("focusRing")
   m.cover = m.top.findNode("cover")
   m.title = m.top.findNode("title")
@@ -13,6 +14,7 @@ sub onItemContentChanged()
       m.cover.uri = ""
     end if
     if m.title <> invalid then m.title.text = ""
+    if m.selectedRing <> invalid then m.selectedRing.visible = false
     if m.focusRing <> invalid then m.focusRing.visible = false
     return
   end if
@@ -39,10 +41,15 @@ end sub
 
 sub applyStyle()
   focused = (m.top.itemHasFocus = true)
+  selected = false
+  c = m.top.itemContent
+  if c <> invalid and c.selected <> invalid and c.selected = true then selected = true
+
+  if m.selectedRing <> invalid then m.selectedRing.visible = (selected and focused <> true)
   if m.focusRing <> invalid then m.focusRing.visible = focused
   if m.title <> invalid then
     if focused then
-      m.title.color = "0xFFFFFF"
+      m.title.color = "0xD8B765"
     else
       m.title.color = "0xE6EBF3"
     end if

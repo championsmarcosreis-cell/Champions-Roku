@@ -15,11 +15,12 @@
     />
 
     <Poster
-      id="focusRing"
-      translation="[-3, -3]"
-      width="346"
-      height="196"
-      uri="pkg:/images/field_focus.png"
+      id="selectedRing"
+      translation="[0, 0]"
+      width="340"
+      height="190"
+      uri="pkg:/images/overlay_focus_detail_340x190.png"
+      opacity="0.65"
       visible="false"
     />
 
@@ -32,14 +33,23 @@
       uri=""
     />
 
+    <Poster
+      id="focusRing"
+      translation="[0, 0]"
+      width="340"
+      height="190"
+      uri="pkg:/images/overlay_focus_detail_340x190.png"
+      visible="false"
+    />
+
     <Label
       id="title"
-      translation="[10, 166]"
+      translation="[10, 164]"
       width="320"
-      height="18"
+      height="24"
       font="font:SmallSystemFont"
       color="0xE6EBF3"
-      wrap="true"
+      wrap="false"
       numLines="1"
       text=""
     />

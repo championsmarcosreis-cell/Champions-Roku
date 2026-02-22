@@ -144,9 +144,9 @@ sub init()
   m.seriesDetailScrollY = 0
   m.seriesDetailContentHeight = 1840
   m.seriesDetailRowHeight = 200
-  m.seriesDetailYSeasons = 1010
-  m.seriesDetailYEpisodes = 1250
-  m.seriesDetailYCast = 1510
+  m.seriesDetailYSeasons = 1022
+  m.seriesDetailYEpisodes = 1272
+  m.seriesDetailYCast = 1532
   m.pendingResumeProbeItemId = ""
   m.pendingResumeProbeTitle = ""
   m.pendingResumeProbeQueued = false
@@ -4687,6 +4687,30 @@ sub refreshPlayerSettingsLists()
 
   if anySelected <> true then off.selected = true
 
+  ' Defensive normalization: mixed native/external subtitle sources can mark
+  ' more than one row as selected. Keep exactly one selected entry.
+  selCount = 0
+  keepIdx = -1
+  for i = 0 to subRoot.getChildCount() - 1
+    n = subRoot.getChild(i)
+    if n <> invalid and n.selected = true then
+      selCount = selCount + 1
+      keepIdx = i ' keep the last selected item (usually the freshest choice)
+    end if
+  end for
+
+  if selCount <= 0 then
+    off.selected = true
+  else if selCount > 1 then
+    print "settings subtitles normalize multi_selected count=" + selCount.ToStr() + " keepIdx=" + keepIdx.ToStr()
+    for i = 0 to subRoot.getChildCount() - 1
+      n = subRoot.getChild(i)
+      if n <> invalid then
+        n.selected = (i = keepIdx)
+      end if
+    end for
+  end if
+
   m.playerSettingsSubList.content = subRoot
   sFocus = _selectedIndexInContent(subRoot)
   if sFocus < 0 then sFocus = 0
@@ -6778,8 +6802,13 @@ sub _togglePauseResume()
   st = ""
   if m.player.state <> invalid then st = m.player.state.ToStr()
   st = LCase(st.Trim())
-  if st = "playing" then
+  lastSt = ""
+  if m.lastPlayerState <> invalid then lastSt = LCase(m.lastPlayerState.ToStr().Trim())
+
+  if st = "playing" or st = "buffering" then
     if m.player.hasField("control") then m.player.control = "pause"
+  else if st = "paused" or lastSt = "paused" then
+    if m.player.hasField("control") then m.player.control = "resume"
   else
     if m.player.hasField("control") then m.player.control = "play"
   end if
@@ -6916,8 +6945,16 @@ function handlePlaybackKey(kl as String) as Boolean
         if m.playbackIsLive <> true then showPlayerSettings()
         consumed = true
       else
-        _applyOsdSeek()
-        hidePlayerOverlay()
+        if m.seekActive = true then
+          _applyOsdSeek()
+          hidePlayerOverlay()
+        else if m.playbackIsLive <> true then
+          ' VOD UX: OK while OSD is open toggles pause/resume without
+          ' forcing the user to move focus to the settings gear first.
+          _togglePauseResume()
+        else
+          hidePlayerOverlay()
+        end if
         consumed = true
       end if
     else if k = "up" or k = "down" then
@@ -10343,12 +10380,18 @@ sub _renderSeriesDetailEpisodes(seasonIdx as Integer)
       if ep.overview <> invalid then eover = ep.overview.ToStr().Trim()
     end if
     if ename = "" then ename = "Episode"
+    epTitle = ename
+    if eidx > 0 then
+      epTitle = eidx.ToStr() + ". " + ename
+    else if pidx > 0 then
+      epTitle = "S" + pidx.ToStr() + " • " + ename
+    end if
 
     c = CreateObject("roSGNode", "ContentNode")
     c.addField("itemType", "string", false)
     c.addField("meta", "string", false)
     if eid <> invalid and eid.Trim() <> "" then c.id = eid.Trim()
-    c.title = ename
+    c.title = epTitle
     c.itemType = "episode"
     c.meta = _compactDialogText(eover, 140)
 
@@ -10446,10 +10489,16 @@ sub _renderSeriesDetail(payload as Object)
   runtimeMin = _minutesFromTicks(series.runTimeTicks)
   if runtimeMin <= 0 and series.RunTimeTicks <> invalid then runtimeMin = _minutesFromTicks(series.RunTimeTicks)
   if runtimeMin < 0 then runtimeMin = 0
-  runtimeText = _t("detail_runtime") + " " + runtimeMin.ToStr() + " min"
+  showRuntime = (isSeries <> true and runtimeMin > 0)
   if m.seriesDetailRuntime <> invalid then
-    m.seriesDetailRuntime.text = runtimeText
-    m.seriesDetailRuntime.visible = true
+    if showRuntime then
+      runtimeText = _t("detail_runtime") + " " + runtimeMin.ToStr() + " min"
+      m.seriesDetailRuntime.text = runtimeText
+      m.seriesDetailRuntime.visible = true
+    else
+      m.seriesDetailRuntime.text = ""
+      m.seriesDetailRuntime.visible = false
+    end if
   end if
 
   cfg = loadConfig()
@@ -10475,30 +10524,36 @@ sub _renderSeriesDetail(payload as Object)
   _renderSeriesDetailCast(people)
   if m.seriesDetailCastCount > 0 then
     if m.seriesDetailIsSeries = true then
-      m.seriesDetailContentHeight = 1840
+      m.seriesDetailContentHeight = 1880
     else
-      m.seriesDetailContentHeight = 1290
+      m.seriesDetailContentHeight = 1330
     end if
   else
     if m.seriesDetailIsSeries = true then
-      m.seriesDetailContentHeight = 1590
+      m.seriesDetailContentHeight = 1630
     else
-      m.seriesDetailContentHeight = 1140
+      m.seriesDetailContentHeight = 1180
     end if
   end if
 
   if m.seriesDetailSeasonsList <> invalid then
     sRoot = CreateObject("roSGNode", "ContentNode")
+    selectedSeasonIndex = m.seriesDetailSeasonIndex
+    if selectedSeasonIndex <= 0 and seasons.Count() > 0 then
+      selectedSeasonIndex = _seriesSeasonIndexFromObj(seasons[0], 1)
+    end if
     idx = 1
     for each s in seasons
       sIdx = _seriesSeasonIndexFromObj(s, idx)
       sName = ""
       if s <> invalid and s.name <> invalid then sName = s.name.ToStr().Trim()
-      if sName = "" then sName = _t("series_seasons") + " " + sIdx.ToStr()
+      if sName = "" then sName = "Temporada " + sIdx.ToStr()
       c = CreateObject("roSGNode", "ContentNode")
       c.addField("seasonIndex", "integer", false)
+      c.addField("selected", "boolean", false)
       c.title = sName
       c.seasonIndex = sIdx
+      c.selected = (sIdx = selectedSeasonIndex)
       seasonPoster = ""
       if s <> invalid and s.id <> invalid then seasonPoster = _browsePosterUri(s.id, cfg.apiBase, cfg.jellyfinToken)
       if seasonPoster = "" then seasonPoster = posterUri
@@ -10510,7 +10565,9 @@ sub _renderSeriesDetail(payload as Object)
     if sRoot.getChildCount() > 0 then
       m.seriesDetailSeasonsList.itemFocused = 0
       first = sRoot.getChild(0)
-      if first <> invalid and first.hasField("seasonIndex") then
+      if selectedSeasonIndex > 0 then
+        m.seriesDetailSeasonIndex = selectedSeasonIndex
+      else if first <> invalid and first.hasField("seasonIndex") then
         m.seriesDetailSeasonIndex = _sceneIntFromAny(first.seasonIndex)
       else
         m.seriesDetailSeasonIndex = -1
@@ -10578,11 +10635,15 @@ sub _renderEpisodeDetail(ep as Object)
 
   runtimeMin = _minutesFromTicks(e.runTimeTicks)
   if runtimeMin <= 0 and e.RunTimeTicks <> invalid then runtimeMin = _minutesFromTicks(e.RunTimeTicks)
-  if runtimeMin < 0 then runtimeMin = 0
-  runtimeText = _t("detail_runtime") + " " + runtimeMin.ToStr() + " min"
   if m.seriesDetailRuntime <> invalid then
-    m.seriesDetailRuntime.text = runtimeText
-    m.seriesDetailRuntime.visible = true
+    if runtimeMin > 0 then
+      runtimeText = _t("detail_runtime") + " " + runtimeMin.ToStr() + " min"
+      m.seriesDetailRuntime.text = runtimeText
+      m.seriesDetailRuntime.visible = true
+    else
+      m.seriesDetailRuntime.text = ""
+      m.seriesDetailRuntime.visible = false
+    end if
   end if
 
   cfg = loadConfig()
@@ -10786,6 +10847,40 @@ sub onSeriesDetailBackSelected()
   _closeSeriesDetail()
 end sub
 
+sub _updateSeriesSeasonSelection(seasonIdx as Integer)
+  if m.seriesDetailSeasonsList = invalid then return
+  root = m.seriesDetailSeasonsList.content
+  if root = invalid then return
+
+  cnt = root.getChildCount()
+  if cnt <= 0 then return
+
+  changed = false
+  selectedGridIndex = -1
+  i = 0
+  while i < cnt
+    n = root.getChild(i)
+    if n <> invalid then
+      sIdx = i + 1
+      if n.hasField("seasonIndex") then sIdx = _sceneIntFromAny(n.seasonIndex)
+      target = (sIdx = seasonIdx)
+
+      cur = false
+      if n.hasField("selected") and n.selected = true then cur = true
+      if n.hasField("selected") <> true then n.addField("selected", "boolean", false)
+      if cur <> target then
+        n.selected = target
+        changed = true
+      end if
+      if target then selectedGridIndex = i
+    end if
+    i = i + 1
+  end while
+
+  if changed then m.seriesDetailSeasonsList.content = root
+  if selectedGridIndex >= 0 then m.seriesDetailSeasonsList.itemFocused = selectedGridIndex
+end sub
+
 sub onSeriesSeasonSelected()
   if m.seriesDetailOpen <> true then return
   if m.seriesDetailSeasonsList = invalid then return
@@ -10798,6 +10893,7 @@ sub onSeriesSeasonSelected()
   sIdx = -1
   if n.hasField("seasonIndex") then sIdx = _sceneIntFromAny(n.seasonIndex)
   m.seriesDetailSeasonIndex = sIdx
+  _updateSeriesSeasonSelection(sIdx)
   m.seriesDetailFocus = "episodes"
   _renderSeriesDetailEpisodes(sIdx)
   applyFocus()

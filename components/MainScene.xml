@@ -331,7 +331,7 @@
               />
               <MarkupGrid
                 id="seriesDetailSeasonsList"
-                translation="[60, 1010]"
+                translation="[60, 1022]"
                 itemSize="[340, 190]"
                 numColumns="3"
                 numRows="1"
@@ -341,7 +341,7 @@
 
               <Label
                 id="seriesDetailEpisodesTitle"
-                translation="[60, 1230]"
+                translation="[60, 1242]"
                 width="240"
                 height="18"
                 font="font:SmallSystemFont"
@@ -350,7 +350,7 @@
               />
               <MarkupGrid
                 id="seriesDetailEpisodesList"
-                translation="[60, 1250]"
+                translation="[60, 1272]"
                 itemSize="[340, 190]"
                 numColumns="3"
                 numRows="1"
@@ -360,7 +360,7 @@
 
               <Label
                 id="seriesDetailCastTitle"
-                translation="[60, 1490]"
+                translation="[60, 1512]"
                 width="320"
                 height="18"
                 font="font:SmallSystemFont"
@@ -369,7 +369,7 @@
               />
               <MarkupGrid
                 id="seriesDetailCastList"
-                translation="[60, 1510]"
+                translation="[60, 1532]"
                 itemSize="[170, 200]"
                 numColumns="6"
                 numRows="1"

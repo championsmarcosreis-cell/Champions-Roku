@@ -47,6 +47,26 @@ function _jellyfinExtractPath(item as Object) as String
   return ""
 end function
 
+function _jellyfinExtractRunTimeTicks(item as Object) as String
+  if item = invalid then return ""
+
+  if item.RunTimeTicks <> invalid then
+    rt = item.RunTimeTicks.ToStr().Trim()
+    if rt <> "" then return rt
+  end if
+
+  ms = item.MediaSources
+  if type(ms) = "roArray" and ms.Count() > 0 then
+    first = ms[0]
+    if first <> invalid and first.RunTimeTicks <> invalid then
+      rt2 = first.RunTimeTicks.ToStr().Trim()
+      if rt2 <> "" then return rt2
+    end if
+  end if
+
+  return ""
+end function
+
 function _urlWithQuery(url as String, params as Object) as String
   if params = invalid then return url
 
@@ -399,7 +419,7 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
   seasonsUrl = base + "/jellyfin/Shows/" + sid + "/Seasons"
   seasonsUrl = _urlWithQuery(seasonsUrl, {
     UserId: uid
-    Fields: "Overview,Path,MediaSources"
+    Fields: "Name,Overview,IndexNumber,Path,MediaSources"
     SortBy: "SortName"
     SortOrder: "Ascending"
   })
@@ -437,7 +457,7 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
   epsUrl = _urlWithQuery(epsUrl, {
     UserId: uid
     Limit: lim
-    Fields: "Overview,Path,MediaSources"
+    Fields: "Name,Overview,ParentIndexNumber,IndexNumber,RunTimeTicks,Path,MediaSources"
     SortBy: "ParentIndexNumber,IndexNumber,SortName"
     SortOrder: "Ascending"
   })
@@ -458,7 +478,7 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
       Recursive: true
       IncludeItemTypes: "Episode"
       Limit: lim
-      Fields: "Overview,Path,MediaSources"
+      Fields: "Name,Overview,ParentIndexNumber,IndexNumber,RunTimeTicks,Path,MediaSources"
       SortBy: "ParentIndexNumber,IndexNumber,SortName"
       SortOrder: "Ascending"
     })
@@ -477,6 +497,7 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
     ename = ""
     eover = ""
     epath = ""
+    eRunTimeTicks = ""
     pidx = -1
     eidx = -1
     if ep <> invalid then
@@ -486,6 +507,7 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
       if ep.ParentIndexNumber <> invalid then pidx = Int(Val(ep.ParentIndexNumber.ToStr()))
       if ep.IndexNumber <> invalid then eidx = Int(Val(ep.IndexNumber.ToStr()))
       epath = _jellyfinExtractPath(ep)
+      eRunTimeTicks = _jellyfinExtractRunTimeTicks(ep)
     end if
 
     if firstEpisodeId = "" and eid <> invalid and eid.Trim() <> "" then
@@ -498,6 +520,7 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
       name: ename
       overview: eover
       path: epath
+      runTimeTicks: eRunTimeTicks
       parentIndexNumber: pidx
       indexNumber: eidx
     })
