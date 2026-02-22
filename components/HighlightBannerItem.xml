@@ -28,7 +28,7 @@
           translation="[0, 0]"
           width="560"
           height="318"
-          loadDisplayMode="zoomToFill"
+          loadDisplayMode="scaleToFill"
           uri=""
         />
 

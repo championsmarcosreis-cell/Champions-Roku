@@ -52,6 +52,12 @@ sub onItemContentChanged()
       mode = c.posterMode.ToStr().Trim()
       if mode = "" then mode = "zoomToFill"
     end if
+    if mode = invalid then mode = ""
+    mode = mode.ToStr().Trim()
+    if mode = "" then mode = "scaleToFill"
+    modeLower = LCase(mode)
+    if modeLower = "zoomtofill" then mode = "scaleToFill"
+    if modeLower = "zoomtofillcenter" then mode = "scaleToFillCenter"
     if m.cover.hasField("loadDisplayMode") then m.cover.loadDisplayMode = mode
     if poster = "" then poster = "pkg:/images/logo.png"
     m.cover.uri = poster
