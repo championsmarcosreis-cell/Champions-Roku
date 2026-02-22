@@ -15,13 +15,19 @@
       visible="false"
     />
 
-    <MaskGroup
+    <Group
       id="railMask"
       translation="[23, 9]"
-      maskSize="[124, 182]"
-      maskUri="pkg:/images/mask_rail_124x182.png"
     >
       <children>
+        <Rectangle
+          id="coverBg"
+          translation="[0, 0]"
+          width="124"
+          height="182"
+          color="0x0A111D"
+        />
+
         <Poster
           id="cover"
           translation="[0, 0]"
@@ -29,6 +35,23 @@
           height="182"
           loadDisplayMode="scaleToFill"
           uri=""
+        />
+
+        <Poster
+          id="coverCornersOverlay"
+          translation="[0, 0]"
+          width="124"
+          height="182"
+          uri="pkg:/images/overlay_corner_rail_124x182.png"
+        />
+
+        <Poster
+          id="focusOverlay"
+          translation="[0, 0]"
+          width="124"
+          height="182"
+          uri="pkg:/images/overlay_focus_rail_124x182.png"
+          visible="false"
         />
 
         <Rectangle
@@ -117,7 +140,7 @@
           visible="false"
         />
       </children>
-    </MaskGroup>
+    </Group>
 
     <Label
       id="title"

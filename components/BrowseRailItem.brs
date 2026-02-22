@@ -2,6 +2,7 @@ sub init()
   m.cardBg = m.top.findNode("cardBg")
   m.focusRing = m.top.findNode("focusRing")
   m.cover = m.top.findNode("cover")
+  m.focusOverlay = m.top.findNode("focusOverlay")
   m.textOverlay = m.top.findNode("textOverlay")
   m.title = m.top.findNode("title")
   m.meta = m.top.findNode("meta")
@@ -24,6 +25,7 @@ sub onItemContentChanged()
       m.cover.uri = ""
     end if
     if m.focusRing <> invalid then m.focusRing.visible = false
+    if m.focusOverlay <> invalid then m.focusOverlay.visible = false
     if m.title <> invalid then m.title.text = ""
     if m.meta <> invalid then m.meta.text = ""
     if m.progressBg <> invalid then m.progressBg.visible = false
@@ -115,7 +117,8 @@ end sub
 
 sub applyStyle()
   focused = (m.top.itemHasFocus = true)
-  if m.focusRing <> invalid then m.focusRing.visible = focused
+  if m.focusRing <> invalid then m.focusRing.visible = false
+  if m.focusOverlay <> invalid then m.focusOverlay.visible = focused
   if m.textOverlay <> invalid then
     m.textOverlay.color = "0x00000000"
   end if

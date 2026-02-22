@@ -183,7 +183,7 @@ function gatewayJellyfinShelfItems(apiBase as String, appToken as String, jellyf
     SortOrder: "Descending"
     ExcludeItemTypes: "Folder,CollectionFolder"
     IsMissing: false
-    Fields: "RunTimeTicks,Path,MediaSources"
+    Fields: "RunTimeTicks,Path,MediaSources,BackdropImageTags,ParentBackdropImageTags,ImageTags"
   })
 
   headers = {
@@ -208,15 +208,29 @@ function gatewayJellyfinShelfItems(apiBase as String, appToken as String, jellyf
     name = ""
     typ = ""
     path = ""
+    backdropTags = invalid
+    parentBackdropTags = invalid
+    imageTags = invalid
 
     if it <> invalid then
       if it.Id <> invalid then id = it.Id
       if it.Name <> invalid then name = it.Name
       if it.Type <> invalid then typ = it.Type
       path = _jellyfinExtractPath(it)
+      if it.BackdropImageTags <> invalid then backdropTags = it.BackdropImageTags
+      if it.ParentBackdropImageTags <> invalid then parentBackdropTags = it.ParentBackdropImageTags
+      if it.ImageTags <> invalid then imageTags = it.ImageTags
     end if
 
-    out.Push({ id: id, name: name, type: typ, path: path })
+    out.Push({
+      id: id
+      name: name
+      type: typ
+      path: path
+      BackdropImageTags: backdropTags
+      ParentBackdropImageTags: parentBackdropTags
+      imageTags: imageTags
+    })
   end for
 
   return { ok: true, items: out }
@@ -252,7 +266,7 @@ function gatewayJellyfinSeriesShelfItems(apiBase as String, appToken as String, 
     IncludeItemTypes: "Series"
     ExcludeItemTypes: "Folder,CollectionFolder"
     IsMissing: false
-    Fields: "Path,MediaSources"
+    Fields: "Path,MediaSources,BackdropImageTags,ParentBackdropImageTags,ImageTags"
   })
 
   headers = {
@@ -277,15 +291,29 @@ function gatewayJellyfinSeriesShelfItems(apiBase as String, appToken as String, 
     name = ""
     typ = "Series"
     path = ""
+    backdropTags = invalid
+    parentBackdropTags = invalid
+    imageTags = invalid
 
     if it <> invalid then
       if it.Id <> invalid then id = it.Id
       if it.Name <> invalid then name = it.Name
       if it.Type <> invalid and it.Type.ToStr().Trim() <> "" then typ = it.Type
       path = _jellyfinExtractPath(it)
+      if it.BackdropImageTags <> invalid then backdropTags = it.BackdropImageTags
+      if it.ParentBackdropImageTags <> invalid then parentBackdropTags = it.ParentBackdropImageTags
+      if it.ImageTags <> invalid then imageTags = it.ImageTags
     end if
 
-    out.Push({ id: id, name: name, type: typ, path: path })
+    out.Push({
+      id: id
+      name: name
+      type: typ
+      path: path
+      BackdropImageTags: backdropTags
+      ParentBackdropImageTags: parentBackdropTags
+      imageTags: imageTags
+    })
   end for
 
   return { ok: true, items: out }
@@ -1631,7 +1659,7 @@ function gatewayJellyfinItemsByIds(apiBase as String, appToken as String, jellyf
     Recursive: true
     ExcludeItemTypes: "Folder,CollectionFolder"
     IsMissing: false
-    Fields: "RunTimeTicks,Path,MediaSources,SeriesId,CollectionType"
+    Fields: "RunTimeTicks,Path,MediaSources,SeriesId,CollectionType,BackdropImageTags,ParentBackdropImageTags,ImageTags"
   })
 
   headers = {
@@ -1658,6 +1686,9 @@ function gatewayJellyfinItemsByIds(apiBase as String, appToken as String, jellyf
     path = ""
     ctype = ""
     seriesId = ""
+    backdropTags = invalid
+    parentBackdropTags = invalid
+    imageTags = invalid
     if it <> invalid then
       if it.Id <> invalid then id = it.Id
       if it.Name <> invalid then name = it.Name
@@ -1665,6 +1696,9 @@ function gatewayJellyfinItemsByIds(apiBase as String, appToken as String, jellyf
       if it.CollectionType <> invalid then ctype = it.CollectionType
       if it.SeriesId <> invalid then seriesId = it.SeriesId
       path = _jellyfinExtractPath(it)
+      if it.BackdropImageTags <> invalid then backdropTags = it.BackdropImageTags
+      if it.ParentBackdropImageTags <> invalid then parentBackdropTags = it.ParentBackdropImageTags
+      if it.ImageTags <> invalid then imageTags = it.ImageTags
     end if
     out.Push({
       id: id
@@ -1673,6 +1707,9 @@ function gatewayJellyfinItemsByIds(apiBase as String, appToken as String, jellyf
       path: path
       collectionType: ctype
       seriesId: seriesId
+      BackdropImageTags: backdropTags
+      ParentBackdropImageTags: parentBackdropTags
+      imageTags: imageTags
     })
   end for
 

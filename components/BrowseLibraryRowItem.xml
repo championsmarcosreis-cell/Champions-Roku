@@ -14,13 +14,19 @@
       uri="pkg:/images/field_normal.png"
     />
 
-    <MaskGroup
+    <Group
       id="libraryMask"
       translation="[14, 14]"
-      maskSize="[68, 92]"
-      maskUri="pkg:/images/mask_library_68x92.png"
     >
       <children>
+        <Rectangle
+          id="coverBg"
+          translation="[0, 0]"
+          width="68"
+          height="92"
+          color="0x0E1623"
+        />
+
         <Poster
           id="cover"
           translation="[0, 0]"
@@ -28,6 +34,23 @@
           height="92"
           loadDisplayMode="scaleToFill"
           uri=""
+        />
+
+        <Poster
+          id="coverCornersOverlay"
+          translation="[0, 0]"
+          width="68"
+          height="92"
+          uri="pkg:/images/overlay_corner_library_68x92.png"
+        />
+
+        <Poster
+          id="focusOverlay"
+          translation="[0, 0]"
+          width="68"
+          height="92"
+          uri="pkg:/images/overlay_focus_library_68x92.png"
+          visible="false"
         />
 
         <Rectangle
@@ -48,7 +71,7 @@
           visible="false"
         />
       </children>
-    </MaskGroup>
+    </Group>
 
     <Rectangle
       id="completeBadgeBg"

@@ -1,6 +1,7 @@
 sub init()
   m.bg = m.top.findNode("bg")
   m.focusRing = m.top.findNode("focusRing")
+  m.focusOverlay = m.top.findNode("focusOverlay")
   m.cover = m.top.findNode("cover")
   m.accent = m.top.findNode("accent")
   m.title = m.top.findNode("title")
@@ -22,6 +23,7 @@ sub onItemContentChanged()
     if m.completeBadgeBg <> invalid then m.completeBadgeBg.visible = false
     if m.completeBadgeText <> invalid then m.completeBadgeText.visible = false
     if m.focusRing <> invalid then m.focusRing.visible = false
+    if m.focusOverlay <> invalid then m.focusOverlay.visible = false
     return
   end if
 
@@ -71,7 +73,8 @@ end sub
 
 sub applyStyle()
   focused = (m.top.itemHasFocus = true)
-  if m.focusRing <> invalid then m.focusRing.visible = focused
+  if m.focusRing <> invalid then m.focusRing.visible = false
+  if m.focusOverlay <> invalid then m.focusOverlay.visible = focused
   if m.bg <> invalid then
     if focused then
       m.bg.uri = "pkg:/images/field_focus.png"

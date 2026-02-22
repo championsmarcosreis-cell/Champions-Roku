@@ -15,13 +15,19 @@
       visible="false"
     />
 
-    <MaskGroup
+    <Group
       id="bannerMask"
       translation="[20, 11]"
-      maskSize="[560, 318]"
-      maskUri="pkg:/images/mask_banner_560x318.png"
     >
       <children>
+        <Rectangle
+          id="coverBg"
+          translation="[0, 0]"
+          width="560"
+          height="318"
+          color="0x0A111D"
+        />
+
         <Poster
           id="cover"
           translation="[0, 0]"
@@ -31,26 +37,29 @@
           uri=""
         />
 
-        <Rectangle
-          id="overlayFadeA"
-          translation="[0, 205]"
+        <Poster
+          id="coverCornersOverlay"
+          translation="[0, 0]"
           width="560"
-          height="50"
-          color="0x400A111D"
+          height="318"
+          uri="pkg:/images/overlay_corner_banner_560x318.png"
         />
-        <Rectangle
-          id="overlayFadeB"
-          translation="[0, 241]"
+
+        <Poster
+          id="focusOverlay"
+          translation="[0, 0]"
           width="560"
-          height="44"
-          color="0x7E0A111D"
+          height="318"
+          uri="pkg:/images/overlay_focus_banner_560x318.png"
+          visible="false"
         />
-        <Rectangle
-          id="overlayFadeC"
-          translation="[0, 277]"
+
+        <Poster
+          id="overlayFade"
+          translation="[0, 0]"
           width="560"
-          height="41"
-          color="0xB40A111D"
+          height="318"
+          uri="pkg:/images/overlay_fade_banner_560x318.png"
         />
 
         <Rectangle
@@ -111,7 +120,7 @@
         />
 
       </children>
-    </MaskGroup>
+    </Group>
 
     <Label
       id="title"
@@ -137,10 +146,10 @@
 
     <Poster
       id="focusRing"
-      translation="[19, 9]"
-      width="562"
-      height="322"
-      uri="pkg:/images/banner_focus_thin.png"
+      translation="[15, 6]"
+      width="570"
+      height="328"
+      uri="pkg:/images/banner_focus_neon.png"
       visible="false"
     />
   </children>

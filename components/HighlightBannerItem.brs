@@ -1,10 +1,10 @@
 sub init()
   m.cardBg = m.top.findNode("cardBg")
   m.focusRing = m.top.findNode("focusRing")
+  m.coverBg = m.top.findNode("coverBg")
   m.cover = m.top.findNode("cover")
-  m.overlayFadeA = m.top.findNode("overlayFadeA")
-  m.overlayFadeB = m.top.findNode("overlayFadeB")
-  m.overlayFadeC = m.top.findNode("overlayFadeC")
+  m.focusOverlay = m.top.findNode("focusOverlay")
+  m.overlayFade = m.top.findNode("overlayFade")
   m.title = m.top.findNode("title")
   m.meta = m.top.findNode("meta")
   m.progressBg = m.top.findNode("progressBg")
@@ -16,7 +16,8 @@ sub init()
   m.rankValue = 0
   m.lastCoverUri = ""
   m.coverFallbackPoster = ""
-  m.coverUsingWide = false
+  m.coverTargetW = 560
+  m.coverTargetH = 318
   if m.cover <> invalid and m.cover.hasField("loadStatus") then
     m.cover.observeField("loadStatus", "onCoverLoadStatusChanged")
   end if
@@ -26,9 +27,10 @@ sub onItemContentChanged()
   c = m.top.itemContent
   if c = invalid then
     m.coverFallbackPoster = ""
-    m.coverUsingWide = false
+    _resetCoverLayout()
     _applyCover("", "zoomToFill")
     if m.focusRing <> invalid then m.focusRing.visible = false
+    if m.focusOverlay <> invalid then m.focusOverlay.visible = false
     if m.title <> invalid then m.title.text = ""
     if m.meta <> invalid then m.meta.text = ""
     if m.progressBg <> invalid then m.progressBg.visible = false
@@ -74,7 +76,6 @@ sub onItemContentChanged()
   if poster = "" then poster = "pkg:/images/logo.png"
   if wide = "" then wide = poster
   m.coverFallbackPoster = poster
-  m.coverUsingWide = (wide <> "" and wide <> poster)
   _applyCover(wide, mode)
 
   pct = 0
@@ -124,14 +125,13 @@ end sub
 
 sub onCoverLoadStatusChanged()
   if m.cover = invalid then return
-  if m.coverUsingWide <> true then return
-  if m.coverFallbackPoster = invalid or m.coverFallbackPoster = "" then return
   st = m.cover.loadStatus
   if st = invalid then return
   s = LCase(st.ToStr().Trim())
   if s = "failed" then
-    m.coverUsingWide = false
-    _applyCover(m.coverFallbackPoster, "zoomToFill")
+    if m.coverFallbackPoster <> invalid and m.coverFallbackPoster <> "" then
+      _applyCover(m.coverFallbackPoster, "zoomToFill")
+    end if
   end if
 end sub
 
@@ -146,6 +146,7 @@ sub _applyCover(uri as String, mode as String)
   if md = invalid then md = ""
   md = md.ToStr().Trim()
   if md = "" then md = "zoomToFill"
+  md = _normalizePosterMode(md)
   if m.cover.hasField("loadDisplayMode") then m.cover.loadDisplayMode = md
 
   nextUri = uri
@@ -153,11 +154,33 @@ sub _applyCover(uri as String, mode as String)
   nextUri = nextUri.ToStr().Trim()
   if nextUri = "" then nextUri = "pkg:/images/logo.png"
 
+  _resetCoverLayout()
   if m.lastCoverUri <> nextUri then
     m.cover.uri = nextUri
     m.lastCoverUri = nextUri
   end if
 end sub
+
+sub _resetCoverLayout()
+  if m.cover = invalid then return
+  w = m.coverTargetW
+  h = m.coverTargetH
+  if w = invalid then w = 560
+  if h = invalid then h = 318
+  if m.cover.hasField("loadWidth") then m.cover.loadWidth = w
+  if m.cover.hasField("loadHeight") then m.cover.loadHeight = h
+  if m.cover.hasField("width") then m.cover.width = w
+  if m.cover.hasField("height") then m.cover.height = h
+  if m.cover.hasField("translation") then m.cover.translation = [0, 0]
+end sub
+
+function _normalizePosterMode(raw as String) as String
+  md = raw
+  if md = invalid then md = ""
+  md = md.ToStr().Trim()
+  if md = "" then return "zoomToFill"
+  return md
+end function
 
 sub applyStyle()
   focused = (m.top.itemHasFocus = true)
@@ -165,19 +188,16 @@ sub applyStyle()
     m.cardBg.uri = "pkg:/images/card.png"
     m.cardBg.visible = false
   end if
-  if m.focusRing <> invalid then m.focusRing.visible = focused
+  if m.focusRing <> invalid then m.focusRing.visible = false
+  if m.focusOverlay <> invalid then m.focusOverlay.visible = focused
 
-  fadeA = "0x400A111D"
-  fadeB = "0x7E0A111D"
-  fadeC = "0xB40A111D"
-  if focused then
-    fadeA = "0x520A111D"
-    fadeB = "0x900A111D"
-    fadeC = "0xC40A111D"
+  if m.overlayFade <> invalid then
+    if focused then
+      m.overlayFade.uri = "pkg:/images/overlay_fade_banner_focus_560x318.png"
+    else
+      m.overlayFade.uri = "pkg:/images/overlay_fade_banner_560x318.png"
+    end if
   end if
-  if m.overlayFadeA <> invalid then m.overlayFadeA.color = fadeA
-  if m.overlayFadeB <> invalid then m.overlayFadeB.color = fadeB
-  if m.overlayFadeC <> invalid then m.overlayFadeC.color = fadeC
 
   if m.title <> invalid then
     if focused then

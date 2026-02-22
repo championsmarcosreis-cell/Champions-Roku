@@ -49,6 +49,13 @@ function Fill-Background($g, [int]$w, [int]$h) {
   } finally { $path.Dispose() }
 }
 
+function Fill-BackgroundSolid($g, [int]$w, [int]$h, [string]$hex) {
+  $rect = New-Object System.Drawing.Rectangle 0,0,$w,$h
+  $c = [System.Drawing.ColorTranslator]::FromHtml($hex)
+  $brush = New-Object System.Drawing.SolidBrush $c
+  try { $g.FillRectangle($brush, $rect) } finally { $brush.Dispose() }
+}
+
 function Draw-LogoCentered($g, $logoImg, [int]$w, [int]$h, [double]$scale, [int]$yOffset) {
   $maxW = [int]($w * $scale)
   $maxH = [int]($h * $scale)
@@ -257,7 +264,7 @@ try {
   $bg = New-Bitmap 1280 720
   With-Graphics $bg {
     param($g)
-    Fill-Background $g 1280 720
+    Fill-BackgroundSolid $g 1280 720 '#0A111D'
   }
   $bg.Save((Join-Path $imagesDir 'background.png'), [System.Drawing.Imaging.ImageFormat]::Png)
   $bg.Dispose()
@@ -313,6 +320,109 @@ try {
     $bmp.Dispose()
   }
 
+  function Make-RoundedCutoutOverlayPng([string]$path, [int]$w, [int]$h, [int]$r, [string]$bgHex) {
+    $bmp = New-Bitmap $w $h
+    With-Graphics $bmp {
+      param($g)
+      $bg = [System.Drawing.ColorTranslator]::FromHtml($bgHex)
+      $g.Clear([System.Drawing.Color]::FromArgb(255, $bg.R, $bg.G, $bg.B))
+
+      $path2 = New-RoundedRectPath 0 0 $w $h $r
+      $clearBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(0, 0, 0, 0))
+      $prevMode = $g.CompositingMode
+      try {
+        $g.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
+        $g.FillPath($clearBrush, $path2)
+      } finally {
+        $g.CompositingMode = $prevMode
+        $clearBrush.Dispose()
+        $path2.Dispose()
+      }
+    }
+    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+  }
+
+  function Make-VerticalFadeOverlayPng([string]$path, [int]$w, [int]$h, [int]$startY, [int]$topA, [int]$bottomA, [string]$bgHex) {
+    $bmp = New-Bitmap $w $h
+    With-Graphics $bmp {
+      param($g)
+      $g.Clear([System.Drawing.Color]::Transparent)
+      $bg = [System.Drawing.ColorTranslator]::FromHtml($bgHex)
+      $y0 = $startY
+      if ($y0 -lt 0) { $y0 = 0 }
+      if ($y0 -ge $h) { $y0 = $h - 1 }
+      $hh = $h - $y0
+      if ($hh -le 0) { $hh = 1 }
+      $rect = New-Object System.Drawing.Rectangle 0, $y0, $w, $hh
+      $top = [System.Drawing.Color]::FromArgb($topA, $bg.R, $bg.G, $bg.B)
+      $bottom = [System.Drawing.Color]::FromArgb($bottomA, $bg.R, $bg.G, $bg.B)
+      $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush $rect, $top, $bottom, 90.0
+      try {
+        $g.FillRectangle($brush, $rect)
+      } finally {
+        $brush.Dispose()
+      }
+    }
+    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+  }
+
+  function Make-NeonFocusRingPng(
+    [string]$path,
+    [int]$w,
+    [int]$h,
+    [int]$r,
+    [string]$ringHex,
+    [int]$w1 = 10,
+    [int]$a1 = 52,
+    [int]$w2 = 6,
+    [int]$a2 = 110,
+    [int]$w3 = 3,
+    [int]$a3 = 200,
+    [int]$w4 = 1,
+    [int]$a4 = 255
+  ) {
+    $bmp = New-Bitmap $w $h
+    With-Graphics $bmp {
+      param($g)
+      $g.Clear([System.Drawing.Color]::Transparent)
+      $c = [System.Drawing.ColorTranslator]::FromHtml($ringHex)
+
+      $layers = @(
+        @{ width = $w1; alpha = $a1 }
+        @{ width = $w2; alpha = $a2 }
+        @{ width = $w3; alpha = $a3 }
+        @{ width = $w4; alpha = $a4 }
+      )
+
+      foreach ($layer in $layers) {
+        $strokeWidth = [single]$layer.width
+        $alpha = [int]$layer.alpha
+        $inset = [int][Math]::Ceiling($strokeWidth / 2.0)
+        $rw = $w - (2 * $inset)
+        $rh = $h - (2 * $inset)
+        if ($rw -le 0 -or $rh -le 0) { continue }
+
+        $rr = $r - $inset
+        if ($rr -lt 0) { $rr = 0 }
+
+        $path2 = New-RoundedRectPath $inset $inset $rw $rh $rr
+        $penColor = [System.Drawing.Color]::FromArgb($alpha, $c.R, $c.G, $c.B)
+        $pen = New-Object System.Drawing.Pen $penColor, $strokeWidth
+        $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
+        try {
+          $g.DrawPath($pen, $path2)
+        } finally {
+          $pen.Dispose()
+          $path2.Dispose()
+        }
+      }
+    }
+    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+  }
+
   Make-RoundedRectPng (Join-Path $imagesDir 'card.png') 520 260 18 '#0E1623' 235 '#263246' 220 2 110
   Make-RoundedRectPng (Join-Path $imagesDir 'field_normal.png') 440 56 14 '#0E1623' 235 '#223044' 210 2 0
   Make-RoundedRectPng (Join-Path $imagesDir 'field_focus.png') 440 56 14 '#0E1623' 245 '#CFA84A' 255 3 0
@@ -328,6 +438,17 @@ try {
   Make-RoundedMaskPng (Join-Path $imagesDir 'mask_poster_556x298.png') 556 298 18
   Make-RoundedMaskPng (Join-Path $imagesDir 'mask_rail_124x182.png') 124 182 10
   Make-RoundedMaskPng (Join-Path $imagesDir 'mask_library_68x92.png') 68 92 8
+
+  # Rounded-corner cutout overlays (for paths where we avoid MaskGroup).
+  Make-RoundedCutoutOverlayPng (Join-Path $imagesDir 'overlay_corner_banner_560x318.png') 560 318 18 '#0A111D'
+  Make-RoundedCutoutOverlayPng (Join-Path $imagesDir 'overlay_corner_rail_124x182.png') 124 182 10 '#0A111D'
+  Make-RoundedCutoutOverlayPng (Join-Path $imagesDir 'overlay_corner_library_68x92.png') 68 92 8 '#0E1623'
+  Make-VerticalFadeOverlayPng (Join-Path $imagesDir 'overlay_fade_banner_560x318.png') 560 318 154 0 236 '#0A111D'
+  Make-VerticalFadeOverlayPng (Join-Path $imagesDir 'overlay_fade_banner_focus_560x318.png') 560 318 150 0 248 '#0A111D'
+  Make-NeonFocusRingPng (Join-Path $imagesDir 'banner_focus_neon.png') 570 328 24 '#E3C06A' 8 36 4 120 2 220 1 255
+  Make-NeonFocusRingPng (Join-Path $imagesDir 'overlay_focus_banner_560x318.png') 560 318 18 '#E3C06A' 8 36 4 120 2 220 1 255
+  Make-NeonFocusRingPng (Join-Path $imagesDir 'overlay_focus_rail_124x182.png') 124 182 10 '#E3C06A' 5 42 3 145 1 235 1 255
+  Make-NeonFocusRingPng (Join-Path $imagesDir 'overlay_focus_library_68x92.png') 68 92 8 '#E3C06A' 5 42 2 150 1 235 1 255
 
   Write-Host "OK: generated Roku assets in $imagesDir"
 } finally {

@@ -1,7 +1,7 @@
 ' Login screen styled like the Windows app (no "Baixados") + optional Live player.
 
 sub init()
-  m.top.backgroundColor = "0x0B0F16"
+  m.top.backgroundColor = "0x0A111D"
   m.form = {
     username: ""
     password: ""
@@ -713,6 +713,23 @@ sub onBindTimerFire()
       return
     end if
 
+    if (m.devAutoplay = "browse" or m.devAutoplay = "browse_items" or m.devAutoplay = "browse_continue" or m.devAutoplay = "browse_movies" or m.devAutoplay = "browse_series") and m.devAutoplayDone <> true then
+      m.devAutoplayDone = true
+      print "DEV autoplay browse: enterBrowse"
+      enterBrowse()
+      if m.devAutoplay = "browse_items" then
+        m.browseFocus = "items"
+      else if m.devAutoplay = "browse_continue" then
+        m.browseFocus = "continue"
+      else if m.devAutoplay = "browse_movies" then
+        m.browseFocus = "movies"
+      else if m.devAutoplay = "browse_series" then
+        m.browseFocus = "series"
+      end if
+      applyFocus()
+      return
+    end if
+
     if m.startupMode = "browse" then
       enterBrowse()
     else if m.startupMode = "home" then
@@ -744,6 +761,10 @@ sub onBindTimerFire()
     m.bindFallbackDone = true
     renderForm()
     enterLogin()
+    if _tryAutoLogin() then
+      print "UI bind fallback: auto-login attempted"
+      return
+    end if
     print "UI bind fallback: continuing with login mode"
     setStatus("ready")
   end if
@@ -1807,6 +1828,17 @@ function _browseSectionHasItems(section as String) as Boolean
   return false
 end function
 
+function _devBrowseFocusTarget() as String
+  mode = m.devAutoplay
+  if mode = invalid then mode = ""
+  mode = LCase(mode.Trim())
+  if mode = "browse_items" then return "items"
+  if mode = "browse_continue" then return "continue"
+  if mode = "browse_movies" then return "movies"
+  if mode = "browse_series" then return "series"
+  return ""
+end function
+
 function _browseNextShelfSection(cur as String) as String
   if cur = "items" then
     if _browseSectionHasItems("continue") then return "continue"
@@ -2174,8 +2206,8 @@ function _browseShelfBackdropUri(itemId as String, apiBase as String, jellyfinTo
 
   u = base + "/jellyfin/Items/" + id + "/Images/Backdrop/0"
   q = {
-    maxWidth: "960"
-    quality: "85"
+    fillWidth: "560"
+    quality: "80"
   }
   tg = tag
   if tg = invalid then tg = ""
@@ -5395,7 +5427,12 @@ sub onGatewayTaskStateChanged()
       end if
 
       if m.mode = "browse" and m.viewsList <> invalid then
-        m.browseFocus = "hero_continue"
+        targetFocus = _devBrowseFocusTarget()
+        if targetFocus <> "" then
+          m.browseFocus = targetFocus
+        else
+          m.browseFocus = "hero_continue"
+        end if
         applyFocus()
       end if
     else
@@ -8693,8 +8730,15 @@ function _shelfBuildImageUrls(it as Object, itemId as String, apiBase as String,
   if posterUri = "" then posterUri = "pkg:/images/logo.png"
 
   wideUri = posterUri
+  backdropTag = ""
   if preferWide = true then
-    wideUri = _shelfItemUrlByKeys(it, ["bannerUrl", "backdropUrl", "thumbWideUrl"], baseNoSlash, jellyfinToken, appToken)
+    backdropTag = _shelfBackdropTagFromItem(it)
+    if backdropTag <> "" then
+      wideUri = _browseShelfBackdropUri(itemId, apiBase, jellyfinToken, backdropTag)
+    end if
+    if wideUri = "" then
+      wideUri = _shelfItemUrlByKeys(it, ["bannerUrl", "backdropUrl", "thumbWideUrl"], baseNoSlash, jellyfinToken, appToken)
+    end if
     if wideUri = "" then
       wideUri = _shelfItemUrlByKeys(it, ["wideUrl", "landscapeUrl", "heroUrl", "backdrop"], baseNoSlash, jellyfinToken, appToken)
     end if
@@ -8702,13 +8746,7 @@ function _shelfBuildImageUrls(it as Object, itemId as String, apiBase as String,
       wideUri = _shelfItemUrlByKeys(it, ["bannerPath", "backdropPath", "thumbWidePath", "widePath", "landscapePath", "heroPath"], baseNoSlash, jellyfinToken, appToken)
     end if
     if wideUri = "" then
-      backdropTag = _shelfBackdropTagFromItem(it)
-      if backdropTag <> "" then
-        wideUri = _browseShelfBackdropUri(itemId, apiBase, jellyfinToken, backdropTag)
-      end if
-      if wideUri = "" then
-        wideUri = _browseShelfBackdropUri(itemId, apiBase, jellyfinToken, "")
-      end if
+      wideUri = _browseShelfBackdropUri(itemId, apiBase, jellyfinToken, "")
     end if
     if wideUri = "" then wideUri = posterUri
   end if
@@ -9080,6 +9118,12 @@ sub _renderHomeShelf(section as String, raw as String)
     hasRows = (root.getChildCount() > 0)
     if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.visible = hasRows
     if m.recentSeriesMore <> invalid then m.recentSeriesMore.visible = hasRows
+  end if
+
+  targetFocus = _devBrowseFocusTarget()
+  if targetFocus = sec and root.getChildCount() > 0 and m.mode = "browse" and m.browseLibraryOpen <> true then
+    m.browseFocus = targetFocus
+    applyFocus()
   end if
 
   _updateBrowseEmptyState()
