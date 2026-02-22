@@ -87,7 +87,7 @@ sub onItemContentChanged()
   if m.rankBadgeText <> invalid then
     m.rankBadgeText.visible = showRank
     if rank > 0 and rank <= 3 then
-      m.rankBadgeText.text = "TOP " + rank.ToStr()
+      m.rankBadgeText.text = "TOP" + rank.ToStr()
     else if rank > 3 then
       m.rankBadgeText.text = "#" + rank.ToStr()
     else
@@ -139,29 +139,29 @@ sub applyStyle()
 
   if m.rankBadgeBorder <> invalid and m.rankBadgeBorder.visible = true then
     rank = Int(m.rankValue)
-    border = "0x2D3A4E"
+    borderUri = "pkg:/images/rank_badge_border_dark_64x22.png"
     if rank = 1 then
-      border = "0xAD8D3E"
+      borderUri = "pkg:/images/rank_badge_border_gold_64x22.png"
     else if rank = 2 then
-      border = "0x9BA3B2"
+      borderUri = "pkg:/images/rank_badge_border_silver_64x22.png"
     else if rank = 3 then
-      border = "0x9C6947"
+      borderUri = "pkg:/images/rank_badge_border_bronze_64x22.png"
     end if
-    if focused then border = "0xE0E8F5"
-    m.rankBadgeBorder.color = border
+    if focused then borderUri = "pkg:/images/rank_badge_border_focus_64x22.png"
+    m.rankBadgeBorder.uri = borderUri
   end if
 
   if m.rankBadgeBg <> invalid and m.rankBadgeBg.visible = true then
     rank = Int(m.rankValue)
-    badge = "0x1C2635"
+    badgeUri = "pkg:/images/rank_badge_bg_dark_62x20.png"
     if rank = 1 then
-      badge = "0xD7B25C"
+      badgeUri = "pkg:/images/rank_badge_bg_gold_62x20.png"
     else if rank = 2 then
-      badge = "0xBFC7D4"
+      badgeUri = "pkg:/images/rank_badge_bg_silver_62x20.png"
     else if rank = 3 then
-      badge = "0xC17F59"
+      badgeUri = "pkg:/images/rank_badge_bg_bronze_62x20.png"
     end if
-    m.rankBadgeBg.color = badge
+    m.rankBadgeBg.uri = badgeUri
   end if
 
   if m.rankBadgeText <> invalid and m.rankBadgeText.visible = true then

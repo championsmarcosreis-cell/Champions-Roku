@@ -157,11 +157,11 @@
                 <MarkupGrid
                   id="continueList"
                   translation="[0, 426]"
-                  itemSize="[170, 252]"
+                  itemSize="[268, 252]"
                   numColumns="3"
                   numRows="1"
                   drawFocusFeedback="false"
-                  itemComponentName="BrowseRailItem"
+                  itemComponentName="ContinueWatchingItem"
                 />
 
                 <Label

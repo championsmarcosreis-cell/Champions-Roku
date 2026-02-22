@@ -1888,6 +1888,14 @@ function _browseSectionForCollection(collectionType as String) as String
   return "items"
 end function
 
+sub _setBrowseTabsSelection(collectionType as String)
+  if m.top = invalid or m.top.hasField("browseTabsSelection") <> true then return
+  ct = collectionType
+  if ct = invalid then ct = ""
+  ct = LCase(ct.ToStr().Trim())
+  m.top.browseTabsSelection = ct
+end sub
+
 function _browseListNodeForFocus(focusName as String) as Object
   f = focusName
   if f = invalid then f = ""
@@ -5415,6 +5423,7 @@ sub onGatewayTaskStateChanged()
       setStatus("ready")
       m.activeViewId = "__top10"
       m.activeViewCollection = "top10"
+      _setBrowseTabsSelection("")
       if m.itemsTitle <> invalid then m.itemsTitle.text = _t("top10")
       m.heroContinueAutoplayPending = false
       _loadBrowseHomeShelves()
@@ -8238,6 +8247,7 @@ sub enterBrowse()
   ' Fresh content on entry (avoid showing stale lists after logout/login).
   m.activeViewId = ""
   m.activeViewCollection = ""
+  _setBrowseTabsSelection("")
   m.pendingShelfViewId = ""
   m.queuedShelfViewId = ""
   m.pendingHomeShelfSection = ""
@@ -8414,6 +8424,7 @@ sub onViewSelected()
 
   ct = LCase(ctype.Trim())
   if ct = "livetv" then
+    _setBrowseTabsSelection("livetv")
     enterLive()
     return
   end if
@@ -8422,6 +8433,7 @@ sub onViewSelected()
     if viewId = "" then return
     m.activeViewId = viewId
     m.activeViewCollection = ct
+    _setBrowseTabsSelection(ct)
     _openBrowseLibrary(viewId, ct, viewTitle)
     return
   end if
@@ -8781,23 +8793,106 @@ function _resumeStateFromRawItem(it as Object) as Object
   }
   if type(it) <> "roAssociativeArray" then return st
 
+  userData = _aaGetCi(it, "userData")
+  if type(userData) <> "roAssociativeArray" then userData = invalid
+
   posMs = -1
-  vPos = _aaGetCi(it, "positionMs")
-  if vPos = invalid then vPos = _aaGetCi(it, "position_ms")
-  if vPos <> invalid then posMs = _sceneIntFromAny(vPos)
+  for each k in ["positionMs", "position_ms", "resumePositionMs", "resume_position_ms"]
+    vPos = _aaGetCi(it, k)
+    if vPos <> invalid then
+      posMs = _sceneIntFromAny(vPos)
+      exit for
+    end if
+  end for
+  if posMs < 0 and userData <> invalid then
+    for each k in ["positionMs", "position_ms", "resumePositionMs", "resume_position_ms"]
+      vPos = _aaGetCi(userData, k)
+      if vPos <> invalid then
+        posMs = _sceneIntFromAny(vPos)
+        exit for
+      end if
+    end for
+  end if
+  if posMs < 0 then
+    posTicks = -1
+    for each k in ["positionTicks", "position_ticks", "playbackPositionTicks", "PlaybackPositionTicks"]
+      vTicks = _aaGetCi(it, k)
+      if vTicks <> invalid then
+        posTicks = _sceneIntFromAny(vTicks)
+        exit for
+      end if
+    end for
+    if posTicks < 0 and userData <> invalid then
+      for each k in ["positionTicks", "position_ticks", "playbackPositionTicks", "PlaybackPositionTicks"]
+        vTicks = _aaGetCi(userData, k)
+        if vTicks <> invalid then
+          posTicks = _sceneIntFromAny(vTicks)
+          exit for
+        end if
+      end for
+    end if
+    if posTicks > 0 then posMs = Int(posTicks / 10000.0)
+  end if
   if posMs < 0 then posMs = 0
   st.positionMs = posMs
 
   durMs = -1
-  vDur = _aaGetCi(it, "durationMs")
-  if vDur = invalid then vDur = _aaGetCi(it, "duration_ms")
-  if vDur <> invalid then durMs = _sceneIntFromAny(vDur)
+  for each k in ["durationMs", "duration_ms", "resumeDurationMs", "resume_duration_ms"]
+    vDur = _aaGetCi(it, k)
+    if vDur <> invalid then
+      durMs = _sceneIntFromAny(vDur)
+      exit for
+    end if
+  end for
+  if durMs < 0 and userData <> invalid then
+    for each k in ["durationMs", "duration_ms", "resumeDurationMs", "resume_duration_ms"]
+      vDur = _aaGetCi(userData, k)
+      if vDur <> invalid then
+        durMs = _sceneIntFromAny(vDur)
+        exit for
+      end if
+    end for
+  end if
+  if durMs < 0 then
+    durTicks = -1
+    for each k in ["durationTicks", "duration_ticks", "runTimeTicks", "RunTimeTicks", "runtimeTicks", "RuntimeTicks"]
+      vTicks = _aaGetCi(it, k)
+      if vTicks <> invalid then
+        durTicks = _sceneIntFromAny(vTicks)
+        exit for
+      end if
+    end for
+    if durTicks < 0 and userData <> invalid then
+      for each k in ["durationTicks", "duration_ticks", "runTimeTicks", "RunTimeTicks", "runtimeTicks", "RuntimeTicks"]
+        vTicks = _aaGetCi(userData, k)
+        if vTicks <> invalid then
+          durTicks = _sceneIntFromAny(vTicks)
+          exit for
+        end if
+      end for
+    end if
+    if durTicks > 0 then durMs = Int(durTicks / 10000.0)
+  end if
   if durMs < 0 then durMs = 0
   st.durationMs = durMs
 
   pct = -1
-  vPct = _aaGetCi(it, "percent")
-  if vPct <> invalid then pct = _sceneIntFromAny(vPct)
+  for each k in ["percent", "resumePercent", "resume_percent", "playedPercentage", "PlayedPercentage"]
+    vPct = _aaGetCi(it, k)
+    if vPct <> invalid then
+      pct = _sceneIntFromAny(vPct)
+      exit for
+    end if
+  end for
+  if pct < 0 and userData <> invalid then
+    for each k in ["percent", "resumePercent", "resume_percent", "playedPercentage", "PlayedPercentage"]
+      vPct = _aaGetCi(userData, k)
+      if vPct <> invalid then
+        pct = _sceneIntFromAny(vPct)
+        exit for
+      end if
+    end for
+  end if
   if pct < 0 and durMs > 0 and posMs > 0 then
     pct = Int((posMs * 100.0) / durMs)
   end if
@@ -8809,8 +8904,13 @@ function _resumeStateFromRawItem(it as Object) as Object
   if vPlayed = invalid then vPlayed = _aaGetCi(it, "isPlayed")
   if vPlayed = invalid then vPlayed = _aaGetCi(it, "completed")
   if vPlayed = invalid then vPlayed = _aaGetCi(it, "finished")
+  if vPlayed = invalid then vPlayed = _aaGetCi(it, "Played")
+  if vPlayed = invalid and userData <> invalid then vPlayed = _aaGetCi(userData, "played")
+  if vPlayed = invalid and userData <> invalid then vPlayed = _aaGetCi(userData, "isPlayed")
+  if vPlayed = invalid and userData <> invalid then vPlayed = _aaGetCi(userData, "Played")
   if vPlayed <> invalid then played = _resumeBoolFromAny(vPlayed)
   vStatus = _aaGetCi(it, "status")
+  if vStatus = invalid and userData <> invalid then vStatus = _aaGetCi(userData, "status")
   if vStatus <> invalid then
     stxt = LCase(vStatus.ToStr().Trim())
     if stxt = "played" or stxt = "finished" or stxt = "completed" then played = true
@@ -8975,7 +9075,7 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
   sec = section
   if sec = invalid then sec = ""
   sec = LCase(sec.Trim())
-  preferWide = (sec = "items")
+  preferWide = (sec = "items" or sec = "continue")
 
   root = CreateObject("roSGNode", "ContentNode")
   rank = 0

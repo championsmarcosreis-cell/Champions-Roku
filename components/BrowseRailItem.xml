@@ -80,21 +80,21 @@
           visible="false"
         />
 
-        <Rectangle
+        <Poster
           id="rankBadgeBorder"
           translation="[2, 2]"
           width="64"
           height="22"
-          color="0x2D3A4E"
+          uri="pkg:/images/rank_badge_border_dark_64x22.png"
           visible="false"
         />
 
-        <Rectangle
+        <Poster
           id="rankBadgeBg"
           translation="[3, 3]"
           width="62"
           height="20"
-          color="0x1C2635"
+          uri="pkg:/images/rank_badge_bg_dark_62x20.png"
           visible="false"
         />
 

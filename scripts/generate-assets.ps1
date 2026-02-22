@@ -423,6 +423,64 @@ try {
     $bmp.Dispose()
   }
 
+  function Make-TabClapperIconPng([string]$path, [string]$hex) {
+    $bmp = New-Bitmap 20 20
+    With-Graphics $bmp {
+      param($g)
+      $g.Clear([System.Drawing.Color]::Transparent)
+
+      $c = [System.Drawing.ColorTranslator]::FromHtml($hex)
+      $ink = [System.Drawing.Color]::FromArgb(245, $c.R, $c.G, $c.B)
+      $pen = New-Object System.Drawing.Pen $ink, 2
+      $brush = New-Object System.Drawing.SolidBrush $ink
+      $cut = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(190, 10, 17, 29)), 2
+      try {
+        # Bottom body
+        $g.FillRectangle($brush, 3, 10, 14, 7)
+        $g.DrawRectangle($pen, 3, 10, 14, 7)
+        # Top clap strip
+        $g.FillRectangle($brush, 3, 5, 14, 4)
+        $g.DrawRectangle($pen, 3, 5, 14, 4)
+        # Diagonal cuts
+        $g.DrawLine($cut, 6, 5, 4, 9)
+        $g.DrawLine($cut, 10, 5, 8, 9)
+        $g.DrawLine($cut, 14, 5, 12, 9)
+      } finally {
+        $cut.Dispose()
+        $brush.Dispose()
+        $pen.Dispose()
+      }
+    }
+    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+  }
+
+  function Make-TabTvIconPng([string]$path, [string]$hex) {
+    $bmp = New-Bitmap 20 20
+    With-Graphics $bmp {
+      param($g)
+      $g.Clear([System.Drawing.Color]::Transparent)
+
+      $c = [System.Drawing.ColorTranslator]::FromHtml($hex)
+      $ink = [System.Drawing.Color]::FromArgb(245, $c.R, $c.G, $c.B)
+      $pen = New-Object System.Drawing.Pen $ink, 2
+      try {
+        # TV frame
+        $g.DrawRectangle($pen, 3, 4, 14, 10)
+        # Antenna
+        $g.DrawLine($pen, 8, 2, 10, 4)
+        $g.DrawLine($pen, 12, 2, 10, 4)
+        # Stand
+        $g.DrawLine($pen, 10, 14, 10, 17)
+        $g.DrawLine($pen, 7, 17, 13, 17)
+      } finally {
+        $pen.Dispose()
+      }
+    }
+    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+  }
+
   Make-RoundedRectPng (Join-Path $imagesDir 'card.png') 520 260 18 '#0E1623' 235 '#263246' 220 2 110
   Make-RoundedRectPng (Join-Path $imagesDir 'field_normal.png') 440 56 14 '#0E1623' 235 '#223044' 210 2 0
   Make-RoundedRectPng (Join-Path $imagesDir 'field_focus.png') 440 56 14 '#0E1623' 245 '#CFA84A' 255 3 0
@@ -441,14 +499,72 @@ try {
 
   # Rounded-corner cutout overlays (for paths where we avoid MaskGroup).
   Make-RoundedCutoutOverlayPng (Join-Path $imagesDir 'overlay_corner_banner_560x318.png') 560 318 18 '#0A111D'
+  Make-RoundedCutoutOverlayPng (Join-Path $imagesDir 'overlay_corner_continue_248x140.png') 248 140 12 '#0A111D'
   Make-RoundedCutoutOverlayPng (Join-Path $imagesDir 'overlay_corner_rail_124x182.png') 124 182 10 '#0A111D'
   Make-RoundedCutoutOverlayPng (Join-Path $imagesDir 'overlay_corner_library_68x92.png') 68 92 8 '#0E1623'
   Make-VerticalFadeOverlayPng (Join-Path $imagesDir 'overlay_fade_banner_560x318.png') 560 318 154 0 236 '#0A111D'
   Make-VerticalFadeOverlayPng (Join-Path $imagesDir 'overlay_fade_banner_focus_560x318.png') 560 318 150 0 248 '#0A111D'
   Make-NeonFocusRingPng (Join-Path $imagesDir 'banner_focus_neon.png') 570 328 24 '#E3C06A' 8 36 4 120 2 220 1 255
   Make-NeonFocusRingPng (Join-Path $imagesDir 'overlay_focus_banner_560x318.png') 560 318 18 '#E3C06A' 8 36 4 120 2 220 1 255
+  Make-NeonFocusRingPng (Join-Path $imagesDir 'overlay_focus_continue_248x140.png') 248 140 12 '#E3C06A' 6 36 3 125 2 220 1 255
   Make-NeonFocusRingPng (Join-Path $imagesDir 'overlay_focus_rail_124x182.png') 124 182 10 '#E3C06A' 5 42 3 145 1 235 1 255
   Make-NeonFocusRingPng (Join-Path $imagesDir 'overlay_focus_library_68x92.png') 68 92 8 '#E3C06A' 5 42 2 150 1 235 1 255
+
+  # Browse library tab icons (white default, gold selected/focused).
+  Make-TabClapperIconPng (Join-Path $imagesDir 'tab_movies_white.png') '#FFFFFF'
+  Make-TabClapperIconPng (Join-Path $imagesDir 'tab_movies_gold.png') '#D7B25C'
+  Make-TabTvIconPng (Join-Path $imagesDir 'tab_livetv_white.png') '#FFFFFF'
+  Make-TabTvIconPng (Join-Path $imagesDir 'tab_livetv_gold.png') '#D7B25C'
+  Make-TabClapperIconPng (Join-Path $imagesDir 'tab_series_white.png') '#FFFFFF'
+  Make-TabClapperIconPng (Join-Path $imagesDir 'tab_series_gold.png') '#D7B25C'
+
+  # Rounded rank badges (TOP 1/2/3).
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_dark_112x34.png') 112 34 11 '#000000' 0 '#2D3A4E' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_gold_112x34.png') 112 34 11 '#000000' 0 '#AD8D3E' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_silver_112x34.png') 112 34 11 '#000000' 0 '#9BA3B2' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_bronze_112x34.png') 112 34 11 '#000000' 0 '#9C6947' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_focus_112x34.png') 112 34 11 '#000000' 0 '#E0E8F5' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_dark_110x32.png') 110 32 10 '#1C2635' 255 '#1C2635' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_gold_110x32.png') 110 32 10 '#D7B25C' 255 '#D7B25C' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_silver_110x32.png') 110 32 10 '#BFC7D4' 255 '#BFC7D4' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_bronze_110x32.png') 110 32 10 '#C17F59' 255 '#C17F59' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_dark_96x30.png') 96 30 10 '#000000' 0 '#2D3A4E' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_gold_96x30.png') 96 30 10 '#000000' 0 '#AD8D3E' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_silver_96x30.png') 96 30 10 '#000000' 0 '#9BA3B2' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_bronze_96x30.png') 96 30 10 '#000000' 0 '#9C6947' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_focus_96x30.png') 96 30 10 '#000000' 0 '#E0E8F5' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_dark_94x28.png') 94 28 9 '#1C2635' 255 '#1C2635' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_gold_94x28.png') 94 28 9 '#D7B25C' 255 '#D7B25C' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_silver_94x28.png') 94 28 9 '#BFC7D4' 255 '#BFC7D4' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_bronze_94x28.png') 94 28 9 '#C17F59' 255 '#C17F59' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_dark_92x28.png') 92 28 9 '#000000' 0 '#2D3A4E' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_gold_92x28.png') 92 28 9 '#000000' 0 '#AD8D3E' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_silver_92x28.png') 92 28 9 '#000000' 0 '#9BA3B2' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_bronze_92x28.png') 92 28 9 '#000000' 0 '#9C6947' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_focus_92x28.png') 92 28 9 '#000000' 0 '#E0E8F5' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_dark_90x26.png') 90 26 8 '#1C2635' 255 '#1C2635' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_gold_90x26.png') 90 26 8 '#D7B25C' 255 '#D7B25C' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_silver_90x26.png') 90 26 8 '#BFC7D4' 255 '#BFC7D4' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_bronze_90x26.png') 90 26 8 '#C17F59' 255 '#C17F59' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_dark_88x26.png') 88 26 9 '#000000' 0 '#2D3A4E' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_gold_88x26.png') 88 26 9 '#000000' 0 '#AD8D3E' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_silver_88x26.png') 88 26 9 '#000000' 0 '#9BA3B2' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_bronze_88x26.png') 88 26 9 '#000000' 0 '#9C6947' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_focus_88x26.png') 88 26 9 '#000000' 0 '#E0E8F5' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_dark_86x24.png') 86 24 8 '#1C2635' 255 '#1C2635' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_gold_86x24.png') 86 24 8 '#D7B25C' 255 '#D7B25C' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_silver_86x24.png') 86 24 8 '#BFC7D4' 255 '#BFC7D4' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_bronze_86x24.png') 86 24 8 '#C17F59' 255 '#C17F59' 0 1 0
+
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_dark_64x22.png') 64 22 8 '#000000' 0 '#2D3A4E' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_gold_64x22.png') 64 22 8 '#000000' 0 '#AD8D3E' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_silver_64x22.png') 64 22 8 '#9BA3B2' 0 '#9BA3B2' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_bronze_64x22.png') 64 22 8 '#000000' 0 '#9C6947' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_border_focus_64x22.png') 64 22 8 '#000000' 0 '#E0E8F5' 255 2 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_dark_62x20.png') 62 20 7 '#1C2635' 255 '#1C2635' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_gold_62x20.png') 62 20 7 '#D7B25C' 255 '#D7B25C' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_silver_62x20.png') 62 20 7 '#BFC7D4' 255 '#BFC7D4' 0 1 0
+  Make-RoundedRectPng (Join-Path $imagesDir 'rank_badge_bg_bronze_62x20.png') 62 20 7 '#C17F59' 255 '#C17F59' 0 1 0
 
   Write-Host "OK: generated Roku assets in $imagesDir"
 } finally {

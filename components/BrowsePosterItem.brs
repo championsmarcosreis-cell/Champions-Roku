@@ -86,7 +86,7 @@ sub onItemContentChanged()
     if m.rankBadgeBg <> invalid then m.rankBadgeBg.visible = true
     if m.rankBadgeText <> invalid then
       m.rankBadgeText.visible = true
-      m.rankBadgeText.text = "TOP " + rank.ToStr()
+      m.rankBadgeText.text = "TOP" + rank.ToStr()
     end if
   else
     if m.rankBadgeBorder <> invalid then m.rankBadgeBorder.visible = false

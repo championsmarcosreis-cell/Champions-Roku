@@ -2,6 +2,7 @@
 <component name="MainScene" extends="Scene">
   <interface>
     <field id="browseFocusVisual" type="string" alwaysNotify="true" />
+    <field id="browseTabsSelection" type="string" alwaysNotify="true" />
     <field id="requestExit" type="boolean" alwaysNotify="true" />
     <field id="requestExitSeq" type="integer" alwaysNotify="true" />
   </interface>

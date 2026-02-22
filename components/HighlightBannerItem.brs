@@ -104,13 +104,13 @@ sub onItemContentChanged()
     if m.rankBadgeText <> invalid then
       m.rankBadgeText.visible = true
       if rank <= 3 then
-        m.rankBadgeText.text = "TOP " + rank.ToStr()
-        m.rankBadgeText.translation = [36, 19]
-        m.rankBadgeText.width = 80
+        m.rankBadgeText.text = "TOP" + rank.ToStr()
+        m.rankBadgeText.translation = [35, 17]
+        m.rankBadgeText.width = 62
       else
         m.rankBadgeText.text = "#" + rank.ToStr()
-        m.rankBadgeText.translation = [24, 19]
-        m.rankBadgeText.width = 90
+        m.rankBadgeText.translation = [32, 17]
+        m.rankBadgeText.width = 64
       end if
     end if
   else
@@ -216,29 +216,29 @@ sub applyStyle()
 
   if m.rankBadgeBorder <> invalid and m.rankBadgeBorder.visible = true then
     rank = Int(m.rankValue)
-    border = "0x2D3A4E"
+    borderUri = "pkg:/images/rank_badge_border_dark_92x28.png"
     if rank = 1 then
-      border = "0xAD8D3E"
+      borderUri = "pkg:/images/rank_badge_border_gold_92x28.png"
     else if rank = 2 then
-      border = "0x9BA3B2"
+      borderUri = "pkg:/images/rank_badge_border_silver_92x28.png"
     else if rank = 3 then
-      border = "0x9C6947"
+      borderUri = "pkg:/images/rank_badge_border_bronze_92x28.png"
     end if
-    if focused then border = "0xE0E8F5"
-    m.rankBadgeBorder.color = border
+    if focused then borderUri = "pkg:/images/rank_badge_border_focus_92x28.png"
+    m.rankBadgeBorder.uri = borderUri
   end if
 
   if m.rankBadgeBg <> invalid and m.rankBadgeBg.visible = true then
     rank = Int(m.rankValue)
-    badge = "0x1C2635"
+    badgeUri = "pkg:/images/rank_badge_bg_dark_90x26.png"
     if rank = 1 then
-      badge = "0xD7B25C"
+      badgeUri = "pkg:/images/rank_badge_bg_gold_90x26.png"
     else if rank = 2 then
-      badge = "0xBFC7D4"
+      badgeUri = "pkg:/images/rank_badge_bg_silver_90x26.png"
     else if rank = 3 then
-      badge = "0xC17F59"
+      badgeUri = "pkg:/images/rank_badge_bg_bronze_90x26.png"
     end if
-    m.rankBadgeBg.color = badge
+    m.rankBadgeBg.uri = badgeUri
   end if
 
   if m.rankBadgeText <> invalid and m.rankBadgeText.visible = true then

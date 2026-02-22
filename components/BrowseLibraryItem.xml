@@ -6,29 +6,29 @@
   </interface>
 
   <children>
-    <Poster
-      id="bg"
-      width="196"
-      height="56"
-      translation="[2, 2]"
-      uri="pkg:/images/field_normal.png"
+    <Rectangle
+      id="focusBg"
+      translation="[6, 8]"
+      width="188"
+      height="40"
+      color="0x00000000"
     />
 
-    <Rectangle
-      id="accent"
-      translation="[14, 26]"
-      width="8"
-      height="8"
-      color="0xD7B25C"
+    <Poster
+      id="icon"
+      translation="[16, 18]"
+      width="20"
+      height="20"
+      uri="pkg:/images/tab_movies_white.png"
     />
 
     <Label
       id="label"
-      translation="[30, 16]"
-      width="152"
+      translation="[44, 16]"
+      width="140"
       height="24"
       font="font:MediumSystemFont"
-      color="0xD0D6E0"
+      color="0xFFFFFF"
       horizAlign="left"
       text=""
     />

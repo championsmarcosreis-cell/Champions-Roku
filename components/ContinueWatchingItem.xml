@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="ContinueWatchingItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onItemContentChanged" />
+    <field id="itemHasFocus" type="boolean" onChange="onItemHasFocusChanged" />
+  </interface>
+
+  <children>
+    <Group
+      id="thumbGroup"
+      translation="[10, 8]"
+    >
+      <children>
+        <Rectangle
+          id="coverBg"
+          translation="[0, 0]"
+          width="248"
+          height="140"
+          color="0x0A111D"
+        />
+
+        <Poster
+          id="cover"
+          translation="[0, 0]"
+          width="248"
+          height="140"
+          loadDisplayMode="zoomToFill"
+          uri=""
+        />
+
+        <Poster
+          id="coverCornersOverlay"
+          translation="[0, 0]"
+          width="248"
+          height="140"
+          uri="pkg:/images/overlay_corner_continue_248x140.png"
+        />
+
+        <Poster
+          id="focusOverlay"
+          translation="[0, 0]"
+          width="248"
+          height="140"
+          uri="pkg:/images/overlay_focus_continue_248x140.png"
+          visible="false"
+        />
+
+        <Rectangle
+          id="progressBg"
+          translation="[0, 136]"
+          width="248"
+          height="4"
+          color="0x2A3448"
+          visible="false"
+        />
+
+        <Rectangle
+          id="progressFill"
+          translation="[0, 136]"
+          width="0"
+          height="4"
+          color="0x3FD97C"
+          visible="false"
+        />
+      </children>
+    </Group>
+
+    <Label
+      id="title"
+      translation="[10, 154]"
+      width="248"
+      height="28"
+      font="font:MediumSystemFont"
+      color="0xE6EBF3"
+      text=""
+    />
+
+    <Label
+      id="subtitle"
+      translation="[10, 182]"
+      width="248"
+      height="18"
+      font="font:SmallSystemFont"
+      color="0x9FB0C5"
+      text=""
+      visible="false"
+    />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/ContinueWatchingItem.brs" />
+</component>
