@@ -361,6 +361,13 @@ sub init()
     m.scrubTimer.observeField("fire", "onScrubTimerFire")
     m.top.appendChild(m.scrubTimer)
   end if
+  m.scrubCommitTimer = CreateObject("roSGNode", "Timer")
+  if m.scrubCommitTimer <> invalid then
+    m.scrubCommitTimer.duration = 0.75
+    m.scrubCommitTimer.repeat = false
+    m.scrubCommitTimer.observeField("fire", "onScrubCommitTimerFire")
+    m.top.appendChild(m.scrubCommitTimer)
+  end if
 
   ' OSD auto-hide + tick (updates progress UI while visible).
   m.osdHideTimer = CreateObject("roSGNode", "Timer")
@@ -1145,14 +1152,23 @@ end function
 
 sub _applySeek(reason as String)
   if m.scrubActive <> true then return
-  print "seek apply reason=" + reason
+  target = Int(m.scrubTargetSec)
+  if target < 0 then target = 0
+  print "seek apply reason=" + reason + " targetSec=" + target.ToStr()
   m.scrubActive = false
   m.scrubDir = 0
+  m.seekActive = false
   if m.scrubTimer <> invalid then m.scrubTimer.control = "stop"
+  if m.scrubCommitTimer <> invalid then m.scrubCommitTimer.control = "stop"
 
   if m.player <> invalid and m.player.visible = true then
-    if m.player.hasField("seek") then m.player.seek = m.scrubTargetSec
-    if m.player.hasField("control") then m.player.control = "play"
+    if m.player.hasField("seek") then m.player.seek = target
+
+    st = ""
+    if m.player.state <> invalid then st = LCase(m.player.state.ToStr().Trim())
+    if st = "paused" and m.player.hasField("control") then
+      m.player.control = "resume"
+    end if
   end if
   setStatus("playing")
 end sub
@@ -1162,9 +1178,58 @@ sub _cancelSeek(reason as String)
   print "seek cancel reason=" + reason
   m.scrubActive = false
   m.scrubDir = 0
+  m.seekActive = false
   if m.scrubTimer <> invalid then m.scrubTimer.control = "stop"
+  if m.scrubCommitTimer <> invalid then m.scrubCommitTimer.control = "stop"
   setStatus("playing")
 end sub
+
+function _handleVodScrubInput(k as String, a as String) as Boolean
+  if m.player = invalid then return false
+  if m.player.visible <> true then return false
+  if m.playbackIsLive = true then return false
+  if m.settingsOpen = true then return false
+  if k <> "left" and k <> "right" then return false
+  if a <> "down" and a <> "up" then return false
+
+  d = 0
+  if m.player.duration <> invalid then d = Int(m.player.duration)
+  if d <= 0 then return false
+
+  if a = "down" then
+    nowMs = _nowMs()
+    if m.scrubActive <> true then
+      m.scrubActive = true
+
+      curPos = m.player.position
+      p = 0
+      if curPos <> invalid then p = Int(curPos)
+      m.scrubTargetSec = p
+    end if
+
+    ' (Re)start hold timer for this keypress.
+    m.scrubStartMs = nowMs
+    if m.scrubTimer <> invalid then m.scrubTimer.control = "start"
+    if m.scrubCommitTimer <> invalid then m.scrubCommitTimer.control = "stop"
+    if k = "right" then m.scrubDir = 1 else m.scrubDir = -1
+
+    ' First tick immediately for responsiveness.
+    _scrubStep(nowMs)
+    return true
+  end if
+
+  if m.scrubActive = true then
+    m.scrubDir = 0
+    if m.scrubTimer <> invalid then m.scrubTimer.control = "stop"
+    if m.scrubCommitTimer <> invalid then
+      m.scrubCommitTimer.control = "stop"
+      m.scrubCommitTimer.control = "start"
+      return true
+    end if
+    _applySeek("release")
+  end if
+  return true
+end function
 
 sub _scrubStep(nowMs as Integer)
   if m.scrubActive <> true then return
@@ -1179,17 +1244,25 @@ sub _scrubStep(nowMs as Integer)
   holdMs = nowMs - m.scrubStartMs
   if holdMs < 0 then holdMs = 0
 
-  skipStep = 2
-  if holdMs >= 2000 then skipStep = 5
-  if holdMs >= 5000 then skipStep = 10
-  if holdMs >= 10000 then skipStep = 20
+  skipStep = 10
+  if holdMs >= 2000 then skipStep = 20
+  if holdMs >= 5000 then skipStep = 40
+  if holdMs >= 10000 then skipStep = 60
 
   target = m.scrubTargetSec + (m.scrubDir * skipStep)
   if target < 0 then target = 0
   if target > (d - 1) then target = d - 1
   m.scrubTargetSec = target
-  ' Avoid repeated seeks while holding: many Roku devices will go black/buffer
-  ' and/or ignore rapid seek updates on HLS VOD. We only apply seek on OK.
+  m.seekTargetSec = target
+  m.seekActive = true
+
+  if m.overlayOpen = true then
+    _updateOsdUi()
+    _restartOsdHideTimer()
+  else
+    m.osdFocus = "TIMELINE"
+    showPlayerOverlay()
+  end if
 
   dirSym = ">>"
   if m.scrubDir < 0 then dirSym = "<<"
@@ -1212,6 +1285,11 @@ sub onScrubTimerFire()
 
   nowMs = _nowMs()
   _scrubStep(nowMs)
+end sub
+
+sub onScrubCommitTimerFire()
+  if m.scrubActive <> true then return
+  _applySeek("release_idle")
 end sub
 
 sub onOsdHideTimerFire()
@@ -1270,42 +1348,8 @@ sub onPlayerScrubEvent()
 
   if k <> "left" and k <> "right" then return
   if a <> "down" and a <> "up" then return
-
-  durVal = m.player.duration
-  d = 0
-  if durVal <> invalid then d = Int(durVal)
-  if d <= 0 then return
-
-  nowMs = _nowMs()
-
-  if a = "down" then
-    if m.scrubActive <> true then
-      m.scrubActive = true
-
-      curPos = m.player.position
-      p = 0
-      if curPos <> invalid then p = Int(curPos)
-      m.scrubTargetSec = p
-    end if
-
-    ' (Re)start hold timer for this keypress.
-    m.scrubStartMs = nowMs
-    if m.scrubTimer <> invalid then m.scrubTimer.control = "start"
-
-    if k = "right" then m.scrubDir = 1 else m.scrubDir = -1
-
-    ' First tick immediately for responsiveness.
-    _scrubStep(nowMs)
-    return
-  end if
-
-  if a = "up" then
-    ' Stop the hold-timer but keep seek-mode active until OK/BACK.
-    m.scrubDir = 0
-    if m.scrubTimer <> invalid then m.scrubTimer.control = "stop"
-    setStatus("seek " + _fmtTime(m.scrubTargetSec) + " / " + _fmtTime(d) + " (OK)")
-    return
-  end if
+  ignore = _handleVodScrubInput(k, a)
+  return
 end sub
 
 sub onPlayerKeyEvent()
@@ -1327,6 +1371,7 @@ sub onPlayerKeyEvent()
   if type(parts) <> "roArray" or parts.Count() < 2 then return
   k = LCase(parts[0].Trim())
   a = LCase(parts[1].Trim())
+  if (k = "left" or k = "right") and m.settingsOpen <> true and m.playbackIsLive <> true then return
   if a <> "press" then return
 
   ignore = handlePlaybackKey(k)
@@ -6484,6 +6529,7 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
   m.scrubActive = false
   m.scrubDir = 0
   if m.scrubTimer <> invalid then m.scrubTimer.control = "stop"
+  if m.scrubCommitTimer <> invalid then m.scrubCommitTimer.control = "stop"
 
   ' Clear any prior selection so we don't carry track IDs across unrelated assets.
   ' We'll re-apply preferences once track lists become available.
@@ -6937,15 +6983,23 @@ function handlePlaybackKey(kl as String) as Boolean
     _restartOsdHideTimer()
 
     if k = "back" then
-      m.seekActive = false
+      if m.scrubActive = true then
+        _cancelSeek("osd_back")
+      else
+        m.seekActive = false
+      end if
       hidePlayerOverlay()
       consumed = true
     else if k = "ok" then
       if m.osdFocus = "GEAR" then
+        if m.scrubActive = true then _cancelSeek("open_settings")
         if m.playbackIsLive <> true then showPlayerSettings()
         consumed = true
       else
-        if m.seekActive = true then
+        if m.scrubActive = true then
+          _applySeek("ok")
+          hidePlayerOverlay()
+        else if m.seekActive = true then
           _applyOsdSeek()
           hidePlayerOverlay()
         else if m.playbackIsLive <> true then
@@ -7057,7 +7111,6 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
   if m.liveInputTrace = true and m.mode = "live" then
     _traceLiveKeyEvent(key, press)
   end if
-  if press <> true then return false
 
   k = key
   if k = invalid then k = ""
@@ -7065,6 +7118,14 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
   if kl = "select" then kl = "ok"
   if kl = "channelup" or kl = "chanup" then kl = "up"
   if kl = "channeldown" or kl = "chandown" then kl = "down"
+
+  if m.player <> invalid and m.player.visible = true and m.playbackIsLive <> true and (kl = "left" or kl = "right") then
+    act = "up"
+    if press = true then act = "down"
+    if _handleVodScrubInput(kl, act) then return true
+  end if
+
+  if press <> true then return false
 
   ' While the modal is open, prioritize settings navigation first.
   if m.player <> invalid and m.player.visible = true and m.settingsOpen = true then

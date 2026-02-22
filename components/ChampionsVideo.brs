@@ -36,7 +36,17 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
   }
 
   if allow[mapped] = true then
-    if press = true then
+    if mapped = "left" or mapped = "right" then
+      m.seq = m.seq + 1
+      act = "up"
+      if press = true then act = "down"
+      m.top.scrubEvent = mapped + ":" + act + ":" + m.seq.ToStr()
+      if press = true then
+        print "[video-key] raw=" + kl + " mapped=" + mapped
+        ' Keep keyEvent on press for fallback paths (e.g. settings focus-steal).
+        m.top.keyEvent = mapped + ":press:" + m.seq.ToStr()
+      end if
+    else if press = true then
       print "[video-key] raw=" + kl + " mapped=" + mapped
       m.seq = m.seq + 1
       m.top.keyEvent = mapped + ":press:" + m.seq.ToStr()
