@@ -23,14 +23,23 @@
       visible="false"
     />
 
-    <Poster
-      id="cover"
+    <MaskGroup
+      id="coverMask"
       translation="[22, 14]"
-      width="556"
-      height="298"
-      loadDisplayMode="zoomToFill"
-      uri=""
-    />
+      maskUri="pkg:/images/mask_poster_556x298.png"
+      maskSize="[556, 298]"
+    >
+      <children>
+        <Poster
+          id="cover"
+          translation="[0, 0]"
+          width="556"
+          height="298"
+          loadDisplayMode="zoomToFill"
+          uri=""
+        />
+      </children>
+    </MaskGroup>
 
     <Rectangle
       id="textOverlay"

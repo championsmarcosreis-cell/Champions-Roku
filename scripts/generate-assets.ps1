@@ -294,6 +294,25 @@ try {
     $bmp.Dispose()
   }
 
+  function Make-RoundedMaskPng([string]$path, [int]$w, [int]$h, [int]$r) {
+    $bmp = New-Bitmap $w $h
+    With-Graphics $bmp {
+      param($g)
+      $g.Clear([System.Drawing.Color]::Transparent)
+
+      $path2 = New-RoundedRectPath 0 0 $w $h $r
+      $brush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 255, 255, 255))
+      try {
+        $g.FillPath($brush, $path2)
+      } finally {
+        $brush.Dispose()
+        $path2.Dispose()
+      }
+    }
+    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+  }
+
   Make-RoundedRectPng (Join-Path $imagesDir 'card.png') 520 260 18 '#0E1623' 235 '#263246' 220 2 110
   Make-RoundedRectPng (Join-Path $imagesDir 'field_normal.png') 440 56 14 '#0E1623' 235 '#223044' 210 2 0
   Make-RoundedRectPng (Join-Path $imagesDir 'field_focus.png') 440 56 14 '#0E1623' 245 '#CFA84A' 255 3 0
@@ -303,6 +322,12 @@ try {
   # Login button needs a more obvious focus state (TV viewing distance).
   Make-RoundedRectPng (Join-Path $imagesDir 'login_button_normal.png') 440 56 14 '#0E1623' 245 '#CFA84A' 255 3 0
   Make-RoundedRectPng (Join-Path $imagesDir 'login_button_focus.png') 440 56 14 '#E3C06A' 255 '#FFFFFF' 255 4 0
+
+  # Rounded corner masks for posters/banners
+  Make-RoundedMaskPng (Join-Path $imagesDir 'mask_banner_560x318.png') 560 318 18
+  Make-RoundedMaskPng (Join-Path $imagesDir 'mask_poster_556x298.png') 556 298 18
+  Make-RoundedMaskPng (Join-Path $imagesDir 'mask_rail_124x182.png') 124 182 10
+  Make-RoundedMaskPng (Join-Path $imagesDir 'mask_library_68x92.png') 68 92 8
 
   Write-Host "OK: generated Roku assets in $imagesDir"
 } finally {

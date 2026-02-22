@@ -23,14 +23,23 @@
       visible="false"
     />
 
-    <Poster
-      id="cover"
+    <MaskGroup
+      id="coverMask"
       translation="[14, 14]"
-      width="68"
-      height="92"
-      loadDisplayMode="zoomToFill"
-      uri=""
-    />
+      maskUri="pkg:/images/mask_library_68x92.png"
+      maskSize="[68, 92]"
+    >
+      <children>
+        <Poster
+          id="cover"
+          translation="[0, 0]"
+          width="68"
+          height="92"
+          loadDisplayMode="zoomToFill"
+          uri=""
+        />
+      </children>
+    </MaskGroup>
 
     <Rectangle
       id="progressBg"
