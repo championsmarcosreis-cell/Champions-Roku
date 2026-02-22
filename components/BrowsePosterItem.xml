@@ -17,8 +17,7 @@
     <MaskGroup
       id="posterMask"
       translation="[22, 14]"
-      width="556"
-      height="298"
+      maskSize="[556, 298]"
       maskUri="pkg:/images/mask_poster_556x298.png"
     >
       <children>

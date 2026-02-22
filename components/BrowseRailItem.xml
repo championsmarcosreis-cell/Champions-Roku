@@ -18,8 +18,7 @@
     <MaskGroup
       id="railMask"
       translation="[23, 9]"
-      width="124"
-      height="182"
+      maskSize="[124, 182]"
       maskUri="pkg:/images/mask_rail_124x182.png"
     >
       <children>

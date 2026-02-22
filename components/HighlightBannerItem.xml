@@ -18,8 +18,7 @@
     <MaskGroup
       id="bannerMask"
       translation="[20, 11]"
-      width="560"
-      height="318"
+      maskSize="[560, 318]"
       maskUri="pkg:/images/mask_banner_560x318.png"
     >
       <children>
@@ -28,7 +27,7 @@
           translation="[0, 0]"
           width="560"
           height="318"
-          loadDisplayMode="scaleToFill"
+          loadDisplayMode="zoomToFill"
           uri=""
         />
 
@@ -111,29 +110,30 @@
           visible="false"
         />
 
-        <Label
-          id="title"
-          translation="[14, 217]"
-          width="528"
-          height="46"
-          font="font:MediumSystemFont"
-          color="0xE6EBF3"
-          wrap="true"
-          numLines="2"
-          text=""
-        />
-
-        <Label
-          id="meta"
-          translation="[14, 267]"
-          width="528"
-          height="22"
-          font="font:SmallSystemFont"
-          color="0x9FB0C5"
-          text=""
-        />
       </children>
     </MaskGroup>
+
+    <Label
+      id="title"
+      translation="[34, 228]"
+      width="528"
+      height="46"
+      font="font:MediumSystemFont"
+      color="0xE6EBF3"
+      wrap="true"
+      numLines="2"
+      text=""
+    />
+
+    <Label
+      id="meta"
+      translation="[34, 278]"
+      width="528"
+      height="22"
+      font="font:SmallSystemFont"
+      color="0x9FB0C5"
+      text=""
+    />
 
     <Poster
       id="focusRing"

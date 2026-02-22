@@ -17,8 +17,7 @@
     <MaskGroup
       id="libraryMask"
       translation="[14, 14]"
-      width="68"
-      height="92"
+      maskSize="[68, 92]"
       maskUri="pkg:/images/mask_library_68x92.png"
     >
       <children>

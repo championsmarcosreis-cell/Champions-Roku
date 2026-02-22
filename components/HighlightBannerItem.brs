@@ -145,10 +145,7 @@ sub _applyCover(uri as String, mode as String)
   md = mode
   if md = invalid then md = ""
   md = md.ToStr().Trim()
-  if md = "" then md = "scaleToFill"
-  mdLower = LCase(md)
-  if mdLower = "zoomtofill" then md = "scaleToFill"
-  if mdLower = "zoomtofillcenter" then md = "scaleToFillCenter"
+  if md = "" then md = "zoomToFill"
   if m.cover.hasField("loadDisplayMode") then m.cover.loadDisplayMode = md
 
   nextUri = uri
