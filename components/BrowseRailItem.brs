@@ -95,10 +95,10 @@ sub onItemContentChanged()
   if m.rankBadgeIcon <> invalid then m.rankBadgeIcon.visible = (showRank and rank > 0 and rank <= 3)
   if m.rankBadgeText <> invalid then
     if rank > 0 and rank <= 3 then
-      m.rankBadgeText.translation = [44, 14]
+      m.rankBadgeText.translation = [21, 5]
       m.rankBadgeText.width = 40
     else
-      m.rankBadgeText.translation = [31, 14]
+      m.rankBadgeText.translation = [8, 5]
       m.rankBadgeText.width = 54
     end if
   end if

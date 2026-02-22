@@ -104,11 +104,11 @@ sub onItemContentChanged()
       m.rankBadgeText.visible = true
       if rank <= 3 then
         m.rankBadgeText.text = "TOP " + rank.ToStr()
-        m.rankBadgeText.translation = [56, 30]
+        m.rankBadgeText.translation = [36, 19]
         m.rankBadgeText.width = 80
       else
         m.rankBadgeText.text = "#" + rank.ToStr()
-        m.rankBadgeText.translation = [44, 30]
+        m.rankBadgeText.translation = [24, 19]
         m.rankBadgeText.width = 90
       end if
     end if

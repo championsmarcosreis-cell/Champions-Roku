@@ -15,20 +15,12 @@
       visible="false"
     />
 
-    <Poster
-      id="focusRing"
-      translation="[19, 9]"
-      width="562"
-      height="322"
-      uri="pkg:/images/banner_focus_thin.png"
-      visible="false"
-    />
-
     <MaskGroup
-      id="coverMask"
+      id="bannerMask"
       translation="[20, 11]"
+      width="560"
+      height="318"
       maskUri="pkg:/images/mask_banner_560x318.png"
-      maskSize="[560, 318]"
     >
       <children>
         <Poster
@@ -39,108 +31,117 @@
           loadDisplayMode="zoomToFill"
           uri=""
         />
+
+        <Rectangle
+          id="overlayFadeA"
+          translation="[0, 205]"
+          width="560"
+          height="50"
+          color="0x400A111D"
+        />
+        <Rectangle
+          id="overlayFadeB"
+          translation="[0, 241]"
+          width="560"
+          height="44"
+          color="0x7E0A111D"
+        />
+        <Rectangle
+          id="overlayFadeC"
+          translation="[0, 277]"
+          width="560"
+          height="41"
+          color="0xB40A111D"
+        />
+
+        <Rectangle
+          id="rankBadgeBorder"
+          translation="[10, 10]"
+          width="112"
+          height="34"
+          color="0x2D3A4E"
+          visible="false"
+        />
+
+        <Rectangle
+          id="rankBadgeBg"
+          translation="[11, 11]"
+          width="110"
+          height="32"
+          color="0xD7B25C"
+          visible="false"
+        />
+
+        <Poster
+          id="rankBadgeIcon"
+          translation="[20, 21]"
+          width="12"
+          height="12"
+          uri="pkg:/images/icon_trophy.png"
+          visible="false"
+        />
+
+        <Label
+          id="rankBadgeText"
+          translation="[36, 19]"
+          width="80"
+          height="18"
+          font="font:SmallSystemFont"
+          horizAlign="left"
+          color="0x0B0F16"
+          text=""
+          visible="false"
+        />
+
+        <Rectangle
+          id="progressBg"
+          translation="[0, 314]"
+          width="560"
+          height="4"
+          color="0x253247"
+          visible="false"
+        />
+
+        <Rectangle
+          id="progressFill"
+          translation="[0, 314]"
+          width="0"
+          height="4"
+          color="0x3FD97C"
+          visible="false"
+        />
+
+        <Label
+          id="title"
+          translation="[14, 217]"
+          width="528"
+          height="46"
+          font="font:MediumSystemFont"
+          color="0xE6EBF3"
+          wrap="true"
+          numLines="2"
+          text=""
+        />
+
+        <Label
+          id="meta"
+          translation="[14, 267]"
+          width="528"
+          height="22"
+          font="font:SmallSystemFont"
+          color="0x9FB0C5"
+          text=""
+        />
       </children>
     </MaskGroup>
 
-    <Rectangle
-      id="overlayFadeA"
-      translation="[20, 216]"
-      width="560"
-      height="50"
-      color="0x400A111D"
-    />
-    <Rectangle
-      id="overlayFadeB"
-      translation="[20, 252]"
-      width="560"
-      height="44"
-      color="0x7E0A111D"
-    />
-    <Rectangle
-      id="overlayFadeC"
-      translation="[20, 288]"
-      width="560"
-      height="41"
-      color="0xB40A111D"
-    />
-
-    <Rectangle
-      id="rankBadgeBorder"
-      translation="[30, 21]"
-      width="112"
-      height="34"
-      color="0x2D3A4E"
-      visible="false"
-    />
-
-    <Rectangle
-      id="rankBadgeBg"
-      translation="[31, 22]"
-      width="110"
-      height="32"
-      color="0xD7B25C"
-      visible="false"
-    />
-
     <Poster
-      id="rankBadgeIcon"
-      translation="[40, 32]"
-      width="12"
-      height="12"
-      uri="pkg:/images/icon_trophy.png"
+      id="focusRing"
+      translation="[19, 9]"
+      width="562"
+      height="322"
+      uri="pkg:/images/banner_focus_thin.png"
       visible="false"
-    />
-
-    <Label
-      id="rankBadgeText"
-      translation="[56, 30]"
-      width="80"
-      height="18"
-      font="font:SmallSystemFont"
-      horizAlign="left"
-      color="0x0B0F16"
-      text=""
-      visible="false"
-    />
-
-    <Rectangle
-      id="progressBg"
-      translation="[20, 325]"
-      width="560"
-      height="4"
-      color="0x253247"
-      visible="false"
-    />
-
-    <Rectangle
-      id="progressFill"
-      translation="[20, 325]"
-      width="0"
-      height="4"
-      color="0x3FD97C"
-      visible="false"
-    />
-
-    <Label
-      id="title"
-      translation="[34, 228]"
-      width="528"
-      height="46"
-      font="font:MediumSystemFont"
-      color="0xE6EBF3"
-      wrap="true"
-      numLines="2"
-      text=""
-    />
-
-    <Label
-      id="meta"
-      translation="[34, 278]"
-      width="528"
-      height="22"
-      font="font:SmallSystemFont"
-      color="0x9FB0C5"
-      text=""
     />
   </children>
 

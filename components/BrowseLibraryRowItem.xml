@@ -14,20 +14,12 @@
       uri="pkg:/images/field_normal.png"
     />
 
-    <Poster
-      id="focusRing"
-      translation="[0, 0]"
-      width="400"
-      height="120"
-      uri="pkg:/images/field_focus.png"
-      visible="false"
-    />
-
     <MaskGroup
-      id="coverMask"
+      id="libraryMask"
       translation="[14, 14]"
+      width="68"
+      height="92"
       maskUri="pkg:/images/mask_library_68x92.png"
-      maskSize="[68, 92]"
     >
       <children>
         <Poster
@@ -38,26 +30,26 @@
           loadDisplayMode="zoomToFill"
           uri=""
         />
+
+        <Rectangle
+          id="progressBg"
+          translation="[0, 89]"
+          width="68"
+          height="3"
+          color="0x253247"
+          visible="false"
+        />
+
+        <Rectangle
+          id="progressFill"
+          translation="[0, 89]"
+          width="0"
+          height="3"
+          color="0x3FD97C"
+          visible="false"
+        />
       </children>
     </MaskGroup>
-
-    <Rectangle
-      id="progressBg"
-      translation="[14, 103]"
-      width="68"
-      height="3"
-      color="0x253247"
-      visible="false"
-    />
-
-    <Rectangle
-      id="progressFill"
-      translation="[14, 103]"
-      width="0"
-      height="3"
-      color="0x3FD97C"
-      visible="false"
-    />
 
     <Rectangle
       id="completeBadgeBg"
@@ -108,6 +100,15 @@
       font="font:SmallSystemFont"
       color="0x9FB0C5"
       text=""
+    />
+
+    <Poster
+      id="focusRing"
+      translation="[0, 0]"
+      width="400"
+      height="120"
+      uri="pkg:/images/field_focus.png"
+      visible="false"
     />
   </children>
 

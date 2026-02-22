@@ -15,20 +15,12 @@
       visible="false"
     />
 
-    <Poster
-      id="focusRing"
-      translation="[22, 8]"
-      width="126"
-      height="184"
-      uri="pkg:/images/field_focus.png"
-      visible="false"
-    />
-
     <MaskGroup
-      id="coverMask"
+      id="railMask"
       translation="[23, 9]"
+      width="124"
+      height="182"
       maskUri="pkg:/images/mask_rail_124x182.png"
-      maskSize="[124, 182]"
     >
       <children>
         <Poster
@@ -39,94 +31,94 @@
           loadDisplayMode="zoomToFill"
           uri=""
         />
+
+        <Rectangle
+          id="textOverlay"
+          translation="[0, 140]"
+          width="124"
+          height="40"
+          color="0x00000000"
+        />
+
+        <Rectangle
+          id="progressBg"
+          translation="[0, 179]"
+          width="124"
+          height="3"
+          color="0x253247"
+          visible="false"
+        />
+
+        <Rectangle
+          id="progressFill"
+          translation="[0, 179]"
+          width="0"
+          height="3"
+          color="0x3FD97C"
+          visible="false"
+        />
+
+        <Rectangle
+          id="rankBadgeBorder"
+          translation="[2, 2]"
+          width="64"
+          height="22"
+          color="0x2D3A4E"
+          visible="false"
+        />
+
+        <Rectangle
+          id="rankBadgeBg"
+          translation="[3, 3]"
+          width="62"
+          height="20"
+          color="0x1C2635"
+          visible="false"
+        />
+
+        <Poster
+          id="rankBadgeIcon"
+          translation="[7, 6]"
+          width="10"
+          height="10"
+          uri="pkg:/images/icon_trophy.png"
+          visible="false"
+        />
+
+        <Label
+          id="rankBadgeText"
+          translation="[21, 5]"
+          width="40"
+          height="14"
+          font="font:SmallestSystemFont"
+          horizAlign="left"
+          color="0xFFFFFF"
+          text=""
+          visible="false"
+        />
+
+        <Rectangle
+          id="completeBadgeBg"
+          translation="[106, 5]"
+          width="18"
+          height="18"
+          color="0x33C86B"
+          visible="false"
+        />
+
+        <Label
+          id="completeBadgeText"
+          translation="[106, 6]"
+          width="18"
+          height="16"
+          font="font:SmallestSystemFont"
+          horizAlign="center"
+          color="0xFFFFFF"
+          text="v"
+          visible="false"
+        />
       </children>
     </MaskGroup>
-
-    <Rectangle
-      id="textOverlay"
-      translation="[23, 149]"
-      width="124"
-      height="40"
-      color="0x00000000"
-    />
-
-    <Rectangle
-      id="progressBg"
-      translation="[23, 188]"
-      width="124"
-      height="3"
-      color="0x253247"
-      visible="false"
-    />
-
-    <Rectangle
-      id="progressFill"
-      translation="[23, 188]"
-      width="0"
-      height="3"
-      color="0x3FD97C"
-      visible="false"
-    />
-
-    <Rectangle
-      id="rankBadgeBorder"
-      translation="[25, 11]"
-      width="64"
-      height="22"
-      color="0x2D3A4E"
-      visible="false"
-    />
-
-    <Rectangle
-      id="rankBadgeBg"
-      translation="[26, 12]"
-      width="62"
-      height="20"
-      color="0x1C2635"
-      visible="false"
-    />
-
-    <Poster
-      id="rankBadgeIcon"
-      translation="[30, 15]"
-      width="10"
-      height="10"
-      uri="pkg:/images/icon_trophy.png"
-      visible="false"
-    />
-
-    <Label
-      id="rankBadgeText"
-      translation="[44, 14]"
-      width="40"
-      height="14"
-      font="font:SmallestSystemFont"
-      horizAlign="left"
-      color="0xFFFFFF"
-      text=""
-      visible="false"
-    />
-
-    <Rectangle
-      id="completeBadgeBg"
-      translation="[129, 14]"
-      width="18"
-      height="18"
-      color="0x33C86B"
-      visible="false"
-    />
-
-    <Label
-      id="completeBadgeText"
-      translation="[129, 15]"
-      width="18"
-      height="16"
-      font="font:SmallestSystemFont"
-      horizAlign="center"
-      color="0xFFFFFF"
-      text="v"
-      visible="false"
-    />
 
     <Label
       id="title"
@@ -148,6 +140,15 @@
       font="font:SmallSystemFont"
       color="0x9FB0C5"
       text=""
+      visible="false"
+    />
+
+    <Poster
+      id="focusRing"
+      translation="[22, 8]"
+      width="126"
+      height="184"
+      uri="pkg:/images/field_focus.png"
       visible="false"
     />
   </children>
