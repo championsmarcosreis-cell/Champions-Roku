@@ -14,7 +14,15 @@ Write-Host '2/4 Package zip'
 & (Join-Path $PSScriptRoot 'package.ps1')
 
 Write-Host '3/4 Install on Roku'
-& (Join-Path $PSScriptRoot 'install.ps1') -RokuIp $RokuIp -Username $Username
+$installOk = $true
+$installErr = $null
+try {
+  & (Join-Path $PSScriptRoot 'install.ps1') -RokuIp $RokuIp -Username $Username
+} catch {
+  $installOk = $false
+  $installErr = $_
+  Write-Warning "Install failed or did not confirm success: $($_.Exception.Message)"
+}
 
 Start-Sleep -Seconds 2
 
@@ -23,3 +31,7 @@ Write-Host '4/4 Screenshot'
 
 Write-Host ("OK: latest screenshot at {0}" -f (Join-Path $root 'dist\\dev.png'))
 Write-Host ("(also saved JPEG at {0})" -f (Join-Path $root 'dist\\dev.jpg'))
+
+if (-not $installOk) {
+  throw "Install did not confirm success. Screenshot captured for inspection."
+}
