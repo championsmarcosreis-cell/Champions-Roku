@@ -631,20 +631,20 @@
       />
       <Rectangle
         id="upNextCancelBg"
-        translation="[968, 686]"
-        width="108"
+        translation="[964, 686]"
+        width="120"
         height="28"
         color="0x00000000"
       />
       <Label
         id="upNextCancelText"
-        translation="[970, 690]"
-        width="104"
+        translation="[964, 690]"
+        width="116"
         height="22"
         font="font:SmallSystemFont"
-        horizAlign="center"
-        color="0x5E6A85"
-        text="Cancelar"
+        horizAlign="left"
+        color="0xD5DEEC"
+        text="&lt; Cancelar"
       />
       <Rectangle
         id="upNextPlayBg"
@@ -675,18 +675,18 @@
       id="skipIntro"
       visible="false"
     >
-      <Rectangle
+      <Poster
         id="skipIntroCard"
-        translation="[954, 496]"
-        width="240"
-        height="44"
-        color="0x10141BF0"
+        translation="[1096, 496]"
+        width="152"
+        height="34"
+        uri="pkg:/images/card.png"
       />
       <Label
         id="skipIntroText"
-        translation="[970, 507]"
-        width="208"
-        height="24"
+        translation="[1110, 503]"
+        width="124"
+        height="22"
         font="font:SmallSystemFont"
         horizAlign="center"
         color="0xFFFFFFFF"
@@ -702,10 +702,30 @@
       color="0x00000000"
       visible="false"
     />
+    <Button
+      id="playerNowBackBtn"
+      translation="[30, 28]"
+      minWidth="44"
+      maxWidth="44"
+      text=""
+      showFocusFootprint="false"
+      opacity="0.0"
+      visible="false"
+    />
+    <Label
+      id="playerNowBack"
+      translation="[36, 33]"
+      width="28"
+      height="24"
+      font="font:SmallSystemFont"
+      color="0xE6EBF3"
+      visible="false"
+      text="&lt;"
+    />
     <Label
       id="playerNowTitle"
-      translation="[36, 33]"
-      width="840"
+      translation="[70, 33]"
+      width="806"
       height="24"
       font="font:SmallSystemFont"
       color="0xF2F5FA"

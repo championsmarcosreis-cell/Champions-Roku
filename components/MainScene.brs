@@ -186,7 +186,7 @@ sub init()
   m.liveLayout = _buildLiveLayoutMetrics()
   ' Player UX state machine.
   m.uiState = "IDLE" ' IDLE | PLAYING | OSD | SETTINGS
-  m.osdFocus = "TIMELINE" ' TIMELINE | GEAR
+  m.osdFocus = "TIMELINE" ' TIMELINE | GEAR | NOWBACK
   m.seekTargetSec = 0
   m.seekActive = false
   m.osdBarMaxW = 1070
@@ -440,13 +440,47 @@ sub _ensurePlayerNowRuntimeNodes()
     end if
   end if
 
+  if m.playerNowBackBtn = invalid then m.playerNowBackBtn = m.top.findNode("playerNowBackBtn")
+  if m.playerNowBackBtn = invalid then
+    btn = CreateObject("roSGNode", "Button")
+    if btn <> invalid then
+      btn.id = "playerNowBackBtn"
+      btn.translation = [30, 28]
+      btn.minWidth = 44
+      btn.maxWidth = 44
+      btn.text = ""
+      btn.showFocusFootprint = false
+      btn.opacity = 0.0
+      btn.visible = false
+      m.top.appendChild(btn)
+      m.playerNowBackBtn = btn
+    end if
+  end if
+
+  if m.playerNowBack = invalid then m.playerNowBack = m.top.findNode("playerNowBack")
+  if m.playerNowBack = invalid then
+    backLbl = CreateObject("roSGNode", "Label")
+    if backLbl <> invalid then
+      backLbl.id = "playerNowBack"
+      backLbl.translation = [36, 33]
+      backLbl.width = 28
+      backLbl.height = 24
+      backLbl.font = "font:SmallSystemFont"
+      backLbl.color = "0xE6EBF3"
+      backLbl.visible = false
+      backLbl.text = "<"
+      m.top.appendChild(backLbl)
+      m.playerNowBack = backLbl
+    end if
+  end if
+
   if m.playerNowTitle = invalid then m.playerNowTitle = m.top.findNode("playerNowTitle")
   if m.playerNowTitle = invalid then
     lbl = CreateObject("roSGNode", "Label")
     if lbl <> invalid then
       lbl.id = "playerNowTitle"
-      lbl.translation = [36, 33]
-      lbl.width = 840
+      lbl.translation = [70, 33]
+      lbl.width = 806
       lbl.height = 24
       lbl.font = "font:SmallSystemFont"
       lbl.color = "0xF2F5FA"
@@ -555,8 +589,8 @@ sub _ensureUpNextRuntimeNodes()
     n = CreateObject("roSGNode", "Rectangle")
     if n <> invalid then
       n.id = "upNextCancelBg"
-      n.translation = [968, 686]
-      n.width = 108
+      n.translation = [964, 686]
+      n.width = 120
       n.height = 28
       n.color = "0x00000000"
       m.upNextGroup.appendChild(n)
@@ -569,13 +603,13 @@ sub _ensureUpNextRuntimeNodes()
     n = CreateObject("roSGNode", "Label")
     if n <> invalid then
       n.id = "upNextCancelText"
-      n.translation = [970, 690]
-      n.width = 104
+      n.translation = [964, 690]
+      n.width = 116
       n.height = 22
       n.font = "font:SmallSystemFont"
-      n.horizAlign = "center"
-      n.color = "0x5E6A85"
-      n.text = "Cancelar"
+      n.horizAlign = "left"
+      n.color = "0xD5DEEC"
+      n.text = "< Cancelar"
       m.upNextGroup.appendChild(n)
       m.upNextCancelText = n
     end if
@@ -642,13 +676,13 @@ sub _ensureSkipIntroRuntimeNodes()
 
   if m.skipIntroCard = invalid then m.skipIntroCard = m.top.findNode("skipIntroCard")
   if m.skipIntroCard = invalid then
-    n = CreateObject("roSGNode", "Rectangle")
+    n = CreateObject("roSGNode", "Poster")
     if n <> invalid then
       n.id = "skipIntroCard"
-      n.translation = [954, 496]
-      n.width = 240
-      n.height = 44
-      n.color = "0x10141BF0"
+      n.translation = [1096, 496]
+      n.width = 152
+      n.height = 34
+      n.uri = "pkg:/images/card.png"
       m.skipIntroGroup.appendChild(n)
       m.skipIntroCard = n
     end if
@@ -659,9 +693,9 @@ sub _ensureSkipIntroRuntimeNodes()
     n = CreateObject("roSGNode", "Label")
     if n <> invalid then
       n.id = "skipIntroText"
-      n.translation = [970, 507]
-      n.width = 208
-      n.height = 24
+      n.translation = [1110, 503]
+      n.width = 124
+      n.height = 22
       n.font = "font:SmallSystemFont"
       n.horizAlign = "center"
       n.color = "0xFFFFFFFF"
@@ -861,6 +895,8 @@ sub bindUiNodes()
   if m.osdBarFill = invalid then m.osdBarFill = m.top.findNode("osdBarFill")
   if m.osdGearFocus = invalid then m.osdGearFocus = m.top.findNode("osdGearFocus")
   if m.playerNowBg = invalid then m.playerNowBg = m.top.findNode("playerNowBg")
+  if m.playerNowBackBtn = invalid then m.playerNowBackBtn = m.top.findNode("playerNowBackBtn")
+  if m.playerNowBack = invalid then m.playerNowBack = m.top.findNode("playerNowBack")
   if m.playerNowTitle = invalid then m.playerNowTitle = m.top.findNode("playerNowTitle")
   if m.playerSettingsModal = invalid then m.playerSettingsModal = m.top.findNode("playerSettingsModal")
   if m.playerSettingsAudioList = invalid then m.playerSettingsAudioList = m.top.findNode("playerSettingsAudioList")
@@ -934,6 +970,10 @@ sub bindUiNodes()
     m.playerSettingsAudioList.observeField("itemSelected", "onSettingsAudioSelected")
     if m.playerSettingsSubList <> invalid then m.playerSettingsSubList.observeField("itemSelected", "onSettingsSubSelected")
     m.settingsObsSetup = true
+  end if
+  if m.playerNowBackBtn <> invalid and (m.playerNowBackObsSetup <> true) then
+    m.playerNowBackBtn.observeField("buttonSelected", "onPlayerNowBackSelected")
+    m.playerNowBackObsSetup = true
   end if
 
   if m.channelsList <> invalid and (m.channelsObsSetup <> true) then
@@ -1494,24 +1534,41 @@ sub _setPlayerNowTitle(title as String)
   if t = "" then
     m.playerNowTitle.text = ""
     m.playerNowTitle.visible = false
+    if m.playerNowBack <> invalid then m.playerNowBack.visible = false
+    if m.playerNowBackBtn <> invalid then m.playerNowBackBtn.visible = false
     m.playerNowBg.visible = false
     return
   end if
 
+  backTxt = "<"
+  if m.playerNowBack <> invalid then m.playerNowBack.text = backTxt
   m.playerNowTitle.text = t
   m.playerNowTitle.visible = true
 
-  bgW = 56 + (Len(t) * 10)
+  bgW = 152 + (Len(t) * 10)
   if bgW < 360 then bgW = 360
   if bgW > 1160 then bgW = 1160
   m.playerNowBg.width = bgW
   m.playerNowBg.color = "0x00000000"
   m.playerNowBg.opacity = 0.0
   m.playerNowTitle.color = "0xF2F5FAFF"
+  if m.playerNowBack <> invalid then
+    backFocus = ""
+    if m.osdFocus <> invalid then backFocus = UCase(m.osdFocus.ToStr().Trim())
+    if backFocus = "NOWBACK" then
+      m.playerNowBack.color = "0xD8B765FF"
+    else
+      m.playerNowBack.color = "0xE6EBF3FF"
+    end if
+  end if
   _bringNodeToFront(m.playerNowBg)
+  _bringNodeToFront(m.playerNowBackBtn)
+  _bringNodeToFront(m.playerNowBack)
   _bringNodeToFront(m.playerNowTitle)
   showNow = (m.overlayOpen = true and m.player <> invalid and m.player.visible = true)
   m.playerNowTitle.visible = showNow
+  if m.playerNowBack <> invalid then m.playerNowBack.visible = showNow
+  if m.playerNowBackBtn <> invalid then m.playerNowBackBtn.visible = showNow
   m.playerNowBg.visible = false
 end sub
 
@@ -1709,16 +1766,56 @@ sub _activateSkipIntroForPlayback(itemId as String)
   print "skipintro active itemId=" + id + " startSec=" + startSec.ToStr() + " endSec=" + endSec.ToStr() + " source=" + source
 end sub
 
+sub _layoutSkipIntroCard(txt as String)
+  if m.skipIntroCard = invalid or m.skipIntroText = invalid then return
+
+  t = txt
+  if t = invalid then t = ""
+  t = t.ToStr().Trim()
+  if t = "" then t = "Pular intro"
+
+  cardH = 34
+  padX = 14
+  textPx = 9
+  cardW = Int(Len(t) * textPx) + (padX * 2)
+  if cardW < 138 then cardW = 138
+  if cardW > 210 then cardW = 210
+
+  rightMargin = 32
+  cardX = 1280 - rightMargin - cardW
+  if cardX < 0 then cardX = 0
+  cardY = 496
+
+  textX = cardX + padX
+  textY = cardY + 7
+  textW = cardW - (padX * 2)
+  if textW < 80 then textW = 80
+
+  m.skipIntroCard.translation = [cardX, cardY]
+  m.skipIntroCard.width = cardW
+  m.skipIntroCard.height = cardH
+  if m.skipIntroCard.hasField("uri") then m.skipIntroCard.uri = "pkg:/images/card.png"
+  if m.skipIntroCard.hasField("blendColor") then m.skipIntroCard.blendColor = "0xFFFFFFFF"
+  m.skipIntroCard.opacity = 0.98
+
+  m.skipIntroText.translation = [textX, textY]
+  m.skipIntroText.width = textW
+  m.skipIntroText.height = 22
+  m.skipIntroText.horizAlign = "center"
+end sub
+
 sub _showSkipIntroPrompt()
   _ensureSkipIntroRuntimeNodes()
   if m.skipIntroGroup = invalid then return
-  if m.skipIntroCard <> invalid then
-    m.skipIntroCard.color = "0x10141BF0"
-    m.skipIntroCard.opacity = 1.0
-  end if
+  txt = _t("skip_intro")
+  if txt = invalid then txt = ""
+  txt = txt.ToStr().Trim()
+  if txt = "" then txt = "Pular intro"
+
+  _layoutSkipIntroCard(txt)
   if m.skipIntroText <> invalid then
     m.skipIntroText.color = "0xFFFFFFFF"
-    m.skipIntroText.text = _t("skip_intro")
+    m.skipIntroText.text = txt
   end if
   _bringNodeToFront(m.skipIntroGroup)
   m.skipIntroGroup.visible = true
@@ -1765,7 +1862,12 @@ sub _updateSkipIntroPrompt()
     _showSkipIntroPrompt()
     print "skipintro prompt show itemId=" + m.skipIntroItemId + " posSec=" + posSec.ToStr() + " startSec=" + startSec.ToStr() + " endSec=" + endSec.ToStr()
   else if m.skipIntroText <> invalid then
-    m.skipIntroText.text = _t("skip_intro")
+    txt2 = _t("skip_intro")
+    if txt2 = invalid then txt2 = ""
+    txt2 = txt2.ToStr().Trim()
+    if txt2 = "" then txt2 = "Pular intro"
+    m.skipIntroText.text = txt2
+    _layoutSkipIntroCard(txt2)
   end if
 end sub
 
@@ -2172,7 +2274,7 @@ end function
 
 sub _refreshUpNextUiStrings()
   if m.upNextTitle <> invalid then m.upNextTitle.text = _t("upnext_title")
-  if m.upNextCancelText <> invalid then m.upNextCancelText.text = _t("upnext_cancel")
+  if m.upNextCancelText <> invalid then m.upNextCancelText.text = "< " + _t("upnext_cancel")
   if m.upNextPlayText <> invalid then m.upNextPlayText.text = _t("upnext_watch_now")
 end sub
 
@@ -2188,7 +2290,7 @@ sub _refreshUpNextActionVisuals()
     if m.upNextPlayText <> invalid then m.upNextPlayText.color = "0xC7D0E2FF"
   else
     if m.upNextCancelBg <> invalid then m.upNextCancelBg.color = "0x00000000"
-    if m.upNextCancelText <> invalid then m.upNextCancelText.color = "0x5E6A85FF"
+    if m.upNextCancelText <> invalid then m.upNextCancelText.color = "0xD5DEECFF"
     if m.upNextPlayBg <> invalid then m.upNextPlayBg.color = "0x00000000"
     if m.upNextPlayText <> invalid then m.upNextPlayText.color = "0xFFFFFFFF"
   end if
@@ -2364,8 +2466,6 @@ end sub
 function _isUpNextActive() as Boolean
   if m.player = invalid or m.player.visible <> true then return false
   if m.playbackIsLive = true then return false
-  if m.settingsOpen = true then return false
-  if m.upNextAutoplayDisabled = true then return false
   if m.upNextGroup = invalid or m.upNextGroup.visible <> true then return false
   if type(m.upNextNextEpisode) <> "roAssociativeArray" then return false
   return true
@@ -2793,6 +2893,14 @@ sub onPlayerSettingsRequested()
   showPlayerSettings()
 end sub
 
+sub onPlayerNowBackSelected()
+  if m.player = invalid then return
+  if m.player.visible <> true then return
+  if m.settingsOpen = true then return
+  print "[ui] now_back click"
+  stopPlaybackAndReturn("now_back_click")
+end sub
+
 function _normLang(s as String) as String
   ' Back-compat shim (older code calls _normLang).
   return normalizeLang(s)
@@ -2943,6 +3051,7 @@ function _t(key as String) as String
         detail_episode: "Episode"
         detail_runtime: "Runtime:"
         detail_synopsis: "Synopsis"
+        player_back: "Back"
         upnext_title: "Next episode"
         upnext_in_prefix: "Next in "
         upnext_cancel: "Cancel"
@@ -3022,6 +3131,7 @@ function _t(key as String) as String
         detail_episode: "Episodio"
         detail_runtime: "Runtime:"
         detail_synopsis: "Sinopse"
+        player_back: "Voltar"
         upnext_title: "Proximo episodio"
         upnext_in_prefix: "Proximo em "
         upnext_cancel: "Cancelar"
@@ -3101,6 +3211,7 @@ function _t(key as String) as String
         detail_episode: "Episodio"
         detail_runtime: "Runtime:"
         detail_synopsis: "Sinopsis"
+        player_back: "Volver"
         upnext_title: "Siguiente episodio"
         upnext_in_prefix: "Siguiente en "
         upnext_cancel: "Cancelar"
@@ -3180,6 +3291,7 @@ function _t(key as String) as String
         detail_episode: "Episodio"
         detail_runtime: "Runtime:"
         detail_synopsis: "Sinossi"
+        player_back: "Indietro"
         upnext_title: "Prossimo episodio"
         upnext_in_prefix: "Prossimo tra "
         upnext_cancel: "Annulla"
@@ -5094,6 +5206,14 @@ sub _updateOsdUi()
     end if
   end if
 
+  if m.playerNowBack <> invalid then
+    if m.osdFocus = "NOWBACK" then
+      m.playerNowBack.color = "0xD8B765FF"
+    else
+      m.playerNowBack.color = "0xE6EBF3FF"
+    end if
+  end if
+
   curPos = 0
   durSec = 0
   if m.player.position <> invalid then curPos = Int(m.player.position)
@@ -5217,6 +5337,8 @@ sub hidePlayerOverlay()
   m.seekActive = false
   if m.osdSeekLabel <> invalid then m.osdSeekLabel.visible = false
   if m.osdGearFocus <> invalid then m.osdGearFocus.visible = false
+  if m.playerNowBack <> invalid then m.playerNowBack.visible = false
+  if m.playerNowBackBtn <> invalid then m.playerNowBackBtn.visible = false
   if m.playerNowTitle <> invalid then m.playerNowTitle.visible = false
   if m.playerNowBg <> invalid then m.playerNowBg.visible = false
   _stopOsdTimers()
@@ -8568,7 +8690,8 @@ function handlePlaybackKey(kl as String) as Boolean
   f = m.osdFocus
   if f = invalid then f = ""
   f = UCase(f.Trim())
-  if f <> "GEAR" then f = "TIMELINE"
+  if f <> "GEAR" and f <> "NOWBACK" and f <> "TIMELINE" then f = "TIMELINE"
+  if m.playbackIsLive = true and f <> "TIMELINE" then f = "TIMELINE"
   m.osdFocus = f
 
   ' Keep Scene focus during playback (except inside settings lists).
@@ -8633,7 +8756,11 @@ function handlePlaybackKey(kl as String) as Boolean
       hidePlayerOverlay()
       consumed = true
     else if k = "ok" then
-      if m.osdFocus = "GEAR" then
+      if m.osdFocus = "NOWBACK" then
+        if m.scrubActive = true then _cancelSeek("now_back")
+        stopPlaybackAndReturn("now_back_key")
+        consumed = true
+      else if m.osdFocus = "GEAR" then
         if m.scrubActive = true then _cancelSeek("open_settings")
         if m.playbackIsLive <> true then showPlayerSettings()
         consumed = true
@@ -8657,8 +8784,9 @@ function handlePlaybackKey(kl as String) as Boolean
       prevFocus = m.osdFocus
       if m.playbackIsLive = true then
         m.osdFocus = "TIMELINE"
+      else if k = "up" then
+        m.osdFocus = "NOWBACK"
       else
-        ' Keep VOD deterministic even with duplicate key events.
         m.osdFocus = "GEAR"
       end if
       _updateOsdUi()
@@ -8712,11 +8840,11 @@ function handlePlaybackKey(kl as String) as Boolean
       consumed = true
     end if
   else if k = "up" then
-    ' VOD shortcut: UP opens OSD directly on settings gear.
+    ' VOD shortcut: UP opens OSD directly on top-left back action.
     if m.playbackIsLive = true then
       m.osdFocus = "TIMELINE"
     else
-      m.osdFocus = "GEAR"
+      m.osdFocus = "NOWBACK"
     end if
     showPlayerOverlay()
     consumed = true
