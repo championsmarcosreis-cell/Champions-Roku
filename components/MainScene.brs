@@ -231,6 +231,23 @@ sub init()
   m.lastViewSelectId = ""
   m.lastLogoutMs = 0
   m.exitSeq = 0
+  m.upNextThresholdPromptSec = 180
+  m.upNextThresholdCountSec = 7
+  m.upNextPromptShown = false
+  m.upNextCountdownMode = false
+  m.upNextAutoplayDisabled = false
+  m.upNextPendingAutoplay = false
+  m.upNextAutoPlayPending = false
+  m.upNextButtonIndex = 1
+  m.upNextCurrentItemId = ""
+  m.upNextNextEpisode = invalid
+  m.upNextCurrentContent = {}
+  m.upNextEpisodesCache = {}
+  m.upNextFetchInFlight = false
+  m.upNextFetchSeriesId = ""
+  m.upNextFetchCurrentContent = {}
+  m.upNextItemMetaById = {}
+  m.playerNowCachedTitle = ""
 
   cfg0 = loadConfig()
   m.apiBase = cfg0.apiBase
@@ -264,6 +281,11 @@ sub init()
   if m.gatewayTask <> invalid then
     m.gatewayTask.observeField("state", "onGatewayTaskStateChanged")
     m.top.appendChild(m.gatewayTask)
+  end if
+  m.upNextTask = CreateObject("roSGNode", "GatewayTask")
+  if m.upNextTask <> invalid then
+    m.upNextTask.observeField("state", "onUpNextTaskStateChanged")
+    m.top.appendChild(m.upNextTask)
   end if
 
   ' IMPORTANT: On some Roku firmware versions, init() runs before all XML nodes
@@ -352,6 +374,7 @@ sub init()
 
   m.scrubActive = false
   m.scrubDir = 0
+  m.scrubLastDir = 0
   m.scrubTargetSec = 0
   m.scrubStartMs = 0
   m.scrubTimer = CreateObject("roSGNode", "Timer")
@@ -387,6 +410,209 @@ sub init()
   end if
 
   m.top.setFocus(true)
+end sub
+
+sub _ensurePlayerNowRuntimeNodes()
+  if m.top = invalid then return
+
+  if m.playerNowBg = invalid then m.playerNowBg = m.top.findNode("playerNowBg")
+  if m.playerNowBg = invalid then
+    bg = CreateObject("roSGNode", "Rectangle")
+    if bg <> invalid then
+      bg.id = "playerNowBg"
+      bg.translation = [26, 26]
+      bg.width = 860
+      bg.height = 36
+      bg.color = "0x00000000"
+      bg.visible = false
+      m.top.appendChild(bg)
+      m.playerNowBg = bg
+    end if
+  end if
+
+  if m.playerNowTitle = invalid then m.playerNowTitle = m.top.findNode("playerNowTitle")
+  if m.playerNowTitle = invalid then
+    lbl = CreateObject("roSGNode", "Label")
+    if lbl <> invalid then
+      lbl.id = "playerNowTitle"
+      lbl.translation = [36, 33]
+      lbl.width = 840
+      lbl.height = 24
+      lbl.font = "font:SmallSystemFont"
+      lbl.color = "0xF2F5FA"
+      lbl.visible = false
+      lbl.text = ""
+      m.top.appendChild(lbl)
+      m.playerNowTitle = lbl
+    end if
+  end if
+end sub
+
+sub _ensureUpNextRuntimeNodes()
+  if m.top = invalid then return
+
+  if m.upNextGroup = invalid then m.upNextGroup = m.top.findNode("upNext")
+  if m.upNextGroup = invalid then
+    g = CreateObject("roSGNode", "Group")
+    if g <> invalid then
+      g.id = "upNext"
+      g.visible = false
+      m.top.appendChild(g)
+      m.upNextGroup = g
+    end if
+  end if
+  if m.upNextGroup = invalid then return
+
+  if m.upNextCard = invalid then m.upNextCard = m.top.findNode("upNextCard")
+  if m.upNextCard = invalid then
+    n = CreateObject("roSGNode", "Rectangle")
+    if n <> invalid then
+      n.id = "upNextCard"
+      n.translation = [954, 544]
+      n.width = 306
+      n.height = 176
+      n.color = "0x10141BF0"
+      m.upNextGroup.appendChild(n)
+      m.upNextCard = n
+    end if
+  end if
+
+  if m.upNextTitle = invalid then m.upNextTitle = m.top.findNode("upNextTitle")
+  if m.upNextTitle = invalid then
+    n = CreateObject("roSGNode", "Label")
+    if n <> invalid then
+      n.id = "upNextTitle"
+      n.translation = [968, 556]
+      n.width = 276
+      n.height = 24
+      n.font = "font:SmallSystemFont"
+      n.color = "0xD8B765"
+      n.text = "Proximo episodio"
+      m.upNextGroup.appendChild(n)
+      m.upNextTitle = n
+    end if
+  end if
+
+  if m.upNextPoster = invalid then m.upNextPoster = m.top.findNode("upNextPoster")
+  if m.upNextPoster = invalid then
+    n = CreateObject("roSGNode", "Poster")
+    if n <> invalid then
+      n.id = "upNextPoster"
+      n.translation = [968, 588]
+      n.width = 52
+      n.height = 74
+      n.uri = "pkg:/images/logo.png"
+      m.upNextGroup.appendChild(n)
+      m.upNextPoster = n
+    end if
+  end if
+
+  if m.upNextEpisode = invalid then m.upNextEpisode = m.top.findNode("upNextEpisode")
+  if m.upNextEpisode = invalid then
+    n = CreateObject("roSGNode", "Label")
+    if n <> invalid then
+      n.id = "upNextEpisode"
+      n.translation = [1028, 596]
+      n.width = 216
+      n.height = 62
+      n.font = "font:SmallSystemFont"
+      n.color = "0xFFFFFF"
+      n.text = ""
+      m.upNextGroup.appendChild(n)
+      m.upNextEpisode = n
+    end if
+  end if
+
+  if m.upNextCountdown = invalid then m.upNextCountdown = m.top.findNode("upNextCountdown")
+  if m.upNextCountdown = invalid then
+    n = CreateObject("roSGNode", "Label")
+    if n <> invalid then
+      n.id = "upNextCountdown"
+      n.translation = [968, 662]
+      n.width = 276
+      n.height = 22
+      n.font = "font:SmallSystemFont"
+      n.color = "0xAAB4C2"
+      n.visible = false
+      n.text = ""
+      m.upNextGroup.appendChild(n)
+      m.upNextCountdown = n
+    end if
+  end if
+
+  if m.upNextCancelBg = invalid then m.upNextCancelBg = m.top.findNode("upNextCancelBg")
+  if m.upNextCancelBg = invalid then
+    n = CreateObject("roSGNode", "Rectangle")
+    if n <> invalid then
+      n.id = "upNextCancelBg"
+      n.translation = [968, 686]
+      n.width = 108
+      n.height = 28
+      n.color = "0x00000000"
+      m.upNextGroup.appendChild(n)
+      m.upNextCancelBg = n
+    end if
+  end if
+
+  if m.upNextCancelText = invalid then m.upNextCancelText = m.top.findNode("upNextCancelText")
+  if m.upNextCancelText = invalid then
+    n = CreateObject("roSGNode", "Label")
+    if n <> invalid then
+      n.id = "upNextCancelText"
+      n.translation = [970, 690]
+      n.width = 104
+      n.height = 22
+      n.font = "font:SmallSystemFont"
+      n.horizAlign = "center"
+      n.color = "0x5E6A85"
+      n.text = "Cancelar"
+      m.upNextGroup.appendChild(n)
+      m.upNextCancelText = n
+    end if
+  end if
+
+  if m.upNextPlayBg = invalid then m.upNextPlayBg = m.top.findNode("upNextPlayBg")
+  if m.upNextPlayBg = invalid then
+    n = CreateObject("roSGNode", "Rectangle")
+    if n <> invalid then
+      n.id = "upNextPlayBg"
+      n.translation = [1084, 682]
+      n.width = 176
+      n.height = 34
+      n.color = "0x00000000"
+      m.upNextGroup.appendChild(n)
+      m.upNextPlayBg = n
+    end if
+  end if
+
+  if m.upNextPlayText = invalid then m.upNextPlayText = m.top.findNode("upNextPlayText")
+  if m.upNextPlayText = invalid then
+    n = CreateObject("roSGNode", "Label")
+    if n <> invalid then
+      n.id = "upNextPlayText"
+      n.translation = [1088, 688]
+      n.width = 168
+      n.height = 22
+      n.font = "font:SmallSystemFont"
+      n.horizAlign = "center"
+      n.color = "0xFFFFFF"
+      n.text = "Assistir agora"
+      m.upNextGroup.appendChild(n)
+      m.upNextPlayText = n
+    end if
+  end if
+
+  if m.upNextTimer = invalid then m.upNextTimer = m.top.findNode("upNextTimer")
+  if m.upNextTimer = invalid then
+    t = CreateObject("roSGNode", "Timer")
+    if t <> invalid then
+      t.id = "upNextTimer"
+      t.duration = 1
+      t.repeat = true
+      m.top.appendChild(t)
+      m.upNextTimer = t
+    end if
+  end if
 end sub
 
 sub bindUiNodes()
@@ -577,9 +803,29 @@ sub bindUiNodes()
   if m.osdBarBg = invalid then m.osdBarBg = m.top.findNode("osdBarBg")
   if m.osdBarFill = invalid then m.osdBarFill = m.top.findNode("osdBarFill")
   if m.osdGearFocus = invalid then m.osdGearFocus = m.top.findNode("osdGearFocus")
+  if m.playerNowBg = invalid then m.playerNowBg = m.top.findNode("playerNowBg")
+  if m.playerNowTitle = invalid then m.playerNowTitle = m.top.findNode("playerNowTitle")
   if m.playerSettingsModal = invalid then m.playerSettingsModal = m.top.findNode("playerSettingsModal")
   if m.playerSettingsAudioList = invalid then m.playerSettingsAudioList = m.top.findNode("playerSettingsAudioList")
   if m.playerSettingsSubList = invalid then m.playerSettingsSubList = m.top.findNode("playerSettingsSubList")
+  if m.upNextGroup = invalid then m.upNextGroup = m.top.findNode("upNext")
+  if m.upNextCard = invalid then m.upNextCard = m.top.findNode("upNextCard")
+  if m.upNextTitle = invalid then m.upNextTitle = m.top.findNode("upNextTitle")
+  if m.upNextPoster = invalid then m.upNextPoster = m.top.findNode("upNextPoster")
+  if m.upNextEpisode = invalid then m.upNextEpisode = m.top.findNode("upNextEpisode")
+  if m.upNextCountdown = invalid then m.upNextCountdown = m.top.findNode("upNextCountdown")
+  if m.upNextCancelBg = invalid then m.upNextCancelBg = m.top.findNode("upNextCancelBg")
+  if m.upNextCancelText = invalid then m.upNextCancelText = m.top.findNode("upNextCancelText")
+  if m.upNextPlayBg = invalid then m.upNextPlayBg = m.top.findNode("upNextPlayBg")
+  if m.upNextPlayText = invalid then m.upNextPlayText = m.top.findNode("upNextPlayText")
+  if m.upNextTimer = invalid then m.upNextTimer = m.top.findNode("upNextTimer")
+  _ensurePlayerNowRuntimeNodes()
+  _ensureUpNextRuntimeNodes()
+  if m.upNextTimer <> invalid and (m.upNextTimerObsSetup <> true) then
+    m.upNextTimer.observeField("fire", "onUpNextTimerFire")
+    m.upNextTimer.control = "start"
+    m.upNextTimerObsSetup = true
+  end if
   if m.player <> invalid and (m.playerObsSetup <> true) then
     m.player.observeField("state", "onPlayerStateChanged")
     m.player.observeField("errorMsg", "onPlayerError")
@@ -1150,13 +1396,799 @@ function _fmtTime(sec as Integer) as String
   return mins.ToStr() + ":" + sss
 end function
 
+sub _bringNodeToFront(node as Object)
+  if m.top = invalid or node = invalid then return
+  total = m.top.getChildCount()
+  if total <= 1 then return
+
+  targetId = ""
+  if node.id <> invalid then targetId = node.id.ToStr().Trim()
+  if targetId = "" then return
+
+  idx = -1
+  i = 0
+  while i < total
+    cur = m.top.getChild(i)
+    curId = ""
+    if cur <> invalid and cur.id <> invalid then curId = cur.id.ToStr().Trim()
+    if curId = targetId then
+      idx = i
+      exit while
+    end if
+    i = i + 1
+  end while
+
+  if idx < 0 or idx = total - 1 then return
+  m.top.removeChildIndex(idx)
+  m.top.appendChild(node)
+end sub
+
+sub _setPlayerNowTitle(title as String)
+  t = title
+  if t = invalid then t = ""
+  t = t.ToStr().Trim()
+  m.playerNowCachedTitle = t
+
+  if m.playerNowBg = invalid or m.playerNowTitle = invalid then return
+  if t = "" then
+    m.playerNowTitle.text = ""
+    m.playerNowTitle.visible = false
+    m.playerNowBg.visible = false
+    return
+  end if
+
+  m.playerNowTitle.text = t
+  m.playerNowTitle.visible = true
+
+  bgW = 56 + (Len(t) * 10)
+  if bgW < 360 then bgW = 360
+  if bgW > 1160 then bgW = 1160
+  m.playerNowBg.width = bgW
+  m.playerNowBg.color = "0x00000000"
+  m.playerNowBg.opacity = 0.0
+  m.playerNowTitle.color = "0xF2F5FAFF"
+  _bringNodeToFront(m.playerNowBg)
+  _bringNodeToFront(m.playerNowTitle)
+  showNow = (m.overlayOpen = true and m.player <> invalid and m.player.visible = true)
+  m.playerNowTitle.visible = showNow
+  m.playerNowBg.visible = false
+end sub
+
+function _episodeIdFromObj(ep as Object) as String
+  if ep = invalid then return ""
+  id = ""
+  if ep.id <> invalid then id = ep.id.ToStr().Trim()
+  if id = "" and ep.Id <> invalid then id = ep.Id.ToStr().Trim()
+  return id
+end function
+
+function _normEpisodeId(v as Dynamic) as String
+  s = ""
+  if v <> invalid then s = v.ToStr().Trim()
+  if s = "" then return ""
+  return LCase(s)
+end function
+
+function _upNextIntFromAny(v as Dynamic, fallback as Integer) as Integer
+  if v = invalid then return fallback
+  if type(v) = "roInt" or type(v) = "Integer" then return Int(v)
+  if type(v) = "roFloat" or type(v) = "Float" then return Int(v)
+  s = v.ToStr()
+  if s = invalid then return fallback
+  s = s.Trim()
+  if s = "" then return fallback
+  return Int(Val(s))
+end function
+
+function _upNextContextFromItem(itemId as String, title as String) as Object
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  t = title
+  if t = invalid then t = ""
+  t = t.ToStr().Trim()
+
+  ctx = {
+    currentId: id
+    title: t
+    seriesId: ""
+    seasonNumber: -1
+    episodeNumber: -1
+    posterUrl: ""
+  }
+
+  if id = "" then return ctx
+  if type(m.upNextItemMetaById) <> "roAssociativeArray" then return ctx
+
+  meta = m.upNextItemMetaById[id]
+  if type(meta) <> "roAssociativeArray" then return ctx
+
+  if meta.seriesId <> invalid then ctx.seriesId = meta.seriesId.ToStr().Trim()
+  if meta.seasonNumber <> invalid then ctx.seasonNumber = _upNextIntFromAny(meta.seasonNumber, -1)
+  if meta.episodeNumber <> invalid then ctx.episodeNumber = _upNextIntFromAny(meta.episodeNumber, -1)
+  if meta.posterUrl <> invalid then ctx.posterUrl = meta.posterUrl.ToStr().Trim()
+  if ctx.title = "" and meta.title <> invalid then ctx.title = meta.title.ToStr().Trim()
+  return ctx
+end function
+
+sub _upNextRememberMeta(itemId as String, seriesId as String, seasonNumber as Integer, episodeNumber as Integer, title as String, posterUrl as String)
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return
+
+  if type(m.upNextItemMetaById) <> "roAssociativeArray" then m.upNextItemMetaById = {}
+
+  sid = seriesId
+  if sid = invalid then sid = ""
+  sid = sid.ToStr().Trim()
+  t = title
+  if t = invalid then t = ""
+  t = t.ToStr().Trim()
+  p = posterUrl
+  if p = invalid then p = ""
+  p = p.ToStr().Trim()
+
+  m.upNextItemMetaById[id] = {
+    seriesId: sid
+    seasonNumber: Int(seasonNumber)
+    episodeNumber: Int(episodeNumber)
+    title: t
+    posterUrl: p
+  }
+end sub
+
+sub _upNextRememberMetaFromEpisode(ep as Object)
+  if type(ep) <> "roAssociativeArray" then return
+
+  itemId = _episodeIdFromObj(ep)
+  if itemId = "" then return
+
+  sNum = _seriesEpisodeSeasonIndex(ep)
+  eNum = _seriesEpisodeIndex(ep)
+  t = _episodeTitleFromObj(ep)
+
+  sid = ""
+  if m.seriesDetailData <> invalid and type(m.seriesDetailData) = "roAssociativeArray" then
+    s = m.seriesDetailData.series
+    if type(s) = "roAssociativeArray" then
+      if s.id <> invalid then sid = s.id.ToStr().Trim()
+      if sid = "" and s.Id <> invalid then sid = s.Id.ToStr().Trim()
+    end if
+  end if
+
+  poster = ""
+  cfg = loadConfig()
+  if cfg <> invalid and itemId <> "" then poster = _browsePosterUri(itemId, cfg.apiBase, cfg.jellyfinToken)
+  _upNextRememberMeta(itemId, sid, sNum, eNum, t, poster)
+end sub
+
+sub _upNextRememberMetaFromNode(it as Object)
+  if it = invalid then return
+
+  itemId = ""
+  if it.id <> invalid then itemId = it.id.ToStr().Trim()
+  if itemId = "" then return
+
+  sid = ""
+  if it.hasField("seriesId") and it.seriesId <> invalid then sid = it.seriesId.ToStr().Trim()
+  if sid = "" and it.hasField("SeriesId") and it.SeriesId <> invalid then sid = it.SeriesId.ToStr().Trim()
+
+  sNum = -1
+  if it.hasField("seasonNumber") then sNum = _upNextIntFromAny(it.seasonNumber, -1)
+  if sNum <= 0 and it.hasField("parentIndexNumber") then sNum = _upNextIntFromAny(it.parentIndexNumber, -1)
+  if sNum <= 0 and it.hasField("ParentIndexNumber") then sNum = _upNextIntFromAny(it.ParentIndexNumber, -1)
+
+  eNum = -1
+  if it.hasField("episodeNumber") then eNum = _upNextIntFromAny(it.episodeNumber, -1)
+  if eNum <= 0 and it.hasField("indexNumber") then eNum = _upNextIntFromAny(it.indexNumber, -1)
+  if eNum <= 0 and it.hasField("IndexNumber") then eNum = _upNextIntFromAny(it.IndexNumber, -1)
+
+  t = ""
+  if it.title <> invalid then t = it.title.ToStr().Trim()
+  poster = ""
+  if it.hasField("posterUrl") and it.posterUrl <> invalid then poster = it.posterUrl.ToStr().Trim()
+  if poster = "" and it.hasField("hdPosterUrl") and it.hdPosterUrl <> invalid then poster = it.hdPosterUrl.ToStr().Trim()
+
+  _upNextRememberMeta(itemId, sid, sNum, eNum, t, poster)
+end sub
+
+function _upNextEpisodeComesBefore(a as Object, b as Object) as Boolean
+  if type(a) <> "roAssociativeArray" then return false
+  if type(b) <> "roAssociativeArray" then return true
+
+  asn = _upNextIntFromAny(a.seasonNumber, 99999)
+  bsn = _upNextIntFromAny(b.seasonNumber, 99999)
+  if asn <> bsn then return (asn < bsn)
+
+  aen = _upNextIntFromAny(a.episodeNumber, 99999)
+  ben = _upNextIntFromAny(b.episodeNumber, 99999)
+  if aen <> ben then return (aen < ben)
+
+  at = ""
+  bt = ""
+  if a.title <> invalid then at = LCase(a.title.ToStr().Trim())
+  if b.title <> invalid then bt = LCase(b.title.ToStr().Trim())
+  return (at < bt)
+end function
+
+function _upNextSortEpisodes(raw as Object) as Object
+  src = []
+  if type(raw) = "roArray" then
+    for each ep in raw
+      if type(ep) = "roAssociativeArray" then src.Push(ep)
+    end for
+  end if
+
+  out = []
+  while src.Count() > 0
+    bestIdx = 0
+    best = src[0]
+    i = 1
+    while i < src.Count()
+      cand = src[i]
+      if _upNextEpisodeComesBefore(cand, best) then
+        bestIdx = i
+        best = cand
+      end if
+      i = i + 1
+    end while
+    out.Push(best)
+    src.Delete(bestIdx)
+  end while
+  return out
+end function
+
+function _upNextResolveFromEpisodeList(currentContent as Object, episodes as Object) as Object
+  if type(episodes) <> "roArray" or episodes.Count() <= 0 then return invalid
+  ctx = currentContent
+  if type(ctx) <> "roAssociativeArray" then ctx = {}
+
+  curId = ""
+  if ctx.currentId <> invalid then curId = ctx.currentId.ToStr().Trim()
+  curNorm = _normEpisodeId(curId)
+  curSeason = _upNextIntFromAny(ctx.seasonNumber, -1)
+  curEpisode = _upNextIntFromAny(ctx.episodeNumber, -1)
+
+  bestIdx = -1
+  bestSeason = 99999
+  bestEpisode = 99999
+
+  if curSeason > 0 and curEpisode > 0 then
+    i = 0
+    for each ep in episodes
+      if type(ep) = "roAssociativeArray" then
+        sNum = _upNextIntFromAny(ep.seasonNumber, -1)
+        eNum = _upNextIntFromAny(ep.episodeNumber, -1)
+        if sNum > 0 and eNum > 0 then
+          isAfter = (sNum > curSeason) or (sNum = curSeason and eNum > curEpisode)
+          if isAfter then
+            if sNum < bestSeason or (sNum = bestSeason and eNum < bestEpisode) then
+              bestSeason = sNum
+              bestEpisode = eNum
+              bestIdx = i
+            end if
+          end if
+        end if
+      end if
+      i = i + 1
+    end for
+  end if
+
+  if bestIdx < 0 and curNorm <> "" then
+    i2 = 0
+    foundCur = false
+    for each ep2 in episodes
+      if type(ep2) = "roAssociativeArray" then
+        eid = ""
+        if ep2.itemId <> invalid then eid = ep2.itemId.ToStr().Trim()
+        if foundCur and eid <> "" then
+          bestIdx = i2
+          exit for
+        end if
+        if _normEpisodeId(eid) = curNorm then foundCur = true
+      end if
+      i2 = i2 + 1
+    end for
+  end if
+
+  if bestIdx < 0 then return invalid
+  if bestIdx >= episodes.Count() then return invalid
+  nextEp = episodes[bestIdx]
+  if type(nextEp) <> "roAssociativeArray" then return invalid
+
+  nextId = ""
+  if nextEp.itemId <> invalid then nextId = nextEp.itemId.ToStr().Trim()
+  if nextId = "" then return invalid
+  nextTitle = ""
+  if nextEp.title <> invalid then nextTitle = nextEp.title.ToStr().Trim()
+  if nextTitle = "" then nextTitle = "Episode"
+  sNum2 = _upNextIntFromAny(nextEp.seasonNumber, -1)
+  eNum2 = _upNextIntFromAny(nextEp.episodeNumber, -1)
+  display = nextTitle
+  if sNum2 > 0 and eNum2 > 0 then display = "S" + sNum2.ToStr() + "E" + eNum2.ToStr() + " • " + nextTitle
+  poster = ""
+  if nextEp.posterUrl <> invalid then poster = nextEp.posterUrl.ToStr().Trim()
+
+  return {
+    id: nextId
+    title: nextTitle
+    displayTitle: display
+    posterUri: poster
+  }
+end function
+
+function _episodeTitleFromObj(ep as Object) as String
+  if ep = invalid then return "Episode"
+  t = ""
+  if ep.name <> invalid then t = ep.name.ToStr().Trim()
+  if t = "" and ep.Name <> invalid then t = ep.Name.ToStr().Trim()
+  if t = "" then t = "Episode"
+  return t
+end function
+
+function _episodeDisplayTitleFromObj(ep as Object) as String
+  t = _episodeTitleFromObj(ep)
+  sIdx = _seriesEpisodeSeasonIndex(ep)
+  eIdx = _seriesEpisodeIndex(ep)
+  if sIdx > 0 and eIdx > 0 then
+    return "S" + sIdx.ToStr() + "E" + eIdx.ToStr() + " • " + t
+  else if eIdx > 0 then
+    return eIdx.ToStr() + ". " + t
+  end if
+  return t
+end function
+
+function _resolveUpNextEpisodeForItem(itemId as String) as Object
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return invalid
+  curNorm = _normEpisodeId(id)
+  if curNorm = "" then return invalid
+
+  eps = m.seriesDetailEpisodes
+  if type(eps) <> "roArray" then return invalid
+  if eps.Count() < 2 then return invalid
+
+  curEp = invalid
+  for each ep in eps
+    if _normEpisodeId(_episodeIdFromObj(ep)) = curNorm then
+      curEp = ep
+      exit for
+    end if
+  end for
+  if curEp = invalid then return invalid
+
+  nextEp = invalid
+  curSeason = _seriesEpisodeSeasonIndex(curEp)
+  curNumber = _seriesEpisodeIndex(curEp)
+  if curSeason > 0 and curNumber > 0 then
+    bestSeason = 99999
+    bestNumber = 99999
+    for each cand in eps
+      candId = _episodeIdFromObj(cand)
+      candNorm = _normEpisodeId(candId)
+      if candNorm = "" or candNorm = curNorm then
+        continue for
+      end if
+      sIdx = _seriesEpisodeSeasonIndex(cand)
+      eIdx = _seriesEpisodeIndex(cand)
+      if sIdx <= 0 or eIdx <= 0 then
+        continue for
+      end if
+      isAfter = (sIdx > curSeason) or (sIdx = curSeason and eIdx > curNumber)
+      if isAfter then
+        if sIdx < bestSeason or (sIdx = bestSeason and eIdx < bestNumber) then
+          bestSeason = sIdx
+          bestNumber = eIdx
+          nextEp = cand
+        end if
+      end if
+    end for
+  end if
+
+  if nextEp = invalid then
+    foundCur = false
+    for each cand in eps
+      candId = _episodeIdFromObj(cand)
+      candNorm = _normEpisodeId(candId)
+      if candNorm = "" then
+        continue for
+      end if
+      if foundCur then
+        nextEp = cand
+        exit for
+      end if
+      if candNorm = curNorm then
+        foundCur = true
+      end if
+    end for
+  end if
+
+  if nextEp = invalid then return invalid
+
+  nextId = _episodeIdFromObj(nextEp)
+  if nextId = "" then return invalid
+
+  cfg = loadConfig()
+  posterUri = ""
+  if cfg <> invalid then
+    posterUri = _browsePosterUri(nextId, cfg.apiBase, cfg.jellyfinToken)
+  end if
+  if posterUri = "" and m.seriesDetailPoster <> invalid and m.seriesDetailPoster.uri <> invalid then
+    posterUri = m.seriesDetailPoster.uri.ToStr().Trim()
+  end if
+
+  return {
+    id: nextId
+    title: _episodeTitleFromObj(nextEp)
+    displayTitle: _episodeDisplayTitleFromObj(nextEp)
+    posterUri: posterUri
+  }
+end function
+
+sub _refreshUpNextUiStrings()
+  if m.upNextTitle <> invalid then m.upNextTitle.text = _t("upnext_title")
+  if m.upNextCancelText <> invalid then m.upNextCancelText.text = _t("upnext_cancel")
+  if m.upNextPlayText <> invalid then m.upNextPlayText.text = _t("upnext_watch_now")
+end sub
+
+sub _refreshUpNextActionVisuals()
+  idx = Int(m.upNextButtonIndex)
+  if idx <> 0 and idx <> 1 then idx = 1
+  m.upNextButtonIndex = idx
+
+  if idx = 0 then
+    if m.upNextCancelBg <> invalid then m.upNextCancelBg.color = "0x00000000"
+    if m.upNextCancelText <> invalid then m.upNextCancelText.color = "0xFFFFFFFF"
+    if m.upNextPlayBg <> invalid then m.upNextPlayBg.color = "0x00000000"
+    if m.upNextPlayText <> invalid then m.upNextPlayText.color = "0xC7D0E2FF"
+  else
+    if m.upNextCancelBg <> invalid then m.upNextCancelBg.color = "0x00000000"
+    if m.upNextCancelText <> invalid then m.upNextCancelText.color = "0x5E6A85FF"
+    if m.upNextPlayBg <> invalid then m.upNextPlayBg.color = "0x00000000"
+    if m.upNextPlayText <> invalid then m.upNextPlayText.color = "0xFFFFFFFF"
+  end if
+end sub
+
+sub _hideUpNext()
+  if m.upNextGroup <> invalid then m.upNextGroup.visible = false
+  if m.upNextCountdown <> invalid then m.upNextCountdown.visible = false
+end sub
+
+sub _showUpNextPrompt()
+  nextEp = m.upNextNextEpisode
+  if type(nextEp) <> "roAssociativeArray" then return
+
+  _bringNodeToFront(m.upNextGroup)
+
+  disp = ""
+  if nextEp.title <> invalid then disp = nextEp.title.ToStr().Trim()
+  if disp = "" and nextEp.displayTitle <> invalid then disp = nextEp.displayTitle.ToStr().Trim()
+  if disp = "" then disp = "Episode"
+  if m.upNextCard <> invalid then
+    m.upNextCard.color = "0x10141BF0"
+    m.upNextCard.opacity = 1.0
+  end if
+  if m.upNextTitle <> invalid then m.upNextTitle.color = "0xD8B765FF"
+  if m.upNextEpisode <> invalid then m.upNextEpisode.color = "0xFFFFFFFF"
+  if m.upNextCountdown <> invalid then m.upNextCountdown.color = "0xAAB4C2FF"
+  if m.upNextEpisode <> invalid then m.upNextEpisode.text = disp
+
+  p = ""
+  if nextEp.posterUri <> invalid then p = nextEp.posterUri.ToStr().Trim()
+  if p <> "" and m.upNextPoster <> invalid then m.upNextPoster.uri = p
+
+  m.upNextButtonIndex = 1
+  _refreshUpNextUiStrings()
+  _refreshUpNextActionVisuals()
+  if m.upNextGroup <> invalid then m.upNextGroup.opacity = 1.0
+  if m.upNextCountdown <> invalid then m.upNextCountdown.visible = false
+  if m.upNextGroup <> invalid then m.upNextGroup.visible = true
+  m.upNextPromptShown = true
+  nextId = ""
+  if nextEp.id <> invalid then nextId = nextEp.id.ToStr().Trim()
+  print "upnext prompt show nextId=" + nextId + " title=" + disp
+end sub
+
+sub _setUpNextCountdownMode(on as Boolean)
+  m.upNextCountdownMode = (on = true)
+  if m.upNextCountdown <> invalid then m.upNextCountdown.visible = (on = true)
+  if on = true then print "upnext countdown start"
+end sub
+
+sub _resetUpNextState()
+  m.upNextPromptShown = false
+  m.upNextCountdownMode = false
+  m.upNextAutoplayDisabled = false
+  m.upNextPendingAutoplay = false
+  m.upNextAutoPlayPending = false
+  m.upNextButtonIndex = 1
+  m.upNextCurrentItemId = ""
+  m.upNextNextEpisode = invalid
+  _hideUpNext()
+end sub
+
+sub _prepareUpNextForPlayback(itemId as String, currentContent as Object)
+  _resetUpNextState()
+
+  if m.playbackIsLive = true then return
+
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return
+
+  ctx = currentContent
+  if type(ctx) <> "roAssociativeArray" then ctx = {}
+  if ctx.currentId = invalid or ctx.currentId.ToStr().Trim() = "" then ctx.currentId = id
+  m.upNextCurrentContent = ctx
+  m.upNextCurrentItemId = id
+  m.upNextNextEpisode = _resolveUpNextEpisodeForItem(id)
+  if type(m.upNextNextEpisode) <> "roAssociativeArray" then
+    cacheKey = ""
+    if ctx.seriesId <> invalid then cacheKey = ctx.seriesId.ToStr().Trim()
+    cachedList = invalid
+    if cacheKey <> "" and type(m.upNextEpisodesCache) = "roAssociativeArray" then cachedList = m.upNextEpisodesCache[cacheKey]
+    fromCache = _upNextResolveFromEpisodeList(ctx, cachedList)
+    if type(fromCache) = "roAssociativeArray" then m.upNextNextEpisode = fromCache
+  end if
+  if type(m.upNextNextEpisode) <> "roAssociativeArray" then
+    UpNextEnsureEpisodesLoaded(ctx)
+  end if
+
+  nextTitle = ""
+  nextId = ""
+  if type(m.upNextNextEpisode) = "roAssociativeArray" then
+    if m.upNextNextEpisode.id <> invalid then nextId = m.upNextNextEpisode.id.ToStr().Trim()
+    if m.upNextNextEpisode.title <> invalid then nextTitle = m.upNextNextEpisode.title.ToStr().Trim()
+  end if
+  if nextId <> "" then
+    print "upnext prepared currentId=" + id + " nextId=" + nextId + " nextTitle=" + nextTitle
+  else
+    print "upnext prepared currentId=" + id + " next=none"
+  end if
+end sub
+
+sub UpNextEnsureEpisodesLoaded(currentContent as Object)
+  ctx = currentContent
+  if type(ctx) <> "roAssociativeArray" then ctx = {}
+  seriesId = ""
+  if ctx.seriesId <> invalid then seriesId = ctx.seriesId.ToStr().Trim()
+  currentId = ""
+  if ctx.currentId <> invalid then currentId = ctx.currentId.ToStr().Trim()
+  seasonNum = _upNextIntFromAny(ctx.seasonNumber, -1)
+  episodeNum = _upNextIntFromAny(ctx.episodeNumber, -1)
+
+  if seriesId = "" then
+    print "upnext fallback no seriesId currentId=" + currentId
+    return
+  end if
+
+  if type(m.upNextEpisodesCache) <> "roAssociativeArray" then m.upNextEpisodesCache = {}
+  cached = m.upNextEpisodesCache[seriesId]
+  if type(cached) = "roArray" and cached.Count() > 0 then
+    nextEp = _upNextResolveFromEpisodeList(ctx, cached)
+    if type(nextEp) = "roAssociativeArray" then m.upNextNextEpisode = nextEp
+    nextId = ""
+    if type(nextEp) = "roAssociativeArray" and nextEp.id <> invalid then nextId = nextEp.id.ToStr().Trim()
+    print "upnext fallback cache hit seriesId=" + seriesId + " count=" + cached.Count().ToStr() + " nextId=" + nextId
+    if m.upNextAutoPlayPending = true and m.lastPlayerState = "finished" and nextId <> "" and m.upNextAutoplayDisabled <> true then
+      ignore = _startUpNextPlayback("fallback_finished")
+    end if
+    return
+  end if
+
+  if m.upNextFetchInFlight = true then
+    if m.upNextFetchSeriesId = seriesId then
+      print "upnext fallback fetch already in-flight seriesId=" + seriesId
+    else
+      print "upnext fallback fetch busy current=" + m.upNextFetchSeriesId + " wanted=" + seriesId
+    end if
+    return
+  end if
+
+  if m.upNextTask = invalid then
+    print "upnext fallback missing task seriesId=" + seriesId
+    return
+  end if
+
+  cfg = loadConfig()
+  if cfg.apiBase = "" or cfg.appToken = "" or cfg.jellyfinToken = "" or cfg.userId = "" then
+    print "upnext fallback missing config seriesId=" + seriesId
+    return
+  end if
+
+  m.upNextFetchInFlight = true
+  m.upNextFetchSeriesId = seriesId
+  m.upNextFetchCurrentContent = {
+    currentId: currentId
+    seriesId: seriesId
+    seasonNumber: seasonNum
+    episodeNumber: episodeNum
+  }
+  m.upNextTask.kind = "series_detail"
+  m.upNextTask.apiBase = cfg.apiBase
+  m.upNextTask.appToken = cfg.appToken
+  m.upNextTask.jellyfinToken = cfg.jellyfinToken
+  m.upNextTask.userId = cfg.userId
+  m.upNextTask.itemId = seriesId
+  m.upNextTask.limit = 240
+  m.upNextTask.control = "run"
+  print "upnext fallback fetch start seriesId=" + seriesId + " currentId=" + currentId
+end sub
+
+function _isUpNextActive() as Boolean
+  if m.player = invalid or m.player.visible <> true then return false
+  if m.playbackIsLive = true then return false
+  if m.settingsOpen = true then return false
+  if m.upNextAutoplayDisabled = true then return false
+  if m.upNextGroup = invalid or m.upNextGroup.visible <> true then return false
+  if type(m.upNextNextEpisode) <> "roAssociativeArray" then return false
+  return true
+end function
+
+function _handleUpNextKey(k as String) as Boolean
+  if _isUpNextActive() <> true then return false
+
+  key = k
+  if key = invalid then key = ""
+  key = LCase(key.ToStr().Trim())
+
+  if key = "left" or key = "up" then
+    m.upNextButtonIndex = 0
+    _refreshUpNextActionVisuals()
+    return true
+  else if key = "right" or key = "down" then
+    m.upNextButtonIndex = 1
+    _refreshUpNextActionVisuals()
+    return true
+  else if key = "back" then
+    m.upNextAutoplayDisabled = true
+    m.upNextAutoPlayPending = false
+    m.upNextPendingAutoplay = false
+    m.upNextPromptShown = false
+    m.upNextCountdownMode = false
+    _hideUpNext()
+    return true
+  else if key = "ok" then
+    if Int(m.upNextButtonIndex) = 0 then
+      m.upNextAutoplayDisabled = true
+      m.upNextAutoPlayPending = false
+      m.upNextPendingAutoplay = false
+      m.upNextPromptShown = false
+      m.upNextCountdownMode = false
+      _hideUpNext()
+      return true
+    end if
+    ignore = _startUpNextPlayback("button")
+    return true
+  else if key = "options" or key = "info" then
+    return true
+  end if
+
+  return false
+end function
+
+function _startUpNextPlayback(reason as String) as Boolean
+  nextEp = m.upNextNextEpisode
+  if type(nextEp) <> "roAssociativeArray" then return false
+
+  nextId = ""
+  if nextEp.id <> invalid then nextId = nextEp.id.ToStr().Trim()
+  if nextId = "" then return false
+
+  nextTitle = ""
+  if nextEp.title <> invalid then nextTitle = nextEp.title.ToStr().Trim()
+  if nextTitle = "" and nextEp.displayTitle <> invalid then nextTitle = nextEp.displayTitle.ToStr().Trim()
+  if nextTitle = "" then nextTitle = "Episode"
+
+  r = reason
+  if r = invalid then r = ""
+  r = r.ToStr().Trim()
+  print "upnext start reason=" + r + " nextId=" + nextId
+
+  m.upNextAutoPlayPending = false
+  m.upNextPendingAutoplay = false
+  m.upNextAutoplayDisabled = true
+  m.upNextPromptShown = false
+  m.upNextCountdownMode = false
+  _hideUpNext()
+
+  snap = _currentProgressSnapshot()
+  if type(snap) = "roAssociativeArray" and snap.ok = true then
+    snapPct = Int(snap.percent)
+    if snapPct < 0 then snapPct = 0
+    if snapPct > 100 then snapPct = 100
+    _rememberResumeState(snap.itemId, {
+      percent: snapPct
+      positionMs: Int(snap.positionMs)
+      durationMs: Int(snap.durationMs)
+      played: false
+    })
+  end if
+
+  if m.player <> invalid and m.player.visible = true then
+    m.ignoreNextStopped = true
+    m.player.control = "stop"
+    m.player.visible = false
+    m.player.content = invalid
+  end if
+
+  _beginVodPlay(nextId, nextTitle, 0)
+  return true
+end function
+
+function _handleFinishedWithUpNext() as Boolean
+  if m.upNextAutoplayDisabled = true then return false
+
+  nextEp = m.upNextNextEpisode
+  if type(nextEp) <> "roAssociativeArray" then
+    if m.upNextFetchInFlight = true then
+      curId0 = m.playbackItemId
+      if curId0 = invalid then curId0 = ""
+      curId0 = curId0.ToStr().Trim()
+      print "upnext finished pending fetch currentId=" + curId0
+      m.upNextAutoPlayPending = true
+      m.upNextPendingAutoplay = true
+      ignore0 = _sendProgressReport("finished", true, true)
+      return true
+    end if
+    print "upnext finished no-next"
+    return false
+  end if
+  id = ""
+  if nextEp.id <> invalid then id = nextEp.id.ToStr().Trim()
+  if id = "" then
+    if m.upNextFetchInFlight = true then
+      curId1 = m.playbackItemId
+      if curId1 = invalid then curId1 = ""
+      curId1 = curId1.ToStr().Trim()
+      print "upnext finished pending fetch currentId=" + curId1
+      m.upNextAutoPlayPending = true
+      m.upNextPendingAutoplay = true
+      ignore1 = _sendProgressReport("finished", true, true)
+      return true
+    end if
+    print "upnext finished no-next"
+    return false
+  end if
+  curId = m.playbackItemId
+  if curId = invalid then curId = ""
+  curId = curId.ToStr().Trim()
+  print "upnext finished currentId=" + curId + " nextId=" + id
+
+  m.upNextAutoPlayPending = true
+  m.upNextPendingAutoplay = true
+  m.upNextPromptShown = false
+  m.upNextCountdownMode = false
+  _hideUpNext()
+
+  didSend = _sendProgressReport("finished", true, true)
+  if didSend = true then
+    print "upnext waiting progress_write before autoplay"
+    return true
+  end if
+
+  return _startUpNextPlayback("finished")
+end function
+
 sub _applySeek(reason as String)
   if m.scrubActive <> true then return
   target = Int(m.scrubTargetSec)
   if target < 0 then target = 0
+  curPos = 0
+  if m.player <> invalid and m.player.position <> invalid then curPos = Int(m.player.position)
+  if curPos < 0 then curPos = 0
+  if target <= 0 and Int(m.scrubLastDir) > 0 and curPos > 30 then
+    print "seek guard clamp_zero currentSec=" + curPos.ToStr()
+    target = curPos
+  end if
   print "seek apply reason=" + reason + " targetSec=" + target.ToStr()
   m.scrubActive = false
   m.scrubDir = 0
+  m.scrubLastDir = 0
   m.seekActive = false
   if m.scrubTimer <> invalid then m.scrubTimer.control = "stop"
   if m.scrubCommitTimer <> invalid then m.scrubCommitTimer.control = "stop"
@@ -1178,6 +2210,7 @@ sub _cancelSeek(reason as String)
   print "seek cancel reason=" + reason
   m.scrubActive = false
   m.scrubDir = 0
+  m.scrubLastDir = 0
   m.seekActive = false
   if m.scrubTimer <> invalid then m.scrubTimer.control = "stop"
   if m.scrubCommitTimer <> invalid then m.scrubCommitTimer.control = "stop"
@@ -1212,6 +2245,7 @@ function _handleVodScrubInput(k as String, a as String) as Boolean
     if m.scrubTimer <> invalid then m.scrubTimer.control = "start"
     if m.scrubCommitTimer <> invalid then m.scrubCommitTimer.control = "stop"
     if k = "right" then m.scrubDir = 1 else m.scrubDir = -1
+    m.scrubLastDir = m.scrubDir
 
     ' First tick immediately for responsiveness.
     _scrubStep(nowMs)
@@ -1307,6 +2341,23 @@ sub onPlayerScrubEvent()
   if m.player.visible <> true then return
   if m.playbackIsLive = true then return
   if m.settingsOpen = true then return
+  if _isUpNextActive() then
+    raw0 = m.player.scrubEvent
+    if raw0 = invalid then return
+    s0 = raw0.ToStr()
+    if s0 = invalid then return
+    s0 = s0.Trim()
+    if s0 = "" then return
+
+    parts0 = s0.Split(":")
+    if type(parts0) <> "roArray" or parts0.Count() < 2 then return
+    k0 = LCase(parts0[0].Trim())
+    a0 = LCase(parts0[1].Trim())
+    if a0 = "down" and (k0 = "left" or k0 = "right" or k0 = "up" or k0 = "down" or k0 = "ok" or k0 = "back") then
+      ignoreUpNext = _handleUpNextKey(k0)
+    end if
+    return
+  end if
 
   raw = m.player.scrubEvent
   if raw = invalid then return
@@ -1371,7 +2422,7 @@ sub onPlayerKeyEvent()
   if type(parts) <> "roArray" or parts.Count() < 2 then return
   k = LCase(parts[0].Trim())
   a = LCase(parts[1].Trim())
-  if (k = "left" or k = "right") and m.settingsOpen <> true and m.playbackIsLive <> true then return
+  if (k = "left" or k = "right") and m.settingsOpen <> true and m.playbackIsLive <> true and _isUpNextActive() <> true then return
   if a <> "press" then return
 
   ignore = handlePlaybackKey(k)
@@ -1546,6 +2597,10 @@ function _t(key as String) as String
         detail_episode: "Episode"
         detail_runtime: "Runtime:"
         detail_synopsis: "Synopsis"
+        upnext_title: "Next episode"
+        upnext_in_prefix: "Next in "
+        upnext_cancel: "Cancel"
+        upnext_watch_now: "Watch now"
       }
       pt: {
         home_live: "Live TV"
@@ -1620,6 +2675,10 @@ function _t(key as String) as String
         detail_episode: "Episodio"
         detail_runtime: "Runtime:"
         detail_synopsis: "Sinopse"
+        upnext_title: "Proximo episodio"
+        upnext_in_prefix: "Proximo em "
+        upnext_cancel: "Cancelar"
+        upnext_watch_now: "Assistir agora"
       }
       es: {
         home_live: "En vivo"
@@ -1694,6 +2753,10 @@ function _t(key as String) as String
         detail_episode: "Episodio"
         detail_runtime: "Runtime:"
         detail_synopsis: "Sinopsis"
+        upnext_title: "Siguiente episodio"
+        upnext_in_prefix: "Siguiente en "
+        upnext_cancel: "Cancelar"
+        upnext_watch_now: "Ver ahora"
       }
       it: {
         home_live: "Diretta"
@@ -1768,6 +2831,10 @@ function _t(key as String) as String
         detail_episode: "Episodio"
         detail_runtime: "Runtime:"
         detail_synopsis: "Sinossi"
+        upnext_title: "Prossimo episodio"
+        upnext_in_prefix: "Prossimo tra "
+        upnext_cancel: "Annulla"
+        upnext_watch_now: "Guarda ora"
       }
     }
   end if
@@ -1814,6 +2881,7 @@ sub applyLocalization()
   end if
   _syncHeroAvatarVisual()
   if m.hintLabel <> invalid then m.hintLabel.text = _t("hint_app_token")
+  _refreshUpNextUiStrings()
 end sub
 
 function _browseListFocusedIndex(lst as Object) as Integer
@@ -2429,14 +3497,19 @@ sub _playSeriesDetailPrimary()
 
   id = ""
   title = ""
+  epForMeta = invalid
 
   if isEpisodeMode then
     if m.seriesDetailStatusItemId <> invalid then id = m.seriesDetailStatusItemId
     if id = invalid or id = "" then
       ep = m.seriesDetailEpisode
       if type(ep) <> "roAssociativeArray" then ep = {}
+      epForMeta = ep
       if ep.id <> invalid then id = ep.id
       if id = "" and ep.Id <> invalid then id = ep.Id
+    else
+      ep2 = m.seriesDetailEpisode
+      if type(ep2) = "roAssociativeArray" then epForMeta = ep2
     end if
     if m.seriesDetailTitle <> invalid and m.seriesDetailTitle.text <> invalid then title = m.seriesDetailTitle.text
   else if m.seriesDetailIsSeries = true then
@@ -2456,6 +3529,10 @@ sub _playSeriesDetailPrimary()
   title = title.ToStr().Trim()
   if title = "" and m.seriesDetailTitle <> invalid and m.seriesDetailTitle.text <> invalid then
     title = m.seriesDetailTitle.text.ToStr().Trim()
+  end if
+
+  if isEpisodeMode and type(epForMeta) = "roAssociativeArray" then
+    _upNextRememberMetaFromEpisode(epForMeta)
   end if
 
   requestResumeProbe(id, title)
@@ -3657,7 +4734,7 @@ sub _updateOsdUi()
   showGear = (m.playbackIsLive <> true)
   if m.playerOverlayCircle <> invalid then m.playerOverlayCircle.visible = showGear
   if m.playerOverlayIcon <> invalid then m.playerOverlayIcon.visible = showGear
-  if m.playerOverlayHint <> invalid then m.playerOverlayHint.visible = showGear
+  if m.playerOverlayHint <> invalid then m.playerOverlayHint.visible = false
 
   if m.osdGearFocus <> invalid then
     if showGear and m.osdFocus = "GEAR" then
@@ -3774,6 +4851,7 @@ sub showPlayerOverlay()
   _updateOsdUi()
   _restartOsdHideTimer()
   _setPlaybackInputFocus()
+  _setPlayerNowTitle(m.playerNowCachedTitle)
   print "[osd] show focus=" + m.osdFocus + " focusNode=" + _focusNodeLabel()
 end sub
 
@@ -3789,6 +4867,8 @@ sub hidePlayerOverlay()
   m.seekActive = false
   if m.osdSeekLabel <> invalid then m.osdSeekLabel.visible = false
   if m.osdGearFocus <> invalid then m.osdGearFocus.visible = false
+  if m.playerNowTitle <> invalid then m.playerNowTitle.visible = false
+  if m.playerNowBg <> invalid then m.playerNowBg.visible = false
   _stopOsdTimers()
   _setPlaybackInputFocus()
 end sub
@@ -4226,7 +5306,8 @@ function _ensurePlayerOverlayNodes() as Boolean
     hint.height = 30
     hint.font = "font:SmallSystemFont"
     hint.color = "0xAAB4C2"
-    hint.text = "OK: confirmar    UP/DOWN: Engrenagem/Barra (VOD)    *: Configuracoes (VOD)    BACK: Fechar"
+    hint.visible = false
+    hint.text = ""
     ov.appendChild(hint)
     m.playerOverlayHint = hint
   end if
@@ -5128,6 +6209,7 @@ sub _beginVodPlay(itemId as String, title as String, resumeMs as Integer)
   m.pendingPlaybackTitle = t
   m.pendingVodStatusItemId = id
   m.pendingVodStatusTitle = t
+  m.upNextCurrentContent = _upNextContextFromItem(id, t)
 
   requestVodStatus(id)
 end sub
@@ -5282,6 +6364,134 @@ sub _showLiveUnavailableDialog(message as String)
   dlg.setFocus(true)
 end sub
 
+sub onUpNextTaskStateChanged()
+  if m.upNextTask = invalid then return
+  st = m.upNextTask.state
+  if st <> "done" and st <> "stop" then return
+  if m.upNextFetchInFlight <> true then return
+
+  taskSeriesId = ""
+  if m.upNextTask.itemId <> invalid then taskSeriesId = m.upNextTask.itemId.ToStr().Trim()
+  reqSeriesId = m.upNextFetchSeriesId
+  reqCtx = m.upNextFetchCurrentContent
+  m.upNextFetchInFlight = false
+  m.upNextFetchSeriesId = ""
+  m.upNextFetchCurrentContent = {}
+
+  if reqSeriesId = invalid then reqSeriesId = ""
+  reqSeriesId = reqSeriesId.ToStr().Trim()
+  if taskSeriesId <> "" and reqSeriesId <> "" and _normEpisodeId(taskSeriesId) <> _normEpisodeId(reqSeriesId) then
+    print "upnext fallback fetch stale requestSeriesId=" + reqSeriesId + " taskSeriesId=" + taskSeriesId
+    if type(m.upNextCurrentContent) = "roAssociativeArray" then UpNextEnsureEpisodesLoaded(m.upNextCurrentContent)
+    return
+  end if
+
+  reqCurrentId = ""
+  if type(reqCtx) = "roAssociativeArray" and reqCtx.currentId <> invalid then reqCurrentId = reqCtx.currentId.ToStr().Trim()
+  activeCurrentId = ""
+  if type(m.upNextCurrentContent) = "roAssociativeArray" and m.upNextCurrentContent.currentId <> invalid then activeCurrentId = m.upNextCurrentContent.currentId.ToStr().Trim()
+  if reqCurrentId <> "" and activeCurrentId <> "" and _normEpisodeId(reqCurrentId) <> _normEpisodeId(activeCurrentId) then
+    print "upnext fallback fetch stale currentId requested=" + reqCurrentId + " active=" + activeCurrentId
+    UpNextEnsureEpisodesLoaded(m.upNextCurrentContent)
+    return
+  end if
+
+  if m.upNextTask.ok <> true then
+    err = m.upNextTask.error
+    if err = invalid then err = ""
+    err = err.ToStr().Trim()
+    print "upnext fallback fetch failed seriesId=" + reqSeriesId + " err=" + err
+    if m.upNextAutoPlayPending = true and m.player <> invalid and m.player.visible = true then
+      print "upnext finished no-next"
+      m.upNextAutoPlayPending = false
+      m.upNextPendingAutoplay = false
+      stopPlaybackAndReturn("finished")
+    end if
+    return
+  end if
+
+  data = ParseJson(m.upNextTask.resultJson)
+  if type(data) <> "roAssociativeArray" then data = {}
+
+  seriesId = reqSeriesId
+  if data.series <> invalid and type(data.series) = "roAssociativeArray" then
+    s0 = data.series
+    if s0.id <> invalid then seriesId = s0.id.ToStr().Trim()
+    if seriesId = "" and s0.Id <> invalid then seriesId = s0.Id.ToStr().Trim()
+  end if
+  if seriesId = "" then seriesId = reqSeriesId
+
+  cfg = loadConfig()
+  raw = data.episodes
+  if type(raw) <> "roArray" then raw = []
+  normalized = []
+  seen = {}
+  for each ep in raw
+    if type(ep) <> "roAssociativeArray" then
+      continue for
+    end if
+    eid = ""
+    if ep.id <> invalid then eid = ep.id.ToStr().Trim()
+    if eid = "" and ep.Id <> invalid then eid = ep.Id.ToStr().Trim()
+    if eid = "" then
+      continue for
+    end if
+    nk = _normEpisodeId(eid)
+    if seen[nk] = true then
+      continue for
+    end if
+    seen[nk] = true
+
+    ename = ""
+    if ep.name <> invalid then ename = ep.name.ToStr().Trim()
+    if ename = "" and ep.Name <> invalid then ename = ep.Name.ToStr().Trim()
+    if ename = "" then ename = "Episode"
+
+    sNum = -1
+    if ep.parentIndexNumber <> invalid then sNum = _upNextIntFromAny(ep.parentIndexNumber, -1)
+    if sNum <= 0 and ep.ParentIndexNumber <> invalid then sNum = _upNextIntFromAny(ep.ParentIndexNumber, -1)
+    eNum = -1
+    if ep.indexNumber <> invalid then eNum = _upNextIntFromAny(ep.indexNumber, -1)
+    if eNum <= 0 and ep.IndexNumber <> invalid then eNum = _upNextIntFromAny(ep.IndexNumber, -1)
+
+    posterUrl = _browsePosterUri(eid, cfg.apiBase, cfg.jellyfinToken)
+    normalized.Push({
+      itemId: eid
+      seasonNumber: sNum
+      episodeNumber: eNum
+      title: ename
+      posterUrl: posterUrl
+    })
+  end for
+
+  normalized = _upNextSortEpisodes(normalized)
+  if type(m.upNextEpisodesCache) <> "roAssociativeArray" then m.upNextEpisodesCache = {}
+  if seriesId <> "" then m.upNextEpisodesCache[seriesId] = normalized
+
+  nextEp = _upNextResolveFromEpisodeList(reqCtx, normalized)
+  if type(nextEp) = "roAssociativeArray" then
+    m.upNextNextEpisode = nextEp
+    if m.upNextCurrentContent = invalid or type(m.upNextCurrentContent) <> "roAssociativeArray" then m.upNextCurrentContent = {}
+    if seriesId <> "" then m.upNextCurrentContent.seriesId = seriesId
+  end if
+
+  nextId = ""
+  if type(nextEp) = "roAssociativeArray" and nextEp.id <> invalid then nextId = nextEp.id.ToStr().Trim()
+  print "upnext fallback fetch done seriesId=" + seriesId + " count=" + normalized.Count().ToStr() + " nextId=" + nextId
+
+  if m.upNextAutoPlayPending = true and m.lastPlayerState = "finished" and nextId <> "" and m.upNextAutoplayDisabled <> true then
+    ignoreAuto = _startUpNextPlayback("fallback_finished")
+    return
+  end if
+
+  if m.upNextAutoPlayPending = true and nextId = "" and m.player <> invalid and m.player.visible = true then
+    print "upnext finished no-next"
+    m.upNextAutoPlayPending = false
+    m.upNextPendingAutoplay = false
+    stopPlaybackAndReturn("finished")
+  end if
+end sub
+
 sub onGatewayTaskStateChanged()
   if m.gatewayTask = invalid then return
   st = m.gatewayTask.state
@@ -5330,6 +6540,10 @@ sub onGatewayTaskStateChanged()
         ignore = _sendProgressReport("drain", m.progressPendingPlayed, true)
       end if
       _refreshVisibleResumeState()
+      if m.upNextAutoPlayPending = true or m.upNextPendingAutoplay = true then
+        ignoreAuto = _startUpNextPlayback("finished")
+        return
+      end if
       if played = true and m.mode = "browse" and m.browseLibraryOpen <> true and m.pendingJob = "" then
         _loadBrowseHomeShelves()
       end if
@@ -6458,6 +7672,16 @@ sub onGatewayTaskStateChanged()
 end sub
 
 sub startVideo(url as String, title as String, streamFormat as String, isLive as Boolean, kind as String, itemId as String)
+  ' Re-bind every playback start to recover late-materialized XML nodes
+  ' (notably Up Next timer/card and Now Playing title overlays).
+  bindUiNodes()
+  if m.upNextTimer <> invalid then
+    if m.upNextTimerObsSetup <> true then
+      m.upNextTimer.observeField("fire", "onUpNextTimerFire")
+      m.upNextTimerObsSetup = true
+    end if
+    m.upNextTimer.control = "start"
+  end if
   if m.player = invalid then
     bindUiNodes()
   end if
@@ -6556,7 +7780,10 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
   fmtStr = streamFormat
   if fmtStr = invalid then fmtStr = ""
   fmtStr = fmtStr.Trim()
-  print "startVideo kind=" + kind + " live=" + liveStr + " fmt=" + fmtStr + " url=" + safeUrl
+  itemStr = itemId
+  if itemStr = invalid then itemStr = ""
+  itemStr = itemStr.ToStr().Trim()
+  print "startVideo kind=" + kind + " live=" + liveStr + " fmt=" + fmtStr + " itemId=" + itemStr + " title=" + title + " url=" + safeUrl
 
   ' If we're switching streams mid-playback (Live signature renew), ignore the
   ' transient "stopped" state so we don't exit back to the UI.
@@ -6643,6 +7870,8 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
   m.playbackItemId = itemId
   m.playbackTitle = title
   m.liveEdgeSnapped = false
+  _prepareUpNextForPlayback(itemId, m.upNextCurrentContent)
+  _setPlayerNowTitle(title)
 
   m.player.content = c
   m.player.visible = true
@@ -6794,6 +8023,8 @@ sub stopPlaybackAndReturn(reason as String)
   if m.playerSettingsModal <> invalid then m.playerSettingsModal.visible = false
   if m.osdSeekLabel <> invalid then m.osdSeekLabel.visible = false
   if m.osdGearFocus <> invalid then m.osdGearFocus.visible = false
+  _setPlayerNowTitle("")
+  _resetUpNextState()
 
   _setBrowseLiveInputEnabled(true, "playback_stop")
   _refreshVisibleResumeState()
@@ -6841,6 +8072,51 @@ sub onProgressTimerFire()
   if m.player = invalid or m.player.visible <> true then return
   if m.lastPlayerState <> "playing" and m.progressPendingFlush <> true then return
   ignore = _sendProgressReport("timer", false, false)
+end sub
+
+sub onUpNextTimerFire()
+  if m.player = invalid or m.player.visible <> true then
+    if m.upNextPromptShown = true or m.upNextCountdownMode = true then _hideUpNext()
+    m.upNextPromptShown = false
+    m.upNextCountdownMode = false
+    return
+  end if
+  if m.playbackIsLive = true then
+    if m.upNextPromptShown = true or m.upNextCountdownMode = true then _hideUpNext()
+    m.upNextPromptShown = false
+    m.upNextCountdownMode = false
+    return
+  end if
+  if m.upNextAutoPlayPending = true or m.upNextPendingAutoplay = true or m.upNextAutoplayDisabled = true then return
+  if type(m.upNextNextEpisode) <> "roAssociativeArray" then
+    if m.upNextPromptShown = true or m.upNextCountdownMode = true then _hideUpNext()
+    m.upNextPromptShown = false
+    m.upNextCountdownMode = false
+    return
+  end if
+
+  dur = 0
+  if m.player.duration <> invalid then dur = Int(m.player.duration)
+  if dur <= 0 then return
+  curPosSec = 0
+  if m.player.position <> invalid then curPosSec = Int(m.player.position)
+  if curPosSec < 0 then curPosSec = 0
+  remainingSec = dur - curPosSec
+
+  if remainingSec <= Int(m.upNextThresholdPromptSec) and remainingSec > Int(m.upNextThresholdCountSec) then
+    if m.upNextPromptShown <> true then _showUpNextPrompt()
+    if m.upNextCountdownMode = true then _setUpNextCountdownMode(false)
+  else if remainingSec <= Int(m.upNextThresholdCountSec) and remainingSec >= 0 then
+    if m.upNextPromptShown <> true then _showUpNextPrompt()
+    if m.upNextCountdownMode <> true then _setUpNextCountdownMode(true)
+    if m.upNextCountdown <> invalid then
+      m.upNextCountdown.text = _t("upnext_in_prefix") + Int(remainingSec).ToStr() + "s"
+    end if
+  else
+    if m.upNextPromptShown = true or m.upNextCountdownMode = true then _hideUpNext()
+    m.upNextPromptShown = false
+    m.upNextCountdownMode = false
+  end if
 end sub
 
 sub _togglePauseResume()
@@ -6942,6 +8218,15 @@ function handlePlaybackKey(kl as String) as Boolean
   if st <> "SETTINGS" then _setPlaybackInputFocus()
 
   consumed = false
+  if st <> "SETTINGS" then
+    if _handleUpNextKey(k) then
+      consumed = true
+      if m.keyPerfDebug = true then
+        print "[key] name=" + k + " state=" + m.uiState + " focus=UPNEXT focusNode=" + _focusNodeLabel() + " consumed=true"
+      end if
+      return _returnKeyWithPerf(kp, consumed)
+    end if
+  end if
 
   if st = "SETTINGS" then
     if k = "back" then
@@ -7119,7 +8404,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
   if kl = "channelup" or kl = "chanup" then kl = "up"
   if kl = "channeldown" or kl = "chandown" then kl = "down"
 
-  if m.player <> invalid and m.player.visible = true and m.playbackIsLive <> true and (kl = "left" or kl = "right") then
+  if m.player <> invalid and m.player.visible = true and m.playbackIsLive <> true and _isUpNextActive() <> true and (kl = "left" or kl = "right") then
     act = "up"
     if press = true then act = "down"
     if _handleVodScrubInput(kl, act) then return true
@@ -8044,6 +9329,7 @@ sub onPlayerStateChanged()
     ' while the Video UI has focus), ensure we return to our UI.
     stopPlaybackAndReturn("state_stopped")
   else if st = "finished" then
+    if _handleFinishedWithUpNext() then return
     ignore = _sendProgressReport("finished", true, true)
     stopPlaybackAndReturn("finished")
   end if
@@ -8449,8 +9735,13 @@ sub _setUiVisibleForPlayback(active as Boolean)
     if m.browseCard <> invalid then m.browseCard.visible = false
     if m.liveCard <> invalid then m.liveCard.visible = false
     if m.hintLabel <> invalid then m.hintLabel.visible = false
+    if m.playerNowTitle <> invalid then m.playerNowTitle.visible = false
+    if m.playerNowBg <> invalid then m.playerNowBg.visible = false
     return
   end if
+
+  if m.playerNowTitle <> invalid then m.playerNowTitle.visible = false
+  if m.playerNowBg <> invalid then m.playerNowBg.visible = false
 
   if m.mode = "login" then
     if m.loginCard <> invalid then m.loginCard.visible = true
@@ -9309,6 +10600,9 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
     c.addField("hdPosterUrl", "string", false)
     c.addField("posterUrl", "string", false)
     c.addField("wideUrl", "string", false)
+    c.addField("seriesId", "string", false)
+    c.addField("seasonNumber", "integer", false)
+    c.addField("episodeNumber", "integer", false)
 
     if it <> invalid then
       if it.id <> invalid then c.id = it.id
@@ -9338,6 +10632,17 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
       c.posterUrl = posterUri
       c.wideUrl = wideUri
       c.posterMode = mode
+      c.seriesId = ""
+      c.seasonNumber = -1
+      c.episodeNumber = -1
+      if it.seriesId <> invalid then c.seriesId = it.seriesId.ToStr().Trim()
+      if c.seriesId = "" and it.SeriesId <> invalid then c.seriesId = it.SeriesId.ToStr().Trim()
+      if it.seasonNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.seasonNumber, -1)
+      if c.seasonNumber <= 0 and it.parentIndexNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.parentIndexNumber, -1)
+      if c.seasonNumber <= 0 and it.ParentIndexNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.ParentIndexNumber, -1)
+      if it.episodeNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.episodeNumber, -1)
+      if c.episodeNumber <= 0 and it.indexNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.indexNumber, -1)
+      if c.episodeNumber <= 0 and it.IndexNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.IndexNumber, -1)
 
       resumeRaw = _resumeStateFromRawItem(it)
       if _resumeStateHasSignal(resumeRaw) then _rememberResumeState(c.id, resumeRaw)
@@ -9375,6 +10680,9 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
       c.hdPosterUrl = ""
       c.posterUrl = ""
       c.wideUrl = ""
+      c.seriesId = ""
+      c.seasonNumber = -1
+      c.episodeNumber = -1
     end if
     root.appendChild(c)
   end for
@@ -9591,6 +10899,9 @@ sub _renderBrowseLibraryItems()
     c.addField("posterMode", "string", false)
     c.addField("hdPosterUrl", "string", false)
     c.addField("posterUrl", "string", false)
+    c.addField("seriesId", "string", false)
+    c.addField("seasonNumber", "integer", false)
+    c.addField("episodeNumber", "integer", false)
     if it <> invalid then
       if it.id <> invalid then
         c.id = it.id
@@ -9605,6 +10916,17 @@ sub _renderBrowseLibraryItems()
       c.hdPosterUrl = posterUri
       c.posterUrl = posterUri
       c.posterMode = "zoomToFill"
+      c.seriesId = ""
+      c.seasonNumber = -1
+      c.episodeNumber = -1
+      if it.seriesId <> invalid then c.seriesId = it.seriesId.ToStr().Trim()
+      if c.seriesId = "" and it.SeriesId <> invalid then c.seriesId = it.SeriesId.ToStr().Trim()
+      if it.seasonNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.seasonNumber, -1)
+      if c.seasonNumber <= 0 and it.parentIndexNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.parentIndexNumber, -1)
+      if c.seasonNumber <= 0 and it.ParentIndexNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.ParentIndexNumber, -1)
+      if it.episodeNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.episodeNumber, -1)
+      if c.episodeNumber <= 0 and it.indexNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.indexNumber, -1)
+      if c.episodeNumber <= 0 and it.IndexNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.IndexNumber, -1)
 
       resumeRaw = _resumeStateFromRawItem(it)
       if _resumeStateHasSignal(resumeRaw) then _rememberResumeState(c.id, resumeRaw)
@@ -9626,6 +10948,9 @@ sub _renderBrowseLibraryItems()
       c.posterMode = "zoomToFill"
       c.hdPosterUrl = ""
       c.posterUrl = ""
+      c.seriesId = ""
+      c.seasonNumber = -1
+      c.episodeNumber = -1
     end if
     root.appendChild(c)
   end for
@@ -9851,6 +11176,9 @@ sub renderShelfItems(raw as String)
     c.addField("hdPosterUrl", "string", false)
     c.addField("posterUrl", "string", false)
     c.addField("wideUrl", "string", false)
+    c.addField("seriesId", "string", false)
+    c.addField("seasonNumber", "integer", false)
+    c.addField("episodeNumber", "integer", false)
     if it <> invalid then
       if it.id <> invalid then c.id = it.id
       c.title = name0
@@ -9874,6 +11202,17 @@ sub renderShelfItems(raw as String)
       c.resumeDurationMs = Int(resume.durationMs)
       c.resumePercent = Int(resume.percent)
       c.played = (resume.played = true)
+      c.seriesId = ""
+      c.seasonNumber = -1
+      c.episodeNumber = -1
+      if it.seriesId <> invalid then c.seriesId = it.seriesId.ToStr().Trim()
+      if c.seriesId = "" and it.SeriesId <> invalid then c.seriesId = it.SeriesId.ToStr().Trim()
+      if it.seasonNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.seasonNumber, -1)
+      if c.seasonNumber <= 0 and it.parentIndexNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.parentIndexNumber, -1)
+      if c.seasonNumber <= 0 and it.ParentIndexNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.ParentIndexNumber, -1)
+      if it.episodeNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.episodeNumber, -1)
+      if c.episodeNumber <= 0 and it.indexNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.indexNumber, -1)
+      if c.episodeNumber <= 0 and it.IndexNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.IndexNumber, -1)
       if isTop10 then
         rank = rank + 1
         c.rank = rank
@@ -9893,6 +11232,9 @@ sub renderShelfItems(raw as String)
       c.hdPosterUrl = ""
       c.posterUrl = ""
       c.wideUrl = ""
+      c.seriesId = ""
+      c.seasonNumber = -1
+      c.episodeNumber = -1
     end if
     root.appendChild(c)
   end for
@@ -10420,6 +11762,14 @@ sub _renderSeriesDetailEpisodes(seasonIdx as Integer)
   if m.seriesDetailPoster <> invalid and m.seriesDetailPoster.uri <> invalid then
     fallbackPoster = m.seriesDetailPoster.uri.ToStr().Trim()
   end if
+  seriesIdForEpisodes = ""
+  if m.seriesDetailData <> invalid and type(m.seriesDetailData) = "roAssociativeArray" then
+    s0 = m.seriesDetailData.series
+    if type(s0) = "roAssociativeArray" then
+      if s0.id <> invalid then seriesIdForEpisodes = s0.id.ToStr().Trim()
+      if seriesIdForEpisodes = "" and s0.Id <> invalid then seriesIdForEpisodes = s0.Id.ToStr().Trim()
+    end if
+  end if
 
   root = CreateObject("roSGNode", "ContentNode")
   for each ep in eps
@@ -10451,10 +11801,16 @@ sub _renderSeriesDetailEpisodes(seasonIdx as Integer)
     c = CreateObject("roSGNode", "ContentNode")
     c.addField("itemType", "string", false)
     c.addField("meta", "string", false)
+    c.addField("seriesId", "string", false)
+    c.addField("seasonNumber", "integer", false)
+    c.addField("episodeNumber", "integer", false)
     if eid <> invalid and eid.Trim() <> "" then c.id = eid.Trim()
     c.title = epTitle
     c.itemType = "episode"
     c.meta = _compactDialogText(eover, 140)
+    c.seriesId = seriesIdForEpisodes
+    c.seasonNumber = pidx
+    c.episodeNumber = eidx
 
     posterUri = ""
     if eid <> "" then posterUri = _browsePosterUri(eid, posterBase, posterToken)
@@ -11036,6 +12392,14 @@ sub onSeriesDetailDone()
   if playTitle = "" then playTitle = "Episode"
 
   if playId <> "" and idx = 0 then
+    if type(m.seriesDetailEpisodes) = "roArray" then
+      for each ep in m.seriesDetailEpisodes
+        if _episodeIdFromObj(ep) = playId then
+          _upNextRememberMetaFromEpisode(ep)
+          exit for
+        end if
+      end for
+    end if
     playVodById(playId, playTitle)
     return
   end if
@@ -11069,6 +12433,7 @@ sub _playBrowseItemNode(it as Object, sourceSection as String)
   if typ = invalid then typ = ""
   typ = typ.Trim()
   typL = LCase(typ)
+  _upNextRememberMetaFromNode(it)
 
   if typL = "livetvchannel" or typL = "livetv" then
     livePath = _resolveLivePathFromItem(it)

@@ -423,7 +423,7 @@
                 height="24"
                 font="font:SmallSystemFont"
                 color="0xFFFFFF"
-                text="< Detalhe"
+                text="&lt; Detalhe"
               />
             </children>
           </Group>
@@ -487,7 +487,8 @@
         height="30"
         font="font:SmallSystemFont"
         color="0xAAB4C2"
-        text="OK: confirmar    UP/DOWN: Engrenagem/Barra (VOD)    *: Configuracoes (VOD)    BACK: Fechar"
+        visible="false"
+        text=""
       />
 
       <!-- Floating settings button (no boxed list). -->
@@ -581,6 +582,113 @@
         text="LEFT/RIGHT: trocar coluna    OK: selecionar    BACK: fechar"
       />
     </Group>
+
+    <Group
+      id="upNext"
+      visible="false"
+    >
+      <Rectangle
+        id="upNextCard"
+        translation="[954, 544]"
+        width="306"
+        height="176"
+        color="0x10141BF0"
+      />
+      <Label
+        id="upNextTitle"
+        translation="[968, 556]"
+        width="276"
+        height="24"
+        font="font:SmallSystemFont"
+        color="0xD8B765"
+        text="Proximo episodio"
+      />
+      <Poster
+        id="upNextPoster"
+        translation="[968, 588]"
+        width="52"
+        height="74"
+        uri="pkg:/images/logo.png"
+      />
+      <Label
+        id="upNextEpisode"
+        translation="[1028, 596]"
+        width="216"
+        height="62"
+        font="font:SmallSystemFont"
+        color="0xFFFFFF"
+        text=""
+      />
+      <Label
+        id="upNextCountdown"
+        translation="[968, 662]"
+        width="276"
+        height="22"
+        font="font:SmallSystemFont"
+        color="0xAAB4C2"
+        visible="false"
+        text=""
+      />
+      <Rectangle
+        id="upNextCancelBg"
+        translation="[968, 686]"
+        width="108"
+        height="28"
+        color="0x00000000"
+      />
+      <Label
+        id="upNextCancelText"
+        translation="[970, 690]"
+        width="104"
+        height="22"
+        font="font:SmallSystemFont"
+        horizAlign="center"
+        color="0x5E6A85"
+        text="Cancelar"
+      />
+      <Rectangle
+        id="upNextPlayBg"
+        translation="[1084, 682]"
+        width="176"
+        height="34"
+        color="0x00000000"
+      />
+      <Label
+        id="upNextPlayText"
+        translation="[1088, 688]"
+        width="168"
+        height="22"
+        font="font:SmallSystemFont"
+        horizAlign="center"
+        color="0xFFFFFF"
+        text="Assistir agora"
+      />
+    </Group>
+
+    <Timer
+      id="upNextTimer"
+      duration="1"
+      repeat="true"
+    />
+
+    <Rectangle
+      id="playerNowBg"
+      translation="[26, 26]"
+      width="860"
+      height="36"
+      color="0x00000000"
+      visible="false"
+    />
+    <Label
+      id="playerNowTitle"
+      translation="[36, 33]"
+      width="840"
+      height="24"
+      font="font:SmallSystemFont"
+      color="0xF2F5FA"
+      visible="false"
+      text=""
+    />
 
     <!-- Keep status + hint above the Video plane for debugging -->
     <Label
