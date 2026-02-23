@@ -98,7 +98,7 @@ sub init()
   m.viewsGridCols = 3
   m.itemsGridCols = 3
   m.itemsGridRows = 2
-  m.libraryGridCols = 3
+  m.libraryGridCols = 5
   m.homeShelfQueue = []
   m.pendingHomeShelfSection = ""
   m.browseMoviesViewId = ""
@@ -728,6 +728,7 @@ sub bindUiNodes()
   m.librarySearchBg = m.top.findNode("librarySearchBg")
   m.librarySearchText = m.top.findNode("librarySearchText")
   m.libraryItemsList = m.top.findNode("libraryItemsList")
+  _configureLibraryGridNode(m.libraryItemsList)
   m.libraryEmptyLabel = m.top.findNode("libraryEmptyLabel")
   m.browseEmptyLabel = m.top.findNode("browseEmptyLabel")
   m.viewsTitle = m.top.findNode("viewsTitle")
@@ -3389,8 +3390,19 @@ function _browseItemRows() as Integer
 end function
 
 function _browseLibraryCols() as Integer
-  return _gridCols(m.libraryGridCols, 3)
+  return _gridCols(m.libraryGridCols, 5)
 end function
+
+sub _configureLibraryGridNode(lst as Object)
+  if lst = invalid then return
+  if lst.hasField("translation") then lst.translation = [20, 220]
+  if lst.hasField("itemSize") then lst.itemSize = [160, 280]
+  if lst.hasField("itemSpacing") then lst.itemSpacing = [24, 24]
+  if lst.hasField("numColumns") then lst.numColumns = 5
+  if lst.hasField("numRows") then lst.numRows = 2
+  if lst.hasField("drawFocusFeedback") then lst.drawFocusFeedback = false
+  if lst.hasField("itemComponentName") then lst.itemComponentName = "PosterTile"
+end sub
 
 function _browseSectionHasItems(section as String) as Boolean
   s = section
@@ -4442,6 +4454,38 @@ function _sceneIntFromAny(v) as Integer
   end for
   if hasDigit <> true then return -1
   return Int(Val(s))
+end function
+
+function _sceneNumberFromAny(v as Dynamic) as Float
+  if v = invalid then return -1
+
+  t = type(v)
+  if t = "roInt" or t = "roInteger" or t = "roFloat" or t = "Float" then
+    return Val(v.ToStr())
+  end if
+
+  s = v.ToStr()
+  if s = invalid then return -1
+  s = s.Trim()
+  if s = "" then return -1
+
+  hasDigit = false
+  dotCount = 0
+  for i = 1 to Len(s)
+    ch = Mid(s, i, 1)
+    if ch >= "0" and ch <= "9" then
+      hasDigit = true
+    else if i = 1 and (ch = "-" or ch = "+") then
+      ' allow sign
+    else if ch = "." then
+      dotCount = dotCount + 1
+      if dotCount > 1 then return -1
+    else
+      return -1
+    end if
+  end for
+  if hasDigit <> true then return -1
+  return Val(s)
 end function
 
 function _sceneBoolFromAny(v) as Boolean
@@ -5535,16 +5579,12 @@ function _ensureLibraryListNodes() as Boolean
     lst = CreateObject("roSGNode", "MarkupGrid")
     if lst <> invalid then
       lst.id = "libraryItemsList"
-      lst.translation = [20, 220]
-      lst.itemSize = [400, 120]
-      lst.numColumns = 3
-      lst.numRows = 4
-      lst.drawFocusFeedback = false
-      lst.itemComponentName = "BrowseLibraryRowItem"
+      _configureLibraryGridNode(lst)
       m.libraryGroup.appendChild(lst)
       m.libraryItemsList = lst
     end if
   end if
+  _configureLibraryGridNode(m.libraryItemsList)
 
   if m.libraryEmptyLabel = invalid then
     e = CreateObject("roSGNode", "Label")
@@ -10788,11 +10828,11 @@ function _resumeStateFromRawItem(it as Object) as Object
     end for
   end if
   if posMs < 0 then
-    posTicks = -1
+    posTicks = -1.0
     for each k in ["positionTicks", "position_ticks", "playbackPositionTicks", "PlaybackPositionTicks"]
       vTicks = _aaGetCi(it, k)
       if vTicks <> invalid then
-        posTicks = _sceneIntFromAny(vTicks)
+        posTicks = _sceneNumberFromAny(vTicks)
         exit for
       end if
     end for
@@ -10800,7 +10840,7 @@ function _resumeStateFromRawItem(it as Object) as Object
       for each k in ["positionTicks", "position_ticks", "playbackPositionTicks", "PlaybackPositionTicks"]
         vTicks = _aaGetCi(userData, k)
         if vTicks <> invalid then
-          posTicks = _sceneIntFromAny(vTicks)
+          posTicks = _sceneNumberFromAny(vTicks)
           exit for
         end if
       end for
@@ -10828,11 +10868,11 @@ function _resumeStateFromRawItem(it as Object) as Object
     end for
   end if
   if durMs < 0 then
-    durTicks = -1
+    durTicks = -1.0
     for each k in ["durationTicks", "duration_ticks", "runTimeTicks", "RunTimeTicks", "runtimeTicks", "RuntimeTicks"]
       vTicks = _aaGetCi(it, k)
       if vTicks <> invalid then
-        durTicks = _sceneIntFromAny(vTicks)
+        durTicks = _sceneNumberFromAny(vTicks)
         exit for
       end if
     end for
@@ -10840,7 +10880,7 @@ function _resumeStateFromRawItem(it as Object) as Object
       for each k in ["durationTicks", "duration_ticks", "runTimeTicks", "RunTimeTicks", "runtimeTicks", "RuntimeTicks"]
         vTicks = _aaGetCi(userData, k)
         if vTicks <> invalid then
-          durTicks = _sceneIntFromAny(vTicks)
+          durTicks = _sceneNumberFromAny(vTicks)
           exit for
         end if
       end for
@@ -10854,7 +10894,7 @@ function _resumeStateFromRawItem(it as Object) as Object
   for each k in ["percent", "resumePercent", "resume_percent", "playedPercentage", "PlayedPercentage"]
     vPct = _aaGetCi(it, k)
     if vPct <> invalid then
-      pct = _sceneIntFromAny(vPct)
+      pct = Int(_sceneNumberFromAny(vPct))
       exit for
     end if
   end for
@@ -10862,7 +10902,7 @@ function _resumeStateFromRawItem(it as Object) as Object
     for each k in ["percent", "resumePercent", "resume_percent", "playedPercentage", "PlayedPercentage"]
       vPct = _aaGetCi(userData, k)
       if vPct <> invalid then
-        pct = _sceneIntFromAny(vPct)
+        pct = Int(_sceneNumberFromAny(vPct))
         exit for
       end if
     end for
@@ -10889,6 +10929,7 @@ function _resumeStateFromRawItem(it as Object) as Object
     stxt = LCase(vStatus.ToStr().Trim())
     if stxt = "played" or stxt = "finished" or stxt = "completed" then played = true
   end if
+  if played <> true and pct <= 0 and posMs > 0 then pct = 1
   if pct >= 98 then played = true
   if played = true and pct < 100 then pct = 100
   st.percent = pct
@@ -11088,6 +11129,7 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
     c.addField("rank", "integer", false)
     c.addField("posterMode", "string", false)
     c.addField("hdPosterUrl", "string", false)
+    c.addField("sdPosterUrl", "string", false)
     c.addField("posterUrl", "string", false)
     c.addField("wideUrl", "string", false)
     c.addField("seriesId", "string", false)
@@ -11404,6 +11446,7 @@ sub _renderBrowseLibraryItems()
       posterUri = _browsePosterUri(c.id, posterBase, posterToken)
       if posterUri = "" then posterUri = _browseChannelPosterUri(c.id, posterBase, posterToken)
       c.hdPosterUrl = posterUri
+      c.sdPosterUrl = posterUri
       c.posterUrl = posterUri
       c.posterMode = "zoomToFill"
       c.seriesId = ""
@@ -11437,6 +11480,7 @@ sub _renderBrowseLibraryItems()
       c.rank = 0
       c.posterMode = "zoomToFill"
       c.hdPosterUrl = ""
+      c.sdPosterUrl = ""
       c.posterUrl = ""
       c.seriesId = ""
       c.seasonNumber = -1

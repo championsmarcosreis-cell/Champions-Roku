@@ -282,11 +282,12 @@
         <MarkupGrid
           id="libraryItemsList"
           translation="[20, 220]"
-          itemSize="[400, 120]"
-          numColumns="3"
-          numRows="4"
+          itemSize="[160, 280]"
+          itemSpacing="[24, 24]"
+          numColumns="5"
+          numRows="2"
           drawFocusFeedback="false"
-          itemComponentName="BrowseLibraryRowItem"
+          itemComponentName="PosterTile"
         />
 
         <Label

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="PosterTile" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onItemContentChanged" />
+    <field id="itemHasFocus" type="boolean" onChange="onItemHasFocusChanged" />
+  </interface>
+
+  <children>
+    <Rectangle
+      id="posterBg"
+      translation="[0, 0]"
+      width="160"
+      height="240"
+      color="0x0A111D"
+    />
+
+    <Poster
+      id="p"
+      translation="[0, 0]"
+      width="160"
+      height="240"
+      loadDisplayMode="scaleToFill"
+      uri=""
+    />
+
+    <Rectangle
+      id="progressBg"
+      translation="[0, 236]"
+      width="160"
+      height="4"
+      color="0x253247"
+      visible="false"
+    />
+
+    <Rectangle
+      id="progressFill"
+      translation="[0, 236]"
+      width="0"
+      height="4"
+      color="0x3FD97C"
+      visible="false"
+    />
+
+    <Group
+      id="focus"
+      visible="false"
+    >
+      <children>
+        <Rectangle
+          translation="[0, 0]"
+          width="160"
+          height="3"
+          color="0xD8B765"
+        />
+        <Rectangle
+          translation="[0, 237]"
+          width="160"
+          height="3"
+          color="0xD8B765"
+        />
+        <Rectangle
+          translation="[0, 0]"
+          width="3"
+          height="240"
+          color="0xD8B765"
+        />
+        <Rectangle
+          translation="[157, 0]"
+          width="3"
+          height="240"
+          color="0xD8B765"
+        />
+      </children>
+    </Group>
+
+    <Label
+      id="t"
+      translation="[0, 248]"
+      width="160"
+      height="32"
+      font="font:SmallSystemFont"
+      horizAlign="center"
+      color="0xE6EBF3"
+      wrap="true"
+      numLines="2"
+      text=""
+    />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/PosterTile.brs" />
+</component>

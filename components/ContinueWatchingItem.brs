@@ -131,6 +131,7 @@ function _resumeRatio(c as Object) as Float
 
   if r < 0 then r = 0
   if r > 1 then r = 1
+  if r <= 0 and posMs > 0 then r = 0.01
   return r
 end function
 
