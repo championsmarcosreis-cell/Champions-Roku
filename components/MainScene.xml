@@ -671,6 +671,29 @@
       repeat="true"
     />
 
+    <Group
+      id="skipIntro"
+      visible="false"
+    >
+      <Rectangle
+        id="skipIntroCard"
+        translation="[954, 496]"
+        width="240"
+        height="44"
+        color="0x10141BF0"
+      />
+      <Label
+        id="skipIntroText"
+        translation="[970, 507]"
+        width="208"
+        height="24"
+        font="font:SmallSystemFont"
+        horizAlign="center"
+        color="0xFFFFFFFF"
+        text="Pular intro"
+      />
+    </Group>
+
     <Rectangle
       id="playerNowBg"
       translation="[26, 26]"

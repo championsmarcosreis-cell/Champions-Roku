@@ -247,6 +247,16 @@ sub init()
   m.upNextFetchSeriesId = ""
   m.upNextFetchCurrentContent = {}
   m.upNextItemMetaById = {}
+  m.pendingSkipIntroItemId = ""
+  m.pendingSkipIntroStartSec = -1
+  m.pendingSkipIntroEndSec = -1
+  m.skipIntroItemId = ""
+  m.skipIntroStartSec = -1
+  m.skipIntroEndSec = -1
+  m.skipIntroVisible = false
+  m.skipIntroConsumed = false
+  m.skipIntroFallbackStartSec = 10
+  m.skipIntroFallbackEndSec = 95
   m.playerNowCachedTitle = ""
 
   cfg0 = loadConfig()
@@ -615,6 +625,53 @@ sub _ensureUpNextRuntimeNodes()
   end if
 end sub
 
+sub _ensureSkipIntroRuntimeNodes()
+  if m.top = invalid then return
+
+  if m.skipIntroGroup = invalid then m.skipIntroGroup = m.top.findNode("skipIntro")
+  if m.skipIntroGroup = invalid then
+    g = CreateObject("roSGNode", "Group")
+    if g <> invalid then
+      g.id = "skipIntro"
+      g.visible = false
+      m.top.appendChild(g)
+      m.skipIntroGroup = g
+    end if
+  end if
+  if m.skipIntroGroup = invalid then return
+
+  if m.skipIntroCard = invalid then m.skipIntroCard = m.top.findNode("skipIntroCard")
+  if m.skipIntroCard = invalid then
+    n = CreateObject("roSGNode", "Rectangle")
+    if n <> invalid then
+      n.id = "skipIntroCard"
+      n.translation = [954, 496]
+      n.width = 240
+      n.height = 44
+      n.color = "0x10141BF0"
+      m.skipIntroGroup.appendChild(n)
+      m.skipIntroCard = n
+    end if
+  end if
+
+  if m.skipIntroText = invalid then m.skipIntroText = m.top.findNode("skipIntroText")
+  if m.skipIntroText = invalid then
+    n = CreateObject("roSGNode", "Label")
+    if n <> invalid then
+      n.id = "skipIntroText"
+      n.translation = [970, 507]
+      n.width = 208
+      n.height = 24
+      n.font = "font:SmallSystemFont"
+      n.horizAlign = "center"
+      n.color = "0xFFFFFFFF"
+      n.text = "Pular intro"
+      m.skipIntroGroup.appendChild(n)
+      m.skipIntroText = n
+    end if
+  end if
+end sub
+
 sub bindUiNodes()
   m.logoPoster = m.top.findNode("logoPoster")
   m.titleLabel = m.top.findNode("titleLabel")
@@ -819,8 +876,12 @@ sub bindUiNodes()
   if m.upNextPlayBg = invalid then m.upNextPlayBg = m.top.findNode("upNextPlayBg")
   if m.upNextPlayText = invalid then m.upNextPlayText = m.top.findNode("upNextPlayText")
   if m.upNextTimer = invalid then m.upNextTimer = m.top.findNode("upNextTimer")
+  if m.skipIntroGroup = invalid then m.skipIntroGroup = m.top.findNode("skipIntro")
+  if m.skipIntroCard = invalid then m.skipIntroCard = m.top.findNode("skipIntroCard")
+  if m.skipIntroText = invalid then m.skipIntroText = m.top.findNode("skipIntroText")
   _ensurePlayerNowRuntimeNodes()
   _ensureUpNextRuntimeNodes()
+  _ensureSkipIntroRuntimeNodes()
   if m.upNextTimer <> invalid and (m.upNextTimerObsSetup <> true) then
     m.upNextTimer.observeField("fire", "onUpNextTimerFire")
     m.upNextTimer.control = "start"
@@ -1453,6 +1514,287 @@ sub _setPlayerNowTitle(title as String)
   m.playerNowTitle.visible = showNow
   m.playerNowBg.visible = false
 end sub
+
+sub _clearPendingSkipIntroWindow()
+  m.pendingSkipIntroItemId = ""
+  m.pendingSkipIntroStartSec = -1
+  m.pendingSkipIntroEndSec = -1
+end sub
+
+function _skipIntroEpisodeMeta(itemId as String) as Object
+  out = { season: -1, episode: -1 }
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+
+  ctx = m.upNextCurrentContent
+  if type(ctx) = "roAssociativeArray" then
+    curId = ""
+    if ctx.currentId <> invalid then curId = ctx.currentId.ToStr().Trim()
+    if id = "" or curId = "" or curId = id then
+      s0 = _upNextIntFromAny(ctx.seasonNumber, -1)
+      e0 = _upNextIntFromAny(ctx.episodeNumber, -1)
+      if s0 > 0 then out.season = s0
+      if e0 > 0 then out.episode = e0
+    end if
+  end if
+
+  if id = "" then return out
+  if type(m.upNextItemMetaById) <> "roAssociativeArray" then return out
+  meta = m.upNextItemMetaById[id]
+  if type(meta) <> "roAssociativeArray" then return out
+
+  s1 = _upNextIntFromAny(meta.seasonNumber, -1)
+  e1 = _upNextIntFromAny(meta.episodeNumber, -1)
+  if s1 > 0 then out.season = s1
+  if e1 > 0 then out.episode = e1
+  return out
+end function
+
+function _skipIntroLooksLikeEpisode(itemId as String) as Boolean
+  meta = _skipIntroEpisodeMeta(itemId)
+  if type(meta) <> "roAssociativeArray" then return false
+  if meta.episode <> invalid and Int(meta.episode) > 0 then return true
+  return false
+end function
+
+function _skipIntroSecFromAny(v as Dynamic) as Integer
+  if v = invalid then return -1
+  s = v.ToStr()
+  if s = invalid then return -1
+  s = s.Trim()
+  if s = "" then return -1
+
+  n = Val(s)
+  if n < 0 then return -1
+  if n >= 10000000 then return Int(n / 10000000)
+  if n >= 100000 then return Int(n / 1000)
+  return Int(n)
+end function
+
+function _skipIntroReadSec(info as Object, keys as Object) as Integer
+  if type(info) <> "roAssociativeArray" then return -1
+  if type(keys) <> "roArray" then return -1
+  for each k in keys
+    if k = invalid then continue for
+    raw = _aaGetCi(info, k.ToStr())
+    if raw = invalid then continue for
+    sec = _skipIntroSecFromAny(raw)
+    if sec >= 0 then return sec
+  end for
+  return -1
+end function
+
+sub _configurePendingSkipIntroWindow(info as Object, itemId as String)
+  _clearPendingSkipIntroWindow()
+
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+
+  startSec = -1
+  endSec = -1
+  source = "none"
+
+  if type(info) = "roAssociativeArray" then
+    startSec = _skipIntroReadSec(info, [
+      "introStartSec"
+      "skipIntroStartSec"
+      "introStart"
+      "skipIntroStart"
+      "introStartSeconds"
+      "skipIntroStartSeconds"
+      "introStartMs"
+      "skipIntroStartMs"
+      "introStartTicks"
+      "skipIntroStartTicks"
+      "introStartPositionTicks"
+      "skipIntroStartPositionTicks"
+    ])
+    endSec = _skipIntroReadSec(info, [
+      "introEndSec"
+      "skipIntroEndSec"
+      "introEnd"
+      "skipIntroEnd"
+      "introEndSeconds"
+      "skipIntroEndSeconds"
+      "introEndMs"
+      "skipIntroEndMs"
+      "introEndTicks"
+      "skipIntroEndTicks"
+      "introEndPositionTicks"
+      "skipIntroEndPositionTicks"
+    ])
+
+    introObj = _aaGetCi(info, "intro")
+    if type(introObj) = "roAssociativeArray" then
+      if startSec < 0 then startSec = _skipIntroReadSec(introObj, ["startSec", "start", "from", "begin"])
+      if endSec < 0 then endSec = _skipIntroReadSec(introObj, ["endSec", "end", "to", "finish"])
+    end if
+  end if
+
+  if startSec >= 0 and endSec > startSec then
+    source = "api"
+  else if _skipIntroLooksLikeEpisode(id) = true then
+    startSec = Int(m.skipIntroFallbackStartSec)
+    endSec = Int(m.skipIntroFallbackEndSec)
+    source = "fallback_episode"
+  end if
+
+  if startSec < 0 or endSec <= startSec or (endSec - startSec) < 4 then
+    print "skipintro prepared itemId=" + id + " none"
+    return
+  end if
+
+  m.pendingSkipIntroItemId = id
+  m.pendingSkipIntroStartSec = startSec
+  m.pendingSkipIntroEndSec = endSec
+  print "skipintro prepared itemId=" + id + " startSec=" + startSec.ToStr() + " endSec=" + endSec.ToStr() + " source=" + source
+end sub
+
+sub _hideSkipIntroPrompt()
+  if m.skipIntroGroup <> invalid then m.skipIntroGroup.visible = false
+  m.skipIntroVisible = false
+end sub
+
+sub _resetSkipIntroState()
+  m.skipIntroItemId = ""
+  m.skipIntroStartSec = -1
+  m.skipIntroEndSec = -1
+  m.skipIntroConsumed = false
+  _hideSkipIntroPrompt()
+end sub
+
+sub _activateSkipIntroForPlayback(itemId as String)
+  _resetSkipIntroState()
+  if m.playbackIsLive = true then
+    _clearPendingSkipIntroWindow()
+    return
+  end if
+
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+
+  pendingId = m.pendingSkipIntroItemId
+  if pendingId = invalid then pendingId = ""
+  pendingId = pendingId.ToStr().Trim()
+
+  startSec = -1
+  endSec = -1
+  source = "none"
+  if pendingId <> "" and (id = "" or id = pendingId) then
+    startSec = Int(m.pendingSkipIntroStartSec)
+    endSec = Int(m.pendingSkipIntroEndSec)
+    source = "api"
+    if id = "" then id = pendingId
+  end if
+
+  _clearPendingSkipIntroWindow()
+
+  if startSec < 0 or endSec <= startSec then
+    if _skipIntroLooksLikeEpisode(id) then
+      startSec = Int(m.skipIntroFallbackStartSec)
+      endSec = Int(m.skipIntroFallbackEndSec)
+      source = "fallback_episode"
+    end if
+  end if
+
+  if startSec < 0 or endSec <= startSec or (endSec - startSec) < 4 then return
+
+  m.skipIntroItemId = id
+  m.skipIntroStartSec = startSec
+  m.skipIntroEndSec = endSec
+  m.skipIntroConsumed = false
+  print "skipintro active itemId=" + id + " startSec=" + startSec.ToStr() + " endSec=" + endSec.ToStr() + " source=" + source
+end sub
+
+sub _showSkipIntroPrompt()
+  _ensureSkipIntroRuntimeNodes()
+  if m.skipIntroGroup = invalid then return
+  if m.skipIntroCard <> invalid then
+    m.skipIntroCard.color = "0x10141BF0"
+    m.skipIntroCard.opacity = 1.0
+  end if
+  if m.skipIntroText <> invalid then
+    m.skipIntroText.color = "0xFFFFFFFF"
+    m.skipIntroText.text = _t("skip_intro")
+  end if
+  _bringNodeToFront(m.skipIntroGroup)
+  m.skipIntroGroup.visible = true
+  m.skipIntroVisible = true
+end sub
+
+sub _updateSkipIntroPrompt()
+  if m.player = invalid or m.player.visible <> true then
+    if m.skipIntroVisible = true then _hideSkipIntroPrompt()
+    return
+  end if
+  if m.playbackIsLive = true then
+    if m.skipIntroVisible = true then _hideSkipIntroPrompt()
+    return
+  end if
+  if m.skipIntroConsumed = true then
+    if m.skipIntroVisible = true then _hideSkipIntroPrompt()
+    return
+  end if
+
+  startSec = Int(m.skipIntroStartSec)
+  endSec = Int(m.skipIntroEndSec)
+  if startSec < 0 or endSec <= startSec then
+    if m.skipIntroVisible = true then _hideSkipIntroPrompt()
+    return
+  end if
+
+  posSec = 0
+  if m.player.position <> invalid then posSec = Int(m.player.position)
+  if posSec < 0 then posSec = 0
+
+  if posSec < startSec then
+    if m.skipIntroVisible = true then _hideSkipIntroPrompt()
+    return
+  end if
+
+  if posSec >= endSec then
+    m.skipIntroConsumed = true
+    if m.skipIntroVisible = true then _hideSkipIntroPrompt()
+    return
+  end if
+
+  if m.skipIntroVisible <> true then
+    _showSkipIntroPrompt()
+    print "skipintro prompt show itemId=" + m.skipIntroItemId + " posSec=" + posSec.ToStr() + " startSec=" + startSec.ToStr() + " endSec=" + endSec.ToStr()
+  else if m.skipIntroText <> invalid then
+    m.skipIntroText.text = _t("skip_intro")
+  end if
+end sub
+
+function _trySkipIntroAction(reason as String) as Boolean
+  if m.player = invalid or m.player.visible <> true then return false
+  if m.playbackIsLive = true then return false
+  if m.skipIntroConsumed = true then return false
+
+  startSec = Int(m.skipIntroStartSec)
+  endSec = Int(m.skipIntroEndSec)
+  if startSec < 0 or endSec <= startSec then return false
+
+  curSec = 0
+  if m.player.position <> invalid then curSec = Int(m.player.position)
+  if curSec < startSec or curSec >= endSec then return false
+  if m.player.hasField("seek") <> true then return false
+
+  targetSec = endSec
+  durSec = 0
+  if m.player.duration <> invalid then durSec = Int(m.player.duration)
+  if durSec > 0 and targetSec > (durSec - 1) then targetSec = durSec - 1
+  if targetSec < 0 then targetSec = 0
+
+  m.player.seek = targetSec
+  m.skipIntroConsumed = true
+  _hideSkipIntroPrompt()
+  print "skipintro jump reason=" + reason + " itemId=" + m.skipIntroItemId + " targetSec=" + targetSec.ToStr()
+  return true
+end function
 
 function _episodeIdFromObj(ep as Object) as String
   if ep = invalid then return ""
@@ -2372,7 +2714,11 @@ sub onPlayerScrubEvent()
   a = LCase(parts[1].Trim())
 
   if k = "ok" and a = "press" then
-    if m.scrubActive = true then _applySeek("ok")
+    if m.scrubActive = true then
+      _applySeek("ok")
+    else
+      ignoreSkipIntro = _trySkipIntroAction("ok_scrub_event")
+    end if
     return
   end if
 
@@ -2601,6 +2947,7 @@ function _t(key as String) as String
         upnext_in_prefix: "Next in "
         upnext_cancel: "Cancel"
         upnext_watch_now: "Watch now"
+        skip_intro: "Skip intro"
       }
       pt: {
         home_live: "Live TV"
@@ -2679,6 +3026,7 @@ function _t(key as String) as String
         upnext_in_prefix: "Proximo em "
         upnext_cancel: "Cancelar"
         upnext_watch_now: "Assistir agora"
+        skip_intro: "Pular intro"
       }
       es: {
         home_live: "En vivo"
@@ -2757,6 +3105,7 @@ function _t(key as String) as String
         upnext_in_prefix: "Siguiente en "
         upnext_cancel: "Cancelar"
         upnext_watch_now: "Ver ahora"
+        skip_intro: "Saltar intro"
       }
       it: {
         home_live: "Diretta"
@@ -2835,6 +3184,7 @@ function _t(key as String) as String
         upnext_in_prefix: "Prossimo tra "
         upnext_cancel: "Annulla"
         upnext_watch_now: "Guarda ora"
+        skip_intro: "Salta intro"
       }
     }
   end if
@@ -7266,6 +7616,7 @@ sub onGatewayTaskStateChanged()
       raw = m.gatewayTask.resultJson
       info = ParseJson(raw)
       if type(info) <> "roAssociativeArray" then info = {}
+      _configurePendingSkipIntroWindow(info, itemId)
 
       path = ""
       query = {}
@@ -7303,6 +7654,7 @@ sub onGatewayTaskStateChanged()
     else
       err = m.gatewayTask.error
       if err = invalid or err = "" then err = "unknown"
+      _clearPendingSkipIntroWindow()
       m.pendingPlaybackInfoIsLive = false
       m.pendingPlaybackInfoKind = ""
       m.playbackSubtitleSources = []
@@ -7663,6 +8015,7 @@ sub onGatewayTaskStateChanged()
     else
       err = m.gatewayTask.error
       if err = invalid or err = "" then err = "unknown"
+      _clearPendingSkipIntroWindow()
       m.liveResignPending = false
       m.playbackStarting = false
       setStatus("sign failed: " + err)
@@ -7870,6 +8223,7 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
   m.playbackItemId = itemId
   m.playbackTitle = title
   m.liveEdgeSnapped = false
+  _activateSkipIntroForPlayback(itemId)
   _prepareUpNextForPlayback(itemId, m.upNextCurrentContent)
   _setPlayerNowTitle(title)
 
@@ -8024,6 +8378,7 @@ sub stopPlaybackAndReturn(reason as String)
   if m.osdSeekLabel <> invalid then m.osdSeekLabel.visible = false
   if m.osdGearFocus <> invalid then m.osdGearFocus.visible = false
   _setPlayerNowTitle("")
+  _resetSkipIntroState()
   _resetUpNextState()
 
   _setBrowseLiveInputEnabled(true, "playback_stop")
@@ -8075,6 +8430,8 @@ sub onProgressTimerFire()
 end sub
 
 sub onUpNextTimerFire()
+  _updateSkipIntroPrompt()
+
   if m.player = invalid or m.player.visible <> true then
     if m.upNextPromptShown = true or m.upNextCountdownMode = true then _hideUpNext()
     m.upNextPromptShown = false
@@ -8347,9 +8704,13 @@ function handlePlaybackKey(kl as String) as Boolean
     stopPlaybackAndReturn("back")
     consumed = true
   else if k = "ok" then
-    m.osdFocus = "TIMELINE"
-    showPlayerOverlay()
-    consumed = true
+    if _trySkipIntroAction("ok_playing") then
+      consumed = true
+    else
+      m.osdFocus = "TIMELINE"
+      showPlayerOverlay()
+      consumed = true
+    end if
   else if k = "up" then
     ' VOD shortcut: UP opens OSD directly on settings gear.
     if m.playbackIsLive = true then
@@ -9318,6 +9679,7 @@ sub onPlayerStateChanged()
     ' Best-effort: apply preferred tracks once playback is stable.
     applyPreferredTracks()
     _requestPlaybackSubtitleSources()
+    _updateSkipIntroPrompt()
   else if st = "paused" then
     ignore = _sendProgressReport("paused", false, true)
   else if st = "stopped" then

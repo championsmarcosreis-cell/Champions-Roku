@@ -250,6 +250,8 @@ sub doWork()
         query: resp.query
         container: resp.container
         subtitleSources: resp.subtitleSources
+        introStartSec: resp.introStartSec
+        introEndSec: resp.introEndSec
       })
     else
       m.top.error = resp.error

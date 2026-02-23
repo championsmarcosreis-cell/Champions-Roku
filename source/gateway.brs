@@ -1045,6 +1045,309 @@ function gatewayJellyfinExternalSubtitleSources(apiBase as String, appToken as S
   return { ok: true, sources: subtitleSources }
 end function
 
+function _gfAaGetCi(a as Object, key as String) as Dynamic
+  if type(a) <> "roAssociativeArray" then return invalid
+  if key = invalid then return invalid
+  k = key.ToStr().Trim()
+  if k = "" then return invalid
+  if a[k] <> invalid then return a[k]
+
+  kl = LCase(k)
+  if a[kl] <> invalid then return a[kl]
+
+  ku = UCase(k)
+  if a[ku] <> invalid then return a[ku]
+
+  for each kk in a
+    if kk <> invalid and LCase(kk.ToStr()) = kl then return a[kk]
+  end for
+  return invalid
+end function
+
+function _gfNumFromAny(v as Dynamic) as Float
+  if v = invalid then return -1
+  if type(v) = "roInt" or type(v) = "roInteger" then return v
+  if type(v) = "roFloat" or type(v) = "Float" then return v
+  s = v.ToStr()
+  if s = invalid then return -1
+  s = s.Trim()
+  if s = "" then return -1
+  return Val(s)
+end function
+
+function _gfSecFromAny(v as Dynamic, unit as String) as Integer
+  n = _gfNumFromAny(v)
+  if n < 0 then return -1
+
+  u = unit
+  if u = invalid then u = ""
+  u = LCase(u.ToStr().Trim())
+
+  if u = "ticks" then return Int(n / 10000000)
+  if u = "ms" then return Int(n / 1000)
+  if u = "auto" then
+    if n >= 10000000 then return Int(n / 10000000)
+    if n >= 100000 then return Int(n / 1000)
+    return Int(n)
+  end if
+  return Int(n)
+end function
+
+function _gfReadSecField(a as Object, keys as Object, unit as String) as Integer
+  if type(a) <> "roAssociativeArray" then return -1
+  if type(keys) <> "roArray" then return -1
+
+  for each k in keys
+    if k = invalid then continue for
+    raw = _gfAaGetCi(a, k.ToStr())
+    if raw = invalid then continue for
+    sec = _gfSecFromAny(raw, unit)
+    if sec >= 0 then return sec
+  end for
+  return -1
+end function
+
+function _gfIntroNameContainsToken(v as Dynamic) as Boolean
+  if v = invalid then return false
+  s = LCase(v.ToStr().Trim())
+  if s = "" then return false
+  if Instr(1, s, "intro") > 0 then return true
+  if Instr(1, s, "opening") > 0 then return true
+  if Instr(1, s, "abertura") > 0 then return true
+  if Instr(1, s, "apertura") > 0 then return true
+  return false
+end function
+
+function _gfExtractIntroFromChapters(chapters as Object) as Object
+  out = { hasIntro: false, startSec: -1, endSec: -1 }
+  if type(chapters) <> "roArray" or chapters.Count() <= 0 then return out
+
+  startSec = -1
+  endSec = -1
+  minIntroSec = -1
+  maxIntroSec = -1
+
+  for each ch in chapters
+    if type(ch) <> "roAssociativeArray" then continue for
+
+    name = ""
+    n0 = _gfAaGetCi(ch, "Name")
+    if n0 = invalid then n0 = _gfAaGetCi(ch, "MarkerType")
+    if n0 = invalid then n0 = _gfAaGetCi(ch, "Type")
+    if n0 <> invalid then name = n0.ToStr().Trim()
+    if _gfIntroNameContainsToken(name) <> true then continue for
+
+    st = _gfReadSecField(ch, [
+      "IntroStartPositionTicks"
+      "IntroStartTicks"
+      "StartPositionTicks"
+      "StartTicks"
+      "PositionTicks"
+      "Ticks"
+    ], "ticks")
+    if st < 0 then
+      st = _gfReadSecField(ch, [
+        "IntroStartMs"
+        "StartMs"
+        "PositionMs"
+      ], "ms")
+    end if
+    if st < 0 then
+      st = _gfReadSecField(ch, [
+        "IntroStartSec"
+        "Start"
+        "StartSeconds"
+        "Position"
+      ], "sec")
+    end if
+
+    en = _gfReadSecField(ch, [
+      "IntroEndPositionTicks"
+      "IntroEndTicks"
+      "EndPositionTicks"
+      "EndTicks"
+    ], "ticks")
+    if en < 0 then
+      en = _gfReadSecField(ch, [
+        "IntroEndMs"
+        "EndMs"
+      ], "ms")
+    end if
+    if en < 0 then
+      en = _gfReadSecField(ch, [
+        "IntroEndSec"
+        "End"
+        "EndSeconds"
+      ], "sec")
+    end if
+
+    if st >= 0 then
+      if minIntroSec < 0 or st < minIntroSec then minIntroSec = st
+      if maxIntroSec < 0 or st > maxIntroSec then maxIntroSec = st
+    end if
+
+    low = LCase(name)
+    isEnd = (Instr(1, low, "end") > 0 or Instr(1, low, "fim") > 0 or Instr(1, low, "fin") > 0 or Instr(1, low, "final") > 0)
+    isStart = (Instr(1, low, "start") > 0 or Instr(1, low, "inicio") > 0 or Instr(1, low, "begin") > 0)
+
+    if isEnd then
+      if en < 0 then en = st
+      if en >= 0 and (endSec < 0 or en > endSec) then endSec = en
+    else if isStart then
+      if st >= 0 and (startSec < 0 or st < startSec) then startSec = st
+      if en >= 0 and (endSec < 0 or en > endSec) then endSec = en
+    else
+      if st >= 0 and (startSec < 0 or st < startSec) then startSec = st
+      if en >= 0 and (endSec < 0 or en > endSec) then endSec = en
+    end if
+  end for
+
+  if startSec < 0 then startSec = minIntroSec
+  if endSec < 0 and minIntroSec >= 0 and maxIntroSec > minIntroSec then endSec = maxIntroSec
+
+  if startSec >= 0 and endSec > startSec then
+    return { hasIntro: true, startSec: startSec, endSec: endSec }
+  end if
+  return out
+end function
+
+function _extractIntroWindowFromPlayback(playbackData as Object, source as Object) as Object
+  out = { hasIntro: false, startSec: -1, endSec: -1 }
+  startSec = -1
+  endSec = -1
+
+  if type(source) = "roAssociativeArray" then
+    startSec = _gfReadSecField(source, [
+      "IntroStartSec"
+      "SkipIntroStartSec"
+      "IntroStartSeconds"
+      "SkipIntroStartSeconds"
+      "IntroStart"
+      "SkipIntroStart"
+    ], "sec")
+    if startSec < 0 then
+      startSec = _gfReadSecField(source, [
+        "IntroStartMs"
+        "SkipIntroStartMs"
+      ], "ms")
+    end if
+    if startSec < 0 then
+      startSec = _gfReadSecField(source, [
+        "IntroStartPositionTicks"
+        "SkipIntroStartPositionTicks"
+        "IntroStartTicks"
+        "SkipIntroStartTicks"
+      ], "ticks")
+    end if
+
+    endSec = _gfReadSecField(source, [
+      "IntroEndSec"
+      "SkipIntroEndSec"
+      "IntroEndSeconds"
+      "SkipIntroEndSeconds"
+      "IntroEnd"
+      "SkipIntroEnd"
+    ], "sec")
+    if endSec < 0 then
+      endSec = _gfReadSecField(source, [
+        "IntroEndMs"
+        "SkipIntroEndMs"
+      ], "ms")
+    end if
+    if endSec < 0 then
+      endSec = _gfReadSecField(source, [
+        "IntroEndPositionTicks"
+        "SkipIntroEndPositionTicks"
+        "IntroEndTicks"
+        "SkipIntroEndTicks"
+      ], "ticks")
+    end if
+  end if
+
+  if type(playbackData) = "roAssociativeArray" then
+    if startSec < 0 then
+      startSec = _gfReadSecField(playbackData, [
+        "IntroStartSec"
+        "SkipIntroStartSec"
+        "IntroStartSeconds"
+        "SkipIntroStartSeconds"
+        "IntroStart"
+        "SkipIntroStart"
+      ], "sec")
+    end if
+    if startSec < 0 then
+      startSec = _gfReadSecField(playbackData, [
+        "IntroStartMs"
+        "SkipIntroStartMs"
+      ], "ms")
+    end if
+    if startSec < 0 then
+      startSec = _gfReadSecField(playbackData, [
+        "IntroStartPositionTicks"
+        "SkipIntroStartPositionTicks"
+        "IntroStartTicks"
+        "SkipIntroStartTicks"
+      ], "ticks")
+    end if
+
+    if endSec < 0 then
+      endSec = _gfReadSecField(playbackData, [
+        "IntroEndSec"
+        "SkipIntroEndSec"
+        "IntroEndSeconds"
+        "SkipIntroEndSeconds"
+        "IntroEnd"
+        "SkipIntroEnd"
+      ], "sec")
+    end if
+    if endSec < 0 then
+      endSec = _gfReadSecField(playbackData, [
+        "IntroEndMs"
+        "SkipIntroEndMs"
+      ], "ms")
+    end if
+    if endSec < 0 then
+      endSec = _gfReadSecField(playbackData, [
+        "IntroEndPositionTicks"
+        "SkipIntroEndPositionTicks"
+        "IntroEndTicks"
+        "SkipIntroEndTicks"
+      ], "ticks")
+    end if
+
+    introObj = _gfAaGetCi(playbackData, "intro")
+    if type(introObj) = "roAssociativeArray" then
+      if startSec < 0 then startSec = _gfReadSecField(introObj, ["startSec", "start", "from", "begin"], "auto")
+      if endSec < 0 then endSec = _gfReadSecField(introObj, ["endSec", "end", "to", "finish"], "auto")
+    end if
+  end if
+
+  if startSec < 0 or endSec < 0 then
+    chapters = invalid
+    if type(source) = "roAssociativeArray" then
+      chapters = _gfAaGetCi(source, "Chapters")
+      if chapters = invalid then chapters = _gfAaGetCi(source, "Markers")
+    end if
+    if chapters = invalid and type(playbackData) = "roAssociativeArray" then
+      chapters = _gfAaGetCi(playbackData, "Chapters")
+      if chapters = invalid then chapters = _gfAaGetCi(playbackData, "Markers")
+    end if
+    fromChapters = _gfExtractIntroFromChapters(chapters)
+    if startSec < 0 and fromChapters.startSec <> invalid then startSec = Int(fromChapters.startSec)
+    if endSec < 0 and fromChapters.endSec <> invalid then endSec = Int(fromChapters.endSec)
+  end if
+
+  if startSec < 0 and endSec < 0 then return out
+  if startSec < 0 then startSec = 0
+  if endSec <= startSec then return out
+  if (endSec - startSec) < 4 then return out
+
+  out.hasIntro = true
+  out.startSec = startSec
+  out.endSec = endSec
+  return out
+end function
+
 function gatewayJellyfinPlaybackSource(apiBase as String, appToken as String, jellyfinToken as String, userId as String, itemId as String, preferDirectStream as Boolean, allowTranscoding as Boolean) as Object
   base = _trimSlash(apiBase)
   print "PlaybackInfo start preferDirectStream=" + preferDirectStream.ToStr() + " allowTranscoding=" + allowTranscoding.ToStr()
@@ -1103,6 +1406,10 @@ function gatewayJellyfinPlaybackSource(apiBase as String, appToken as String, je
 
   source = mediaSources[0]
   subtitleSources = _extractExternalSubtitleSources(iid, source)
+  introWindow = _extractIntroWindowFromPlayback(data, source)
+  if introWindow.hasIntro = true then
+    print "PlaybackInfo intro startSec=" + introWindow.startSec.ToStr() + " endSec=" + introWindow.endSec.ToStr()
+  end if
 
   transcode = ""
   if source <> invalid and source.TranscodingUrl <> invalid then
@@ -1188,7 +1495,15 @@ function gatewayJellyfinPlaybackSource(apiBase as String, appToken as String, je
     ' Video node can't send headers; append token as query so the gateway proxy can
     ' forward it to Jellyfin upstream (api_key auth).
     if jellyfinToken <> invalid and jellyfinToken.Trim() <> "" then q["api_key"] = jellyfinToken.Trim()
-    return { ok: true, path: path, query: q, container: container, subtitleSources: subtitleSources }
+    return {
+      ok: true
+      path: path
+      query: q
+      container: container
+      subtitleSources: subtitleSources
+      introStartSec: introWindow.startSec
+      introEndSec: introWindow.endSec
+    }
   end if
 
   ' Fallback: build /Videos/<id>/stream with a minimal safe query.
@@ -1210,7 +1525,15 @@ function gatewayJellyfinPlaybackSource(apiBase as String, appToken as String, je
   q2 = _sanitizePlaybackQuery(rawQ, supportsDirectPlay)
   _maybeSelectAudioStreamIndex(source, q2)
   if jellyfinToken <> invalid and jellyfinToken.Trim() <> "" then q2["api_key"] = jellyfinToken.Trim()
-  return { ok: true, path: "/Videos/" + iid + "/stream", query: q2, container: container, subtitleSources: subtitleSources }
+  return {
+    ok: true
+    path: "/Videos/" + iid + "/stream"
+    query: q2
+    container: container
+    subtitleSources: subtitleSources
+    introStartSec: introWindow.startSec
+    introEndSec: introWindow.endSec
+  }
 end function
 
 function gatewaySignPath(apiBase as String, appToken as String, jellyfinToken as String, path as String) as Object
