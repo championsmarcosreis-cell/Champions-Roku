@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="SortOptionItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onItemContentChanged" />
+    <field id="itemHasFocus" type="boolean" onChange="onItemHasFocusChanged" />
+  </interface>
+
+  <children>
+    <Poster
+      id="checkIcon"
+      translation="[12, 16]"
+      width="20"
+      height="20"
+      uri="pkg:/images/radio_off_24.png"
+    />
+
+    <Label
+      id="titleLabel"
+      translation="[42, 16]"
+      width="384"
+      height="24"
+      font="font:MediumSystemFont"
+      color="0xD0D6E0"
+      text=""
+    />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/SortOptionItem.brs" />
+</component>

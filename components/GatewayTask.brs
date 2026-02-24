@@ -123,6 +123,37 @@ sub doWork()
     return
   end if
 
+  if kind = "library_page" then
+    lim = m.top.limit
+    if lim = invalid then lim = 0
+    if lim <= 0 then lim = 84
+
+    start = m.top.startIndex
+    if start = invalid then start = 0
+    if start < 0 then start = 0
+
+    sortBy = m.top.sortBy
+    if sortBy = invalid then sortBy = ""
+    sortOrder = m.top.sortOrder
+    if sortOrder = invalid then sortOrder = ""
+    searchTerm = m.top.searchTerm
+    if searchTerm = invalid then searchTerm = ""
+    collectionType = m.top.collectionType
+    if collectionType = invalid then collectionType = ""
+
+    resp = gatewayJellyfinLibraryPageItems(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.parentId, collectionType, start, lim, sortBy, sortOrder, searchTerm)
+    if resp.ok = true then
+      m.top.ok = true
+      m.top.resultJson = FormatJson({
+        items: resp.items
+        totalRecordCount: resp.totalRecordCount
+      })
+    else
+      m.top.error = resp.error
+    end if
+    return
+  end if
+
   if kind = "continue" then
     lim = m.top.limit
     if lim = invalid then lim = 0

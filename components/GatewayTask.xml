@@ -14,6 +14,11 @@
     <field id="path" type="string" />
     <field id="parentId" type="string" />
     <field id="limit" type="integer" />
+    <field id="startIndex" type="integer" />
+    <field id="sortBy" type="string" />
+    <field id="sortOrder" type="string" />
+    <field id="searchTerm" type="string" />
+    <field id="collectionType" type="string" />
     <field id="itemId" type="string" />
     <field id="preferDirectStream" type="boolean" />
     <field id="allowTranscoding" type="boolean" />

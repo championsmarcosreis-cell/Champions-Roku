@@ -339,6 +339,146 @@ function gatewayJellyfinSeriesShelfItems(apiBase as String, appToken as String, 
   return { ok: true, items: out }
 end function
 
+function gatewayJellyfinLibraryPageItems(apiBase as String, appToken as String, jellyfinToken as String, userId as String, parentId as String, collectionType as String, startIndex as Integer, limit as Integer, sortBy as String, sortOrder as String, searchTerm as String) as Object
+  base = _trimSlash(apiBase)
+
+  uid = userId
+  if uid = invalid then uid = ""
+  uid = uid.Trim()
+  if uid = "" then
+    return { ok: false, error: "missing_user_id" }
+  end if
+
+  pid = parentId
+  if pid = invalid then pid = ""
+  pid = pid.Trim()
+  if pid = "" then
+    return { ok: false, error: "missing_parent_id" }
+  end if
+
+  coll = collectionType
+  if coll = invalid then coll = ""
+  coll = LCase(coll.Trim())
+
+  lim = limit
+  if lim <= 0 then lim = 84
+
+  start = startIndex
+  if start = invalid then start = 0
+  if start < 0 then start = 0
+
+  sortKey = sortBy
+  if sortKey = invalid then sortKey = ""
+  sortKey = sortKey.Trim()
+  if sortKey = "" then sortKey = "Name"
+
+  sortDir = sortOrder
+  if sortDir = invalid then sortDir = ""
+  sortDir = LCase(sortDir.Trim())
+  if sortDir = "descending" then
+    sortDir = "Descending"
+  else
+    sortDir = "Ascending"
+  end if
+
+  q = searchTerm
+  if q = invalid then q = ""
+  q = q.Trim()
+
+  params = {
+    ParentId: pid
+    Recursive: true
+    StartIndex: start
+    Limit: lim
+    SortBy: sortKey
+    SortOrder: sortDir
+    ExcludeItemTypes: "Folder,CollectionFolder"
+    IsMissing: false
+    Fields: "RunTimeTicks,Path,MediaSources,BackdropImageTags,ParentBackdropImageTags,ImageTags,DateCreated,PremiereDate,CommunityRating,CriticRating,OfficialRating,ParentIndexNumber,IndexNumber,SeriesId,UserData"
+  }
+  if q <> "" then params.SearchTerm = q
+  if coll = "tvshows" then
+    params.IncludeItemTypes = "Series"
+  else if coll = "movies" then
+    params.ExcludeItemTypes = "Folder,CollectionFolder,Series,Season,Episode"
+  end if
+
+  url = base + "/jellyfin/Users/" + uid + "/Items"
+  url = _urlWithQuery(url, params)
+
+  headers = {
+    "X-Emby-Authorization": _jellyfinClientHeader()
+    "X-Emby-Token": jellyfinToken
+  }
+  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+
+  resp = httpJson("GET", url, headers)
+  if resp.ok <> true then
+    return { ok: false, error: resp.error }
+  end if
+
+  data = resp.data
+  items = invalid
+  totalRecordCount = -1
+  if type(data) = "roAssociativeArray" then
+    items = data.Items
+    if data.TotalRecordCount <> invalid then totalRecordCount = Int(Val(data.TotalRecordCount.ToStr()))
+  end if
+  if type(items) <> "roArray" then items = []
+
+  out = []
+  for each it in items
+    id = ""
+    name = ""
+    typ = ""
+    path = ""
+    backdropTags = invalid
+    parentBackdropTags = invalid
+    imageTags = invalid
+    userData = invalid
+    seriesId = ""
+    seasonNumber = -1
+    episodeNumber = -1
+    runTimeTicks = ""
+
+    if it <> invalid then
+      if it.Id <> invalid then id = it.Id
+      if it.Name <> invalid then name = it.Name
+      if it.Type <> invalid then typ = it.Type
+      path = _jellyfinExtractPath(it)
+      if it.BackdropImageTags <> invalid then backdropTags = it.BackdropImageTags
+      if it.ParentBackdropImageTags <> invalid then parentBackdropTags = it.ParentBackdropImageTags
+      if it.ImageTags <> invalid then imageTags = it.ImageTags
+      if it.UserData <> invalid then userData = it.UserData
+      if it.SeriesId <> invalid then seriesId = it.SeriesId
+      if it.ParentIndexNumber <> invalid then seasonNumber = Int(Val(it.ParentIndexNumber.ToStr()))
+      if it.IndexNumber <> invalid then episodeNumber = Int(Val(it.IndexNumber.ToStr()))
+      if it.RunTimeTicks <> invalid then runTimeTicks = it.RunTimeTicks.ToStr().Trim()
+    end if
+
+    out.Push({
+      id: id
+      name: name
+      type: typ
+      path: path
+      BackdropImageTags: backdropTags
+      ParentBackdropImageTags: parentBackdropTags
+      imageTags: imageTags
+      userData: userData
+      seriesId: seriesId
+      seasonNumber: seasonNumber
+      episodeNumber: episodeNumber
+      runTimeTicks: runTimeTicks
+    })
+  end for
+
+  return {
+    ok: true
+    items: out
+    totalRecordCount: totalRecordCount
+  }
+end function
+
 function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jellyfinToken as String, userId as String, seriesId as String, episodeLimit as Integer) as Object
   base = _trimSlash(apiBase)
 

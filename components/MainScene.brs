@@ -109,6 +109,31 @@ sub init()
   m.browseLibraryTitle = ""
   m.browseLibrarySearch = ""
   m.browseLibraryRawItems = []
+  m.libraryTopFocus = "search" ' back | sort | search | chip_clear
+  m.librarySortOverlayOpen = false
+  m.librarySortOverlayFocus = "by" ' by | order | apply | cancel
+  m.librarySortByIndex = 0
+  m.librarySortOrderIndex = 0
+  m.librarySortDraftByIndex = 0
+  m.librarySortDraftOrderIndex = 0
+  m.librarySortByApi = "Name"
+  m.librarySortOrderApi = "Ascending"
+  m.librarySortLabel = "A-Z"
+  m.supportedSorts = ["Name", "DateAdded", "PremiereDate", "OfficialRating", "CriticRating"]
+  m.librarySortUiBusy = false
+  m.libraryOpenGuardUntilMs = 0
+  m.libraryPageSize = 84
+  m.libraryPrefetchThreshold = 20
+  m.libraryLoadedCount = 0
+  m.libraryStartIndex = 0
+  m.libraryHasMore = true
+  m.libraryIsLoading = false
+  m.libraryTotalCount = -1
+  m.pendingLibraryStartIndex = 0
+  m.pendingLibraryReset = false
+  m.pendingLibrarySortKey = "Name"
+  m.pendingLibrarySortBy = "Name"
+  m.librarySeenIds = {}
   m.pendingLibraryViewId = ""
   m.pendingLibraryLoad = false
   m.pendingLiveLoad = false
@@ -419,6 +444,14 @@ sub init()
     m.top.appendChild(m.osdTickTimer)
   end if
 
+  m.sortNoticeTimer = CreateObject("roSGNode", "Timer")
+  if m.sortNoticeTimer <> invalid then
+    m.sortNoticeTimer.duration = 2.8
+    m.sortNoticeTimer.repeat = false
+    m.sortNoticeTimer.observeField("fire", "onSortNoticeTimerFire")
+    m.top.appendChild(m.sortNoticeTimer)
+  end if
+
   m.top.setFocus(true)
 end sub
 
@@ -724,6 +757,29 @@ sub bindUiNodes()
   m.continueList = m.top.findNode("continueList")
   m.recentMoviesList = m.top.findNode("recentMoviesList")
   m.recentSeriesList = m.top.findNode("recentSeriesList")
+  m.topBar = m.top.findNode("topBar")
+  m.btnBack = m.top.findNode("btnBack")
+  m.btnBackBg = m.top.findNode("btnBackBg")
+  m.btnBackIcon = m.top.findNode("btnBackIcon")
+  m.lblLibTitle = m.top.findNode("lblLibTitle")
+  m.btnSort = m.top.findNode("btnSort")
+  m.btnSortBg = m.top.findNode("btnSortBg")
+  m.btnSortText = m.top.findNode("btnSortText")
+  m.btnSearch = m.top.findNode("btnSearch")
+  m.btnSearchBg = m.top.findNode("btnSearchBg")
+  m.btnSearchText = m.top.findNode("btnSearchText")
+  m.searchChip = m.top.findNode("searchChip")
+  m.searchChipBg = m.top.findNode("searchChipBg")
+  m.searchChipText = m.top.findNode("searchChipText")
+  m.searchChipClearBg = m.top.findNode("searchChipClearBg")
+  m.searchChipClearText = m.top.findNode("searchChipClearText")
+  m.sortOverlay = m.top.findNode("sortOverlay")
+  m.sortByList = m.top.findNode("sortByList")
+  m.sortOrderList = m.top.findNode("sortOrderList")
+  m.sortApplyBg = m.top.findNode("sortApplyBg")
+  m.sortApplyText = m.top.findNode("sortApplyText")
+  m.sortCancelBg = m.top.findNode("sortCancelBg")
+  m.sortCancelText = m.top.findNode("sortCancelText")
   m.libraryTitle = m.top.findNode("libraryTitle")
   m.librarySearchBg = m.top.findNode("librarySearchBg")
   m.librarySearchText = m.top.findNode("librarySearchText")
@@ -1010,7 +1066,16 @@ sub bindUiNodes()
 
   if m.libraryItemsList <> invalid and (m.libraryItemsObsSetup <> true) then
     m.libraryItemsList.observeField("itemSelected", "onLibraryItemSelected")
+    m.libraryItemsList.observeField("itemFocused", "onLibraryItemFocused")
     m.libraryItemsObsSetup = true
+  end if
+  if m.sortByList <> invalid and (m.sortByObsSetup <> true) then
+    m.sortByList.observeField("itemSelected", "onLibrarySortBySelected")
+    m.sortByObsSetup = true
+  end if
+  if m.sortOrderList <> invalid and (m.sortOrderObsSetup <> true) then
+    m.sortOrderList.observeField("itemSelected", "onLibrarySortOrderSelected")
+    m.sortOrderObsSetup = true
   end if
 
   if m.seriesDetailSeasonsList <> invalid and (m.seriesDetailSeasonsObsSetup <> true) then
@@ -1218,6 +1283,19 @@ sub setStatus(msg as String)
     m.statusLabel.visible = false
     m.statusLabel.text = ""
   end if
+end sub
+
+sub onSortNoticeTimerFire()
+  if m.hintLabel = invalid then return
+
+  cfg = loadConfig()
+  if m.mode = "login" and (cfg.appToken = invalid or cfg.appToken = "") then
+    m.hintLabel.text = _t("hint_app_token")
+    m.hintLabel.visible = true
+    return
+  end if
+
+  m.hintLabel.visible = false
 end sub
 
 sub doLogin()
@@ -3395,11 +3473,11 @@ end function
 
 sub _configureLibraryGridNode(lst as Object)
   if lst = invalid then return
-  if lst.hasField("translation") then lst.translation = [20, 220]
+  if lst.hasField("translation") then lst.translation = [40, 128]
   if lst.hasField("itemSize") then lst.itemSize = [160, 280]
   if lst.hasField("itemSpacing") then lst.itemSpacing = [24, 24]
   if lst.hasField("numColumns") then lst.numColumns = 5
-  if lst.hasField("numRows") then lst.numRows = 2
+  if lst.hasField("numRows") then lst.numRows = 3
   if lst.hasField("drawFocusFeedback") then lst.drawFocusFeedback = false
   if lst.hasField("itemComponentName") then lst.itemComponentName = "PosterTile"
 end sub
@@ -3501,6 +3579,9 @@ sub _setBrowseLibraryVisible(open as Boolean)
     bindUiNodes()
     _ensureBrowseNodes()
   end if
+  if m.browseHeaderTitle <> invalid then m.browseHeaderTitle.visible = (showLibrary <> true)
+  if m.browseLogoutBg <> invalid then m.browseLogoutBg.visible = (showLibrary <> true)
+  if m.browseLogoutIcon <> invalid then m.browseLogoutIcon.visible = (showLibrary <> true)
   if m.browseHomeGroup <> invalid then m.browseHomeGroup.visible = (showLibrary <> true)
   if m.libraryGroup <> invalid then m.libraryGroup.visible = showLibrary
   if showLibrary then
@@ -3508,6 +3589,831 @@ sub _setBrowseLibraryVisible(open as Boolean)
   else
     if m.libraryEmptyLabel <> invalid then m.libraryEmptyLabel.visible = false
   end if
+end sub
+
+function _librarySortByOptions() as Object
+  return [
+    { label: "Nome", api: "Name" }
+    { label: "Recentes", api: "DateAdded" }
+    { label: "Lancamento", api: "PremiereDate" }
+    { label: "Avaliacao (Critica)", api: "CriticRating" }
+    { label: "Classificacao etaria", api: "OfficialRating" }
+  ]
+end function
+
+function _librarySortOrderOptions() as Object
+  return [
+    { label: "Crescente", api: "Ascending" }
+    { label: "Decrescente", api: "Descending" }
+  ]
+end function
+
+function _normalizeLibrarySortKey(v as Dynamic) as String
+  if v = invalid then return ""
+  k = v.ToStr()
+  if k = invalid then return ""
+  k = LCase(k.Trim())
+  if k = "name" then return "Name"
+  if k = "dateadded" then return "DateAdded"
+  if k = "datecreated" then return "DateAdded"
+  if k = "premieredate" then return "PremiereDate"
+  if k = "officialrating" then return "OfficialRating"
+  if k = "criticrating" then return "CriticRating"
+  return ""
+end function
+
+function _librarySupportedSortsList() as Object
+  arr = m.supportedSorts
+  if type(arr) <> "roArray" or arr.Count() <= 0 then
+    arr = ["Name"]
+    m.supportedSorts = arr
+  end if
+  return arr
+end function
+
+function _librarySortIsSupported(sortKey as String) as Boolean
+  want = _normalizeLibrarySortKey(sortKey)
+  if want = "" then return false
+  arr = _librarySupportedSortsList()
+  for each rawKey in arr
+    got = _normalizeLibrarySortKey(rawKey)
+    if got = want then return true
+  end for
+  return false
+end function
+
+function _librarySortGatewaySortBy(sortKey as String) as String
+  normalized = _normalizeLibrarySortKey(sortKey)
+  if normalized = "DateAdded" then return "DateCreated"
+  if normalized = "" then return "Name"
+  return normalized
+end function
+
+function _libraryResolveSortRequest(sortKey as String) as Object
+  normalized = _normalizeLibrarySortKey(sortKey)
+  if normalized = "" then normalized = "Name"
+  fallback = false
+  if _librarySortIsSupported(normalized) <> true then
+    fallback = true
+    normalized = "Name"
+  end if
+  return {
+    sortKey: normalized
+    sortBy: _librarySortGatewaySortBy(normalized)
+    fallback: fallback
+  }
+end function
+
+function _librarySortLooksUnsupportedError(errMsg as Dynamic) as Boolean
+  if errMsg = invalid then return false
+  s = LCase(errMsg.ToStr().Trim())
+  if s = "" then return false
+  if Instr(1, s, "unsupported") > 0 then return true
+  if Instr(1, s, "invalid_sort") > 0 then return true
+  if Instr(1, s, "invalid sort") > 0 then return true
+  if Instr(1, s, "http_400") > 0 then return true
+  return false
+end function
+
+sub _showLibrarySortFallbackNotice()
+  msg = "Ordenacao nao disponivel, usando Nome"
+  if m.hintLabel <> invalid then
+    m.hintLabel.text = msg
+    m.hintLabel.visible = true
+  else
+    setStatus(msg)
+  end if
+  if m.sortNoticeTimer <> invalid then
+    m.sortNoticeTimer.control = "stop"
+    m.sortNoticeTimer.control = "start"
+  end if
+end sub
+
+sub _applyLibrarySortFallback(badSortKey as Dynamic)
+  bad = _normalizeLibrarySortKey(badSortKey)
+  if bad = "" and badSortKey <> invalid then bad = badSortKey.ToStr().Trim()
+  if bad = "" then bad = "unknown"
+  print "sort unsupported: " + bad + " fallback Name"
+  _showLibrarySortFallbackNotice()
+
+  m.librarySortByIndex = 0
+  m.librarySortDraftByIndex = 0
+  m.librarySortByApi = "Name"
+  m.librarySortLabel = _librarySortButtonLabel()
+  _refreshBrowseLibraryHeader()
+end sub
+
+sub _updateSupportedSortsFromLibraryPayload(payload as Object)
+  if type(payload) <> "roAssociativeArray" then return
+  raw = invalid
+  if type(payload.supportedSorts) = "roArray" then raw = payload.supportedSorts
+  if raw = invalid and type(payload.SupportedSorts) = "roArray" then raw = payload.SupportedSorts
+  if type(raw) <> "roArray" or raw.Count() <= 0 then return
+
+  out = []
+  seen = {}
+  for each v in raw
+    key = _normalizeLibrarySortKey(v)
+    if key <> "" and seen.DoesExist(key) <> true then
+      seen[key] = true
+      out.Push(key)
+    end if
+  end for
+  if out.Count() <= 0 then return
+  m.supportedSorts = out
+  print "library supportedSorts updated count=" + out.Count().ToStr()
+end sub
+
+function _librarySortByApiFromIndex(idx as Integer) as String
+  opts = _librarySortByOptions()
+  i = Int(idx)
+  if i < 0 or i >= opts.Count() then i = 0
+  v = opts[i]
+  if type(v) <> "roAssociativeArray" then return "Name"
+  api = ""
+  if v.api <> invalid then api = v.api.ToStr().Trim()
+  api = _normalizeLibrarySortKey(api)
+  if api = "" then api = "Name"
+  return api
+end function
+
+function _librarySortOrderApiFromIndex(idx as Integer) as String
+  opts = _librarySortOrderOptions()
+  i = Int(idx)
+  if i < 0 or i >= opts.Count() then i = 0
+  v = opts[i]
+  if type(v) <> "roAssociativeArray" then return "Ascending"
+  api = ""
+  if v.api <> invalid then api = v.api.ToStr().Trim()
+  if LCase(api) = "descending" then return "Descending"
+  return "Ascending"
+end function
+
+function _librarySortButtonLabel() as String
+  byIdx = Int(m.librarySortByIndex)
+  ordIdx = Int(m.librarySortOrderIndex)
+
+  if byIdx = 0 then
+    if ordIdx = 1 then return "Z-A"
+    return "A-Z"
+  end if
+  if byIdx = 1 then return "Recentes"
+  if byIdx = 2 then return "Lancamento"
+  if byIdx = 3 then return "Critica"
+  if byIdx = 4 then return "Etaria"
+  return "A-Z"
+end function
+
+function _libraryTopFocusOptions() as Object
+  out = ["back", "sort", "search"]
+  q = m.browseLibrarySearch
+  if q = invalid then q = ""
+  q = q.ToStr().Trim()
+  if q <> "" then out.Push("chip_clear")
+  return out
+end function
+
+function _libraryTopFocusStep(dir as Integer) as String
+  opts = _libraryTopFocusOptions()
+  if type(opts) <> "roArray" or opts.Count() <= 0 then return "search"
+
+  cur = m.libraryTopFocus
+  if cur = invalid then cur = ""
+  cur = LCase(cur.ToStr().Trim())
+  if cur = "" then cur = "search"
+
+  idx = -1
+  for i = 0 to opts.Count() - 1
+    if opts[i] = cur then
+      idx = i
+      exit for
+    end if
+  end for
+  if idx < 0 then
+    if cur = "search" then
+      idx = 2
+    else
+      idx = 0
+    end if
+  end if
+
+  stepDir = Int(dir)
+  if stepDir >= 0 then
+    idx = idx + 1
+    if idx >= opts.Count() then idx = 0
+  else
+    idx = idx - 1
+    if idx < 0 then idx = opts.Count() - 1
+  end if
+
+  return opts[idx]
+end function
+
+sub _ensureLibraryTopBarFallbackNodes()
+  if m.libraryGroup = invalid then return
+
+  if m.topBar = invalid then
+    tb = CreateObject("roSGNode", "Group")
+    if tb <> invalid then
+      tb.id = "topBar"
+      tb.translation = [40, 22]
+      tb.visible = true
+      m.libraryGroup.appendChild(tb)
+      m.topBar = tb
+      print "library fallback created topBar"
+    end if
+  end if
+
+  if m.topBar = invalid then return
+
+  if m.btnBack = invalid then
+    g = CreateObject("roSGNode", "Group")
+    if g <> invalid then
+      g.id = "btnBack"
+      g.translation = [0, 0]
+
+      p = CreateObject("roSGNode", "Poster")
+      if p <> invalid then
+        p.id = "btnBackBg"
+        p.translation = [0, 0]
+        p.width = 64
+        p.height = 48
+        p.uri = "pkg:/images/field_normal.png"
+        g.appendChild(p)
+        m.btnBackBg = p
+      end if
+
+      l = CreateObject("roSGNode", "Label")
+      if l <> invalid then
+        l.id = "btnBackIcon"
+        l.translation = [0, 12]
+        l.width = 64
+        l.height = 24
+        l.font = "font:MediumSystemFont"
+        l.horizAlign = "center"
+        l.color = "0xD0D6E0"
+        l.text = "<"
+        g.appendChild(l)
+        m.btnBackIcon = l
+      end if
+
+      m.topBar.appendChild(g)
+      m.btnBack = g
+      print "library fallback created btnBack"
+    end if
+  end if
+
+  if m.lblLibTitle = invalid then
+    t = CreateObject("roSGNode", "Label")
+    if t <> invalid then
+      t.id = "lblLibTitle"
+      t.translation = [82, 10]
+      t.width = 560
+      t.height = 30
+      t.font = "font:MediumSystemFont"
+      t.color = "0xE6EBF3"
+      t.text = _t("library_movies")
+      m.topBar.appendChild(t)
+      m.lblLibTitle = t
+      print "library fallback created lblLibTitle"
+    end if
+  end if
+
+  if m.btnSort = invalid then
+    g = CreateObject("roSGNode", "Group")
+    if g <> invalid then
+      g.id = "btnSort"
+      g.translation = [748, 0]
+
+      p = CreateObject("roSGNode", "Poster")
+      if p <> invalid then
+        p.id = "btnSortBg"
+        p.translation = [0, 0]
+        p.width = 188
+        p.height = 48
+        p.uri = "pkg:/images/field_normal.png"
+        g.appendChild(p)
+        m.btnSortBg = p
+      end if
+
+      l = CreateObject("roSGNode", "Label")
+      if l <> invalid then
+        l.id = "btnSortText"
+        l.translation = [0, 13]
+        l.width = 188
+        l.height = 22
+        l.font = "font:MediumSystemFont"
+        l.horizAlign = "center"
+        l.color = "0xD0D6E0"
+        l.text = "A-Z"
+        g.appendChild(l)
+        m.btnSortText = l
+      end if
+
+      m.topBar.appendChild(g)
+      m.btnSort = g
+      print "library fallback created btnSort"
+    end if
+  end if
+
+  if m.btnSearch = invalid then
+    g = CreateObject("roSGNode", "Group")
+    if g <> invalid then
+      g.id = "btnSearch"
+      g.translation = [948, 0]
+
+      p = CreateObject("roSGNode", "Poster")
+      if p <> invalid then
+        p.id = "btnSearchBg"
+        p.translation = [0, 0]
+        p.width = 188
+        p.height = 48
+        p.uri = "pkg:/images/field_normal.png"
+        g.appendChild(p)
+        m.btnSearchBg = p
+      end if
+
+      l = CreateObject("roSGNode", "Label")
+      if l <> invalid then
+        l.id = "btnSearchText"
+        l.translation = [0, 13]
+        l.width = 188
+        l.height = 22
+        l.font = "font:MediumSystemFont"
+        l.horizAlign = "center"
+        l.color = "0xD0D6E0"
+        l.text = _t("library_search_hint")
+        g.appendChild(l)
+        m.btnSearchText = l
+      end if
+
+      m.topBar.appendChild(g)
+      m.btnSearch = g
+      print "library fallback created btnSearch"
+    end if
+  end if
+
+  if m.btnBackBg = invalid then m.btnBackBg = m.topBar.findNode("btnBackBg")
+  if m.btnBackIcon = invalid then m.btnBackIcon = m.topBar.findNode("btnBackIcon")
+  if m.btnSortBg = invalid then m.btnSortBg = m.topBar.findNode("btnSortBg")
+  if m.btnSortText = invalid then m.btnSortText = m.topBar.findNode("btnSortText")
+  if m.btnSearchBg = invalid then m.btnSearchBg = m.topBar.findNode("btnSearchBg")
+  if m.btnSearchText = invalid then m.btnSearchText = m.topBar.findNode("btnSearchText")
+
+  if m.topBar <> invalid and m.topBar.hasField("translation") then m.topBar.translation = [40, 22]
+  if m.btnBack <> invalid and m.btnBack.hasField("translation") then m.btnBack.translation = [0, 0]
+  if m.btnBackBg <> invalid then
+    if m.btnBackBg.hasField("width") then m.btnBackBg.width = 64
+    if m.btnBackBg.hasField("height") then m.btnBackBg.height = 48
+  end if
+  if m.btnBackIcon <> invalid then
+    if m.btnBackIcon.hasField("translation") then m.btnBackIcon.translation = [0, 12]
+    if m.btnBackIcon.hasField("width") then m.btnBackIcon.width = 64
+    if m.btnBackIcon.hasField("height") then m.btnBackIcon.height = 24
+  end if
+  if m.lblLibTitle <> invalid then
+    if m.lblLibTitle.hasField("translation") then m.lblLibTitle.translation = [82, 10]
+    if m.lblLibTitle.hasField("width") then m.lblLibTitle.width = 560
+    if m.lblLibTitle.hasField("height") then m.lblLibTitle.height = 30
+  end if
+  if m.btnSort <> invalid and m.btnSort.hasField("translation") then m.btnSort.translation = [748, 0]
+  if m.btnSortBg <> invalid then
+    if m.btnSortBg.hasField("width") then m.btnSortBg.width = 188
+    if m.btnSortBg.hasField("height") then m.btnSortBg.height = 48
+  end if
+  if m.btnSortText <> invalid then
+    if m.btnSortText.hasField("translation") then m.btnSortText.translation = [0, 13]
+    if m.btnSortText.hasField("width") then m.btnSortText.width = 188
+    if m.btnSortText.hasField("height") then m.btnSortText.height = 22
+  end if
+  if m.btnSearch <> invalid and m.btnSearch.hasField("translation") then m.btnSearch.translation = [948, 0]
+  if m.btnSearchBg <> invalid then
+    if m.btnSearchBg.hasField("width") then m.btnSearchBg.width = 188
+    if m.btnSearchBg.hasField("height") then m.btnSearchBg.height = 48
+  end if
+  if m.btnSearchText <> invalid then
+    if m.btnSearchText.hasField("translation") then m.btnSearchText.translation = [0, 13]
+    if m.btnSearchText.hasField("width") then m.btnSearchText.width = 188
+    if m.btnSearchText.hasField("height") then m.btnSearchText.height = 22
+  end if
+end sub
+
+sub _ensureLibrarySearchChipFallbackNodes()
+  if m.libraryGroup = invalid then return
+
+  if m.searchChip = invalid then
+    chip = CreateObject("roSGNode", "Group")
+    if chip = invalid then return
+
+    chip.id = "searchChip"
+    chip.translation = [40, 84]
+    chip.visible = false
+
+    bg = CreateObject("roSGNode", "Poster")
+    if bg <> invalid then
+      bg.id = "searchChipBg"
+      bg.translation = [0, 0]
+      bg.width = 460
+      bg.height = 34
+      bg.uri = "pkg:/images/field_normal.png"
+      chip.appendChild(bg)
+      m.searchChipBg = bg
+    end if
+
+    text = CreateObject("roSGNode", "Label")
+    if text <> invalid then
+      text.id = "searchChipText"
+      text.translation = [14, 7]
+      text.width = 378
+      text.height = 20
+      text.font = "font:SmallSystemFont"
+      text.color = "0xD0D6E0"
+      text.text = ""
+      chip.appendChild(text)
+      m.searchChipText = text
+    end if
+
+    clearBg = CreateObject("roSGNode", "Poster")
+    if clearBg <> invalid then
+      clearBg.id = "searchChipClearBg"
+      clearBg.translation = [404, 1]
+      clearBg.width = 52
+      clearBg.height = 32
+      clearBg.uri = "pkg:/images/field_normal.png"
+      chip.appendChild(clearBg)
+      m.searchChipClearBg = clearBg
+    end if
+
+    clearText = CreateObject("roSGNode", "Label")
+    if clearText <> invalid then
+      clearText.id = "searchChipClearText"
+      clearText.translation = [404, 7]
+      clearText.width = 52
+      clearText.height = 20
+      clearText.font = "font:SmallSystemFont"
+      clearText.horizAlign = "center"
+      clearText.color = "0xD0D6E0"
+      clearText.text = "X"
+      chip.appendChild(clearText)
+      m.searchChipClearText = clearText
+    end if
+
+    m.libraryGroup.appendChild(chip)
+    m.searchChip = chip
+    print "library fallback created searchChip"
+  end if
+
+  if m.searchChip = invalid then return
+  if m.searchChipBg = invalid then m.searchChipBg = m.searchChip.findNode("searchChipBg")
+  if m.searchChipText = invalid then m.searchChipText = m.searchChip.findNode("searchChipText")
+  if m.searchChipClearBg = invalid then m.searchChipClearBg = m.searchChip.findNode("searchChipClearBg")
+  if m.searchChipClearText = invalid then m.searchChipClearText = m.searchChip.findNode("searchChipClearText")
+
+  if m.searchChip.hasField("translation") then m.searchChip.translation = [40, 84]
+  if m.searchChipBg <> invalid then
+    if m.searchChipBg.hasField("width") then m.searchChipBg.width = 460
+    if m.searchChipBg.hasField("height") then m.searchChipBg.height = 34
+  end if
+  if m.searchChipText <> invalid then
+    if m.searchChipText.hasField("translation") then m.searchChipText.translation = [14, 7]
+    if m.searchChipText.hasField("width") then m.searchChipText.width = 378
+    if m.searchChipText.hasField("height") then m.searchChipText.height = 20
+  end if
+  if m.searchChipClearBg <> invalid then
+    if m.searchChipClearBg.hasField("translation") then m.searchChipClearBg.translation = [404, 1]
+    if m.searchChipClearBg.hasField("width") then m.searchChipClearBg.width = 52
+    if m.searchChipClearBg.hasField("height") then m.searchChipClearBg.height = 32
+  end if
+  if m.searchChipClearText <> invalid then
+    if m.searchChipClearText.hasField("translation") then m.searchChipClearText.translation = [404, 7]
+    if m.searchChipClearText.hasField("width") then m.searchChipClearText.width = 52
+    if m.searchChipClearText.hasField("height") then m.searchChipClearText.height = 20
+  end if
+end sub
+
+sub _ensureLibrarySortOverlayFallbackNodes()
+  if m.libraryGroup = invalid then return
+
+  if m.sortOverlay = invalid then
+    g = CreateObject("roSGNode", "Group")
+    if g <> invalid then
+      g.id = "sortOverlay"
+      g.visible = false
+      m.libraryGroup.appendChild(g)
+      m.sortOverlay = g
+      print "library fallback created sortOverlay"
+    end if
+  end if
+  if m.sortOverlay = invalid then return
+
+  if m.sortOverlay.findNode("sortOverlayScrim") = invalid then
+    scrim = CreateObject("roSGNode", "Rectangle")
+    if scrim <> invalid then
+      scrim.id = "sortOverlayScrim"
+      scrim.translation = [0, 0]
+      scrim.width = 1280
+      scrim.height = 720
+      scrim.color = "0x02060CBF"
+      m.sortOverlay.appendChild(scrim)
+    end if
+  end if
+
+  if m.sortOverlay.findNode("sortOverlayPanel") = invalid then
+    panel = CreateObject("roSGNode", "Poster")
+    if panel <> invalid then
+      panel.id = "sortOverlayPanel"
+      panel.translation = [290, 104]
+      panel.width = 700
+      panel.height = 560
+      panel.uri = "pkg:/images/field_normal.png"
+      m.sortOverlay.appendChild(panel)
+    end if
+  end if
+
+  if m.sortOverlay.findNode("sortOverlayTitle") = invalid then
+    title = CreateObject("roSGNode", "Label")
+    if title <> invalid then
+      title.id = "sortOverlayTitle"
+      title.translation = [332, 128]
+      title.width = 620
+      title.height = 34
+      title.font = "font:MediumSystemFont"
+      title.color = "0xE6EBF3"
+      title.text = "Ordenar por"
+      m.sortOverlay.appendChild(title)
+    end if
+  end if
+
+  if m.sortByList = invalid then m.sortByList = m.sortOverlay.findNode("sortByList")
+  if m.sortByList = invalid then
+    byList = CreateObject("roSGNode", "MarkupList")
+    if byList <> invalid then
+      byList.id = "sortByList"
+      byList.translation = [332, 172]
+      byList.itemSize = [440, 48]
+      byList.itemComponentName = "SortOptionItem"
+      byList.drawFocusFeedback = false
+      byList.vertFocusAnimationStyle = "floatingFocus"
+      byList.numRows = 5
+      m.sortOverlay.appendChild(byList)
+      m.sortByList = byList
+      print "library fallback created sortByList"
+    end if
+  end if
+
+  if m.sortOverlay.findNode("sortOrderTitle") = invalid then
+    orderTitle = CreateObject("roSGNode", "Label")
+    if orderTitle <> invalid then
+      orderTitle.id = "sortOrderTitle"
+      orderTitle.translation = [332, 424]
+      orderTitle.width = 620
+      orderTitle.height = 28
+      orderTitle.font = "font:SmallSystemFont"
+      orderTitle.color = "0xAAB4C2"
+      orderTitle.text = "Ordem"
+      m.sortOverlay.appendChild(orderTitle)
+    end if
+  end if
+
+  if m.sortOrderList = invalid then m.sortOrderList = m.sortOverlay.findNode("sortOrderList")
+  if m.sortOrderList = invalid then
+    orderList = CreateObject("roSGNode", "MarkupList")
+    if orderList <> invalid then
+      orderList.id = "sortOrderList"
+      orderList.translation = [332, 456]
+      orderList.itemSize = [440, 48]
+      orderList.itemComponentName = "SortOptionItem"
+      orderList.drawFocusFeedback = false
+      orderList.vertFocusAnimationStyle = "floatingFocus"
+      orderList.numRows = 2
+      m.sortOverlay.appendChild(orderList)
+      m.sortOrderList = orderList
+      print "library fallback created sortOrderList"
+    end if
+  end if
+
+  if m.sortApplyBg = invalid then m.sortApplyBg = m.sortOverlay.findNode("sortApplyBg")
+  if m.sortApplyBg = invalid then
+    applyBg = CreateObject("roSGNode", "Poster")
+    if applyBg <> invalid then
+      applyBg.id = "sortApplyBg"
+      applyBg.translation = [332, 562]
+      applyBg.width = 300
+      applyBg.height = 42
+      applyBg.uri = "pkg:/images/field_normal.png"
+      m.sortOverlay.appendChild(applyBg)
+      m.sortApplyBg = applyBg
+    end if
+  end if
+
+  if m.sortApplyText = invalid then m.sortApplyText = m.sortOverlay.findNode("sortApplyText")
+  if m.sortApplyText = invalid then
+    applyText = CreateObject("roSGNode", "Label")
+    if applyText <> invalid then
+      applyText.id = "sortApplyText"
+      applyText.translation = [332, 572]
+      applyText.width = 300
+      applyText.height = 24
+      applyText.font = "font:SmallSystemFont"
+      applyText.horizAlign = "center"
+      applyText.color = "0xD0D6E0"
+      applyText.text = "Aplicar"
+      m.sortOverlay.appendChild(applyText)
+      m.sortApplyText = applyText
+    end if
+  end if
+
+  if m.sortCancelBg = invalid then m.sortCancelBg = m.sortOverlay.findNode("sortCancelBg")
+  if m.sortCancelBg = invalid then
+    cancelBg = CreateObject("roSGNode", "Poster")
+    if cancelBg <> invalid then
+      cancelBg.id = "sortCancelBg"
+      cancelBg.translation = [652, 562]
+      cancelBg.width = 300
+      cancelBg.height = 42
+      cancelBg.uri = "pkg:/images/field_normal.png"
+      m.sortOverlay.appendChild(cancelBg)
+      m.sortCancelBg = cancelBg
+    end if
+  end if
+
+  if m.sortCancelText = invalid then m.sortCancelText = m.sortOverlay.findNode("sortCancelText")
+  if m.sortCancelText = invalid then
+    cancelText = CreateObject("roSGNode", "Label")
+    if cancelText <> invalid then
+      cancelText.id = "sortCancelText"
+      cancelText.translation = [652, 572]
+      cancelText.width = 300
+      cancelText.height = 24
+      cancelText.font = "font:SmallSystemFont"
+      cancelText.horizAlign = "center"
+      cancelText.color = "0xD0D6E0"
+      cancelText.text = "Cancelar"
+      m.sortOverlay.appendChild(cancelText)
+      m.sortCancelText = cancelText
+    end if
+  end if
+
+  if m.sortByList <> invalid and (m.sortByObsSetup <> true) then
+    m.sortByList.observeField("itemSelected", "onLibrarySortBySelected")
+    m.sortByObsSetup = true
+  end if
+  if m.sortOrderList <> invalid and (m.sortOrderObsSetup <> true) then
+    m.sortOrderList.observeField("itemSelected", "onLibrarySortOrderSelected")
+    m.sortOrderObsSetup = true
+  end if
+end sub
+
+sub _setLibraryButtonVisual(bg as Object, textNode as Object, focused as Boolean)
+  isFocused = (focused = true)
+  if bg <> invalid and bg.hasField("uri") then
+    if isFocused then
+      bg.uri = "pkg:/images/field_focus.png"
+    else
+      bg.uri = "pkg:/images/field_normal.png"
+    end if
+  end if
+  if textNode <> invalid and textNode.hasField("color") then
+    if isFocused then
+      textNode.color = "0xFFFFFF"
+    else
+      textNode.color = "0xD0D6E0"
+    end if
+  end if
+end sub
+
+function _buildSortListContent(options as Object, selectedIndex as Integer) as Object
+  root = CreateObject("roSGNode", "ContentNode")
+  opts = options
+  if type(opts) <> "roArray" then opts = []
+  sel = Int(selectedIndex)
+
+  for i = 0 to opts.Count() - 1
+    o = opts[i]
+    if type(o) <> "roAssociativeArray" then continue for
+    n = root.createChild("ContentNode")
+    lbl = ""
+    if o.label <> invalid then lbl = o.label.ToStr().Trim()
+    n.title = lbl
+    n.addField("selected", "boolean", false)
+    n.selected = (i = sel)
+  end for
+  return root
+end function
+
+sub _refreshLibrarySortOverlayUi()
+  if m.librarySortUiBusy = true then return
+  m.librarySortUiBusy = true
+
+  if m.sortByList <> invalid then
+    m.sortByList.content = _buildSortListContent(_librarySortByOptions(), m.librarySortDraftByIndex)
+    if m.sortByList.hasField("itemFocused") then m.sortByList.itemFocused = Int(m.librarySortDraftByIndex)
+  end if
+  if m.sortOrderList <> invalid then
+    m.sortOrderList.content = _buildSortListContent(_librarySortOrderOptions(), m.librarySortDraftOrderIndex)
+    if m.sortOrderList.hasField("itemFocused") then m.sortOrderList.itemFocused = Int(m.librarySortDraftOrderIndex)
+  end if
+
+  focusKey = m.librarySortOverlayFocus
+  if focusKey = invalid then focusKey = ""
+  focusKey = LCase(focusKey.ToStr().Trim())
+
+  _setLibraryButtonVisual(m.sortApplyBg, m.sortApplyText, (focusKey = "apply"))
+  _setLibraryButtonVisual(m.sortCancelBg, m.sortCancelText, (focusKey = "cancel"))
+
+  if m.sortByList <> invalid and focusKey = "by" then
+    m.sortByList.setFocus(true)
+  else if m.sortOrderList <> invalid and focusKey = "order" then
+    m.sortOrderList.setFocus(true)
+  else if m.top <> invalid then
+    m.top.setFocus(true)
+  end if
+
+  m.librarySortUiBusy = false
+end sub
+
+sub _showLibrarySortOverlay()
+  if m.browseLibraryOpen <> true then return
+  _ensureLibrarySortOverlayFallbackNodes()
+  if m.sortOverlay = invalid then return
+  if m.sortByList = invalid or m.sortOrderList = invalid then return
+  if m.libraryItemsList <> invalid and m.libraryItemsList.hasField("focusable") then
+    m.libraryItemsList.focusable = false
+  end if
+  m.librarySortOverlayOpen = true
+  m.librarySortOverlayFocus = "by"
+  m.librarySortDraftByIndex = Int(m.librarySortByIndex)
+  m.librarySortDraftOrderIndex = Int(m.librarySortOrderIndex)
+  if m.sortOverlay <> invalid then m.sortOverlay.visible = true
+  print "library sort overlay open by=" + m.librarySortDraftByIndex.ToStr() + " order=" + m.librarySortDraftOrderIndex.ToStr()
+  _refreshLibrarySortOverlayUi()
+  applyFocus()
+end sub
+
+sub _hideLibrarySortOverlay()
+  m.librarySortOverlayOpen = false
+  if m.sortOverlay <> invalid then m.sortOverlay.visible = false
+  if m.libraryItemsList <> invalid and m.libraryItemsList.hasField("focusable") then
+    m.libraryItemsList.focusable = true
+  end if
+  m.librarySortOverlayFocus = "by"
+  if m.top <> invalid then m.top.setFocus(true)
+  applyFocus()
+end sub
+
+sub _applyLibrarySortDraft()
+  m.librarySortByIndex = Int(m.librarySortDraftByIndex)
+  m.librarySortOrderIndex = Int(m.librarySortDraftOrderIndex)
+  m.librarySortByApi = _librarySortByApiFromIndex(m.librarySortByIndex)
+  m.librarySortOrderApi = _librarySortOrderApiFromIndex(m.librarySortOrderIndex)
+  m.librarySortLabel = _librarySortButtonLabel()
+  print "library sort apply by=" + m.librarySortByApi + " order=" + m.librarySortOrderApi
+  m.browseLibraryAutoFocusPending = true
+  m.browseFocus = "library_search"
+  _refreshBrowseLibraryHeader()
+  _hideLibrarySortOverlay()
+  _reloadBrowseLibraryItems(true)
+end sub
+
+sub _refreshLibraryTopBarUi()
+  if m.topBar = invalid or m.btnBack = invalid or m.btnSort = invalid or m.btnSearch = invalid then
+    _ensureLibraryTopBarFallbackNodes()
+  end if
+  if m.searchChip = invalid then _ensureLibrarySearchChipFallbackNodes()
+  if m.sortOverlay = invalid or m.sortByList = invalid or m.sortOrderList = invalid then _ensureLibrarySortOverlayFallbackNodes()
+  if m.topBar <> invalid then m.topBar.visible = true
+
+  if m.btnSortText <> invalid then
+    m.btnSortText.text = _librarySortButtonLabel()
+  end if
+
+  q = m.browseLibrarySearch
+  if q = invalid then q = ""
+  q = q.ToStr().Trim()
+
+  if m.searchChip <> invalid then m.searchChip.visible = (q <> "")
+  if m.searchChipText <> invalid then m.searchChipText.text = q
+
+  topFocused = (m.browseFocus = "library_search" and m.librarySortOverlayOpen <> true)
+  act = m.libraryTopFocus
+  if act = invalid then act = ""
+  act = LCase(act.ToStr().Trim())
+  if act = "" then act = "search"
+
+  _setLibraryButtonVisual(m.btnBackBg, m.btnBackIcon, (topFocused and act = "back"))
+  _setLibraryButtonVisual(m.btnSortBg, m.btnSortText, (topFocused and act = "sort"))
+  _setLibraryButtonVisual(m.btnSearchBg, m.btnSearchText, (topFocused and act = "search"))
+  _setLibraryButtonVisual(m.searchChipClearBg, m.searchChipClearText, (topFocused and act = "chip_clear"))
+end sub
+
+sub _clearBrowseLibrarySearch()
+  if m.browseLibraryOpen <> true then return
+  m.browseLibrarySearch = ""
+  m.libraryTopFocus = "search"
+  m.browseFocus = "library_search"
+  _refreshBrowseLibraryHeader()
+  _reloadBrowseLibraryItems(true)
+  applyFocus()
 end sub
 
 sub _refreshBrowseLibraryHeader()
@@ -3526,20 +4432,49 @@ sub _refreshBrowseLibraryHeader()
       titleTxt = _t("libraries")
     end if
   end if
-  if m.libraryTitle <> invalid then m.libraryTitle.text = titleTxt
+  if m.lblLibTitle <> invalid then
+    m.lblLibTitle.text = titleTxt
+  else if m.libraryTitle <> invalid then
+    m.libraryTitle.text = titleTxt
+  end if
 
   q = m.browseLibrarySearch
   if q = invalid then q = ""
   q = q.ToStr().Trim()
-  if m.librarySearchText <> invalid then
+  if m.searchChip <> invalid then m.searchChip.visible = (q <> "")
+  if m.searchChipText <> invalid then
     if q = "" then
-      m.librarySearchText.text = _t("library_search_hint")
-      m.librarySearchText.color = "0xAAB4C2"
+      m.searchChipText.text = ""
     else
-      m.librarySearchText.text = _t("library_search_prefix") + q
-      m.librarySearchText.color = "0xE6EBF3"
+      m.searchChipText.text = _t("library_search_prefix") + q
     end if
   end if
+
+  hasTopBar = (m.topBar <> invalid and m.btnBack <> invalid and m.btnSort <> invalid and m.btnSearch <> invalid)
+  if hasTopBar then
+    if m.librarySearchBg <> invalid then m.librarySearchBg.visible = false
+    if m.librarySearchText <> invalid then m.librarySearchText.visible = false
+    if m.libraryTitle <> invalid then m.libraryTitle.visible = false
+  else
+    if m.libraryTitle <> invalid then
+      m.libraryTitle.text = titleTxt
+      m.libraryTitle.visible = true
+    end if
+    if m.librarySearchBg <> invalid then m.librarySearchBg.visible = true
+    if m.librarySearchText <> invalid then
+      if q = "" then
+        m.librarySearchText.text = _t("library_search_hint")
+      else
+        m.librarySearchText.text = _t("library_search_prefix") + q
+      end if
+      m.librarySearchText.visible = true
+    end if
+  end if
+
+  if m.btnSortText <> invalid then
+    m.btnSortText.text = _librarySortButtonLabel()
+  end if
+  _refreshLibraryTopBarUi()
 end sub
 
 function _hasDeferredBrowseActions() as Boolean
@@ -3573,7 +4508,7 @@ sub _runDeferredBrowseActions()
 
   if m.pendingLibraryLoad = true then
     m.pendingLibraryLoad = false
-    _loadBrowseLibraryItems()
+    _reloadBrowseLibraryItems(m.pendingLibraryReset = true)
     if m.pendingJob <> "" then return
   end if
 
@@ -3843,6 +4778,44 @@ function _formatRating(raw as Dynamic) as String
   return whole.ToStr() + "." + frac.ToStr()
 end function
 
+function _compactOfficialRating(raw as Dynamic) as String
+  if raw = invalid then return ""
+  s = raw.ToStr()
+  if s = invalid then return ""
+  s = s.Trim()
+  if s = "" then return ""
+
+  up = UCase(s)
+  if Left(up, 3) = "BR-" then
+    reBr = CreateObject("roRegex", "BR-\\s*([0-9]{1,2})", "i")
+    if reBr <> invalid then
+      mBr = reBr.Match(up)
+      if mBr <> invalid and mBr.Count() > 1 then return "BR-" + mBr[1].ToStr().Trim()
+    end if
+    if Len(up) > 8 then return Left(up, 8)
+    return up
+  end if
+
+  if Left(up, 3) = "TV-" or Left(up, 3) = "PG-" then
+    if Len(up) > 12 then return Left(up, 12)
+    return up
+  end if
+
+  reNum = CreateObject("roRegex", "([0-9]{1,2})", "i")
+  if reNum <> invalid then
+    mNum = reNum.Match(s)
+    if mNum <> invalid and mNum.Count() > 1 then
+      n = mNum[1].ToStr().Trim()
+      low = LCase(s)
+      if Instr(1, low, "br") > 0 then return "BR-" + n
+      if Instr(1, low, "ano") > 0 or Instr(1, low, "year") > 0 or Instr(1, low, "idade") > 0 then return n + "+"
+    end if
+  end if
+
+  if Len(up) > 14 then return Left(up, 14)
+  return up
+end function
+
 function _seriesGenresText(raw as Dynamic) as String
   if raw = invalid then return ""
   if type(raw) = "roArray" then
@@ -3872,11 +4845,16 @@ sub _setDetailChip(chip as Object, bg as Object, label as Object, text as String
   chip.visible = true
   if label <> invalid then label.text = t
 
-  w = 20 + (Len(t) * 8)
-  if w < 50 then w = 50
-  if w > 160 then w = 160
+  ' Keep metadata chips readable (year/age/rating) without truncation.
+  w = 34 + (Len(t) * 11)
+  if w < 76 then w = 76
+  if w > 240 then w = 240
   if bg <> invalid then bg.width = w
-  if label <> invalid then label.width = w
+  if label <> invalid then
+    if label.hasField("translation") then label.translation = [7, 0]
+    if label.hasField("width") then label.width = w - 14
+    if label.hasField("horizAlign") then label.horizAlign = "left"
+  end if
 end sub
 
 sub _layoutDetailChips()
@@ -3890,7 +4868,7 @@ sub _layoutDetailChips()
   ]
 
   x = 0
-  pad = 10
+  pad = 12
   hasAny = false
   for each c in chips
     g = c.g
@@ -3900,6 +4878,8 @@ sub _layoutDetailChips()
     hasAny = true
     w = 0
     if c.bg <> invalid and c.bg.width <> invalid then w = Int(c.bg.width)
+    if w <= 0 and c.g <> invalid and c.g.hasField("width") and c.g.width <> invalid then w = Int(c.g.width)
+    if w <= 0 then w = 76
     g.translation = [x, 0]
     x = x + w + pad
   end for
@@ -5423,6 +6403,29 @@ function _ensureBrowseNodes() as Boolean
     if m.continueList = invalid then m.continueList = m.browseCard.findNode("continueList")
     if m.recentMoviesList = invalid then m.recentMoviesList = m.browseCard.findNode("recentMoviesList")
     if m.recentSeriesList = invalid then m.recentSeriesList = m.browseCard.findNode("recentSeriesList")
+    if m.topBar = invalid then m.topBar = m.browseCard.findNode("topBar")
+    if m.btnBack = invalid then m.btnBack = m.browseCard.findNode("btnBack")
+    if m.btnBackBg = invalid then m.btnBackBg = m.browseCard.findNode("btnBackBg")
+    if m.btnBackIcon = invalid then m.btnBackIcon = m.browseCard.findNode("btnBackIcon")
+    if m.lblLibTitle = invalid then m.lblLibTitle = m.browseCard.findNode("lblLibTitle")
+    if m.btnSort = invalid then m.btnSort = m.browseCard.findNode("btnSort")
+    if m.btnSortBg = invalid then m.btnSortBg = m.browseCard.findNode("btnSortBg")
+    if m.btnSortText = invalid then m.btnSortText = m.browseCard.findNode("btnSortText")
+    if m.btnSearch = invalid then m.btnSearch = m.browseCard.findNode("btnSearch")
+    if m.btnSearchBg = invalid then m.btnSearchBg = m.browseCard.findNode("btnSearchBg")
+    if m.btnSearchText = invalid then m.btnSearchText = m.browseCard.findNode("btnSearchText")
+    if m.searchChip = invalid then m.searchChip = m.browseCard.findNode("searchChip")
+    if m.searchChipBg = invalid then m.searchChipBg = m.browseCard.findNode("searchChipBg")
+    if m.searchChipText = invalid then m.searchChipText = m.browseCard.findNode("searchChipText")
+    if m.searchChipClearBg = invalid then m.searchChipClearBg = m.browseCard.findNode("searchChipClearBg")
+    if m.searchChipClearText = invalid then m.searchChipClearText = m.browseCard.findNode("searchChipClearText")
+    if m.sortOverlay = invalid then m.sortOverlay = m.browseCard.findNode("sortOverlay")
+    if m.sortByList = invalid then m.sortByList = m.browseCard.findNode("sortByList")
+    if m.sortOrderList = invalid then m.sortOrderList = m.browseCard.findNode("sortOrderList")
+    if m.sortApplyBg = invalid then m.sortApplyBg = m.browseCard.findNode("sortApplyBg")
+    if m.sortApplyText = invalid then m.sortApplyText = m.browseCard.findNode("sortApplyText")
+    if m.sortCancelBg = invalid then m.sortCancelBg = m.browseCard.findNode("sortCancelBg")
+    if m.sortCancelText = invalid then m.sortCancelText = m.browseCard.findNode("sortCancelText")
     if m.libraryTitle = invalid then m.libraryTitle = m.browseCard.findNode("libraryTitle")
     if m.librarySearchBg = invalid then m.librarySearchBg = m.browseCard.findNode("librarySearchBg")
     if m.librarySearchText = invalid then m.librarySearchText = m.browseCard.findNode("librarySearchText")
@@ -5584,14 +6587,42 @@ function _ensureLibraryListNodes() as Boolean
       m.libraryItemsList = lst
     end if
   end if
+
+  if m.topBar = invalid then m.topBar = m.libraryGroup.findNode("topBar")
+  if m.btnBack = invalid then m.btnBack = m.libraryGroup.findNode("btnBack")
+  if m.btnBackBg = invalid then m.btnBackBg = m.libraryGroup.findNode("btnBackBg")
+  if m.btnBackIcon = invalid then m.btnBackIcon = m.libraryGroup.findNode("btnBackIcon")
+  if m.lblLibTitle = invalid then m.lblLibTitle = m.libraryGroup.findNode("lblLibTitle")
+  if m.btnSort = invalid then m.btnSort = m.libraryGroup.findNode("btnSort")
+  if m.btnSortBg = invalid then m.btnSortBg = m.libraryGroup.findNode("btnSortBg")
+  if m.btnSortText = invalid then m.btnSortText = m.libraryGroup.findNode("btnSortText")
+  if m.btnSearch = invalid then m.btnSearch = m.libraryGroup.findNode("btnSearch")
+  if m.btnSearchBg = invalid then m.btnSearchBg = m.libraryGroup.findNode("btnSearchBg")
+  if m.btnSearchText = invalid then m.btnSearchText = m.libraryGroup.findNode("btnSearchText")
+  if m.searchChip = invalid then m.searchChip = m.libraryGroup.findNode("searchChip")
+  if m.searchChipBg = invalid then m.searchChipBg = m.libraryGroup.findNode("searchChipBg")
+  if m.searchChipText = invalid then m.searchChipText = m.libraryGroup.findNode("searchChipText")
+  if m.searchChipClearBg = invalid then m.searchChipClearBg = m.libraryGroup.findNode("searchChipClearBg")
+  if m.searchChipClearText = invalid then m.searchChipClearText = m.libraryGroup.findNode("searchChipClearText")
+  if m.sortOverlay = invalid then m.sortOverlay = m.libraryGroup.findNode("sortOverlay")
+  if m.sortByList = invalid then m.sortByList = m.libraryGroup.findNode("sortByList")
+  if m.sortOrderList = invalid then m.sortOrderList = m.libraryGroup.findNode("sortOrderList")
+  if m.sortApplyBg = invalid then m.sortApplyBg = m.libraryGroup.findNode("sortApplyBg")
+  if m.sortApplyText = invalid then m.sortApplyText = m.libraryGroup.findNode("sortApplyText")
+  if m.sortCancelBg = invalid then m.sortCancelBg = m.libraryGroup.findNode("sortCancelBg")
+  if m.sortCancelText = invalid then m.sortCancelText = m.libraryGroup.findNode("sortCancelText")
+  _ensureLibraryTopBarFallbackNodes()
+  _ensureLibrarySearchChipFallbackNodes()
+  _ensureLibrarySortOverlayFallbackNodes()
+  if m.topBar = invalid then print "library warning topBar missing after ensure"
   _configureLibraryGridNode(m.libraryItemsList)
 
   if m.libraryEmptyLabel = invalid then
     e = CreateObject("roSGNode", "Label")
     if e <> invalid then
       e.id = "libraryEmptyLabel"
-      e.translation = [20, 710]
-      e.width = 1240
+      e.translation = [40, 680]
+      e.width = 1200
       e.height = 30
       e.font = "font:SmallSystemFont"
       e.horizAlign = "center"
@@ -5605,7 +6636,16 @@ function _ensureLibraryListNodes() as Boolean
 
   if m.libraryItemsList <> invalid and (m.libraryItemsObsSetup <> true) then
     m.libraryItemsList.observeField("itemSelected", "onLibraryItemSelected")
+    m.libraryItemsList.observeField("itemFocused", "onLibraryItemFocused")
     m.libraryItemsObsSetup = true
+  end if
+  if m.sortByList <> invalid and (m.sortByObsSetup <> true) then
+    m.sortByList.observeField("itemSelected", "onLibrarySortBySelected")
+    m.sortByObsSetup = true
+  end if
+  if m.sortOrderList <> invalid and (m.sortOrderObsSetup <> true) then
+    m.sortOrderList.observeField("itemSelected", "onLibrarySortOrderSelected")
+    m.sortOrderObsSetup = true
   end if
 
   return (m.libraryGroup <> invalid and m.libraryItemsList <> invalid)
@@ -7273,7 +8313,7 @@ sub onGatewayTaskStateChanged()
         _scheduleDeferredBrowseActions()
       else
         m.pendingLibraryLoad = false
-        _loadBrowseLibraryItems()
+        _reloadBrowseLibraryItems(m.pendingLibraryReset = true)
       end if
     end if
     if m.pendingSeriesDetailQueued = true and m.pendingJob = "" then
@@ -7331,17 +8371,39 @@ sub onGatewayTaskStateChanged()
     return
   end if
 
-  if job = "library_shelf" then
+  if job = "library_page" or job = "library_shelf" then
     reqViewId = m.pendingLibraryViewId
     if reqViewId = invalid then reqViewId = ""
     reqViewId = reqViewId.ToStr().Trim()
+    reqStart = Int(m.pendingLibraryStartIndex)
+    if reqStart < 0 then reqStart = 0
+    wasReset = (m.pendingLibraryReset = true)
+    reqSortKey = m.pendingLibrarySortKey
+    if reqSortKey = invalid then reqSortKey = ""
+    reqSortKey = reqSortKey.ToStr().Trim()
     m.pendingLibraryViewId = ""
+    m.pendingLibraryStartIndex = 0
+    m.pendingLibraryReset = false
+    m.pendingLibrarySortKey = "Name"
+    m.pendingLibrarySortBy = "Name"
+    m.libraryIsLoading = false
 
     if m.gatewayTask.ok = true then
       raw = m.gatewayTask.resultJson
       parsed = ParseJson(raw)
-      if type(parsed) <> "roArray" then parsed = []
-      print "library response viewId=" + reqViewId + " count=" + parsed.Count().ToStr()
+      _updateSupportedSortsFromLibraryPayload(parsed)
+      parsedItems = []
+      totalCount = -1
+      if type(parsed) = "roAssociativeArray" then
+        if type(parsed.items) = "roArray" then parsedItems = parsed.items
+        if type(parsed.Items) = "roArray" and parsedItems.Count() <= 0 then parsedItems = parsed.Items
+        if parsed.totalRecordCount <> invalid then totalCount = _sceneIntFromAny(parsed.totalRecordCount)
+        if totalCount < 0 and parsed.TotalRecordCount <> invalid then totalCount = _sceneIntFromAny(parsed.TotalRecordCount)
+      else if type(parsed) = "roArray" then
+        parsedItems = parsed
+      end if
+      if type(parsedItems) <> "roArray" then parsedItems = []
+      print "library page response viewId=" + reqViewId + " start=" + reqStart.ToStr() + " count=" + parsedItems.Count().ToStr() + " total=" + totalCount.ToStr()
 
       currentViewId = m.browseLibraryViewId
       if currentViewId = invalid then currentViewId = ""
@@ -7349,17 +8411,32 @@ sub onGatewayTaskStateChanged()
 
       if m.browseLibraryOpen = true and reqViewId = currentViewId then
         _setBrowseLibraryVisible(true)
-        m.browseLibraryRawItems = parsed
-        _renderBrowseLibraryItems()
+        if wasReset then _resetBrowseLibraryPaginationState()
+        _appendBrowseLibraryItems(parsedItems, totalCount)
       end if
       setStatus("ready")
     else
       errLib = m.gatewayTask.error
       if errLib = invalid or errLib = "" then errLib = "unknown"
+      currentViewId2 = m.browseLibraryViewId
+      if currentViewId2 = invalid then currentViewId2 = ""
+      currentViewId2 = currentViewId2.ToStr().Trim()
+      if _librarySortLooksUnsupportedError(errLib) = true then
+        unsupportedKey = _normalizeLibrarySortKey(reqSortKey)
+        if unsupportedKey <> "" and unsupportedKey <> "Name" then
+          _applyLibrarySortFallback(unsupportedKey)
+          print "library sort fallback retry after error=" + errLib
+          if m.browseLibraryOpen = true and reqViewId = currentViewId2 then
+            _reloadBrowseLibraryItems(true)
+          end if
+          return
+        end if
+      end if
       setStatus("library failed: " + errLib)
-      if m.browseLibraryOpen = true then
-        m.browseLibraryRawItems = []
-        _renderBrowseLibraryItems()
+      if m.browseLibraryOpen = true and reqViewId = currentViewId2 then
+        if wasReset then _resetBrowseLibraryPaginationState()
+        m.libraryHasMore = false
+        _updateBrowseLibraryEmptyState(false)
       end if
     end if
     return
@@ -9074,16 +10151,132 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     if m.player <> invalid and m.player.visible = true then return false
 
     if m.browseLibraryOpen = true then
+      if m.librarySortOverlayOpen = true then
+        if kl = "back" then
+          _hideLibrarySortOverlay()
+          return true
+        end if
+
+        if kl = "left" then
+          if m.librarySortOverlayFocus = "by" then
+            nextBy = Int(m.librarySortDraftByIndex) - 1
+            if nextBy < 0 then nextBy = _librarySortByOptions().Count() - 1
+            m.librarySortDraftByIndex = nextBy
+            _refreshLibrarySortOverlayUi()
+          else if m.librarySortOverlayFocus = "order" then
+            nextOrder = Int(m.librarySortDraftOrderIndex) - 1
+            if nextOrder < 0 then nextOrder = _librarySortOrderOptions().Count() - 1
+            m.librarySortDraftOrderIndex = nextOrder
+            _refreshLibrarySortOverlayUi()
+          else if m.librarySortOverlayFocus = "cancel" then
+            m.librarySortOverlayFocus = "apply"
+            _refreshLibrarySortOverlayUi()
+          end if
+          return true
+        end if
+
+        if kl = "right" then
+          if m.librarySortOverlayFocus = "by" then
+            nextBy = Int(m.librarySortDraftByIndex) + 1
+            if nextBy >= _librarySortByOptions().Count() then nextBy = 0
+            m.librarySortDraftByIndex = nextBy
+            _refreshLibrarySortOverlayUi()
+          else if m.librarySortOverlayFocus = "order" then
+            nextOrder = Int(m.librarySortDraftOrderIndex) + 1
+            if nextOrder >= _librarySortOrderOptions().Count() then nextOrder = 0
+            m.librarySortDraftOrderIndex = nextOrder
+            _refreshLibrarySortOverlayUi()
+          else if m.librarySortOverlayFocus = "apply" then
+            m.librarySortOverlayFocus = "cancel"
+            _refreshLibrarySortOverlayUi()
+          end if
+          return true
+        end if
+
+        if kl = "up" then
+          if m.librarySortOverlayFocus = "order" then
+            m.librarySortOverlayFocus = "by"
+          else if m.librarySortOverlayFocus = "apply" or m.librarySortOverlayFocus = "cancel" then
+            m.librarySortOverlayFocus = "order"
+          end if
+          _refreshLibrarySortOverlayUi()
+          return true
+        end if
+
+        if kl = "down" then
+          if m.librarySortOverlayFocus = "by" then
+            m.librarySortOverlayFocus = "order"
+          else if m.librarySortOverlayFocus = "order" then
+            m.librarySortOverlayFocus = "apply"
+          end if
+          _refreshLibrarySortOverlayUi()
+          return true
+        end if
+
+        if kl = "ok" then
+          if m.librarySortOverlayFocus = "by" then
+            chosenBy = -1
+            if m.sortByList <> invalid and m.sortByList.hasField("itemSelected") then
+              chosenBy = Int(m.sortByList.itemSelected)
+            end if
+            if chosenBy < 0 and m.sortByList <> invalid and m.sortByList.hasField("itemFocused") then
+              chosenBy = Int(m.sortByList.itemFocused)
+            end if
+            if chosenBy >= 0 and chosenBy < _librarySortByOptions().Count() then
+              m.librarySortDraftByIndex = chosenBy
+              print "library sort by confirm idx=" + chosenBy.ToStr()
+            end if
+            m.librarySortOverlayFocus = "order"
+            _refreshLibrarySortOverlayUi()
+          else if m.librarySortOverlayFocus = "order" then
+            chosenOrd = -1
+            if m.sortOrderList <> invalid and m.sortOrderList.hasField("itemSelected") then
+              chosenOrd = Int(m.sortOrderList.itemSelected)
+            end if
+            if chosenOrd < 0 and m.sortOrderList <> invalid and m.sortOrderList.hasField("itemFocused") then
+              chosenOrd = Int(m.sortOrderList.itemFocused)
+            end if
+            if chosenOrd >= 0 and chosenOrd < _librarySortOrderOptions().Count() then
+              m.librarySortDraftOrderIndex = chosenOrd
+              print "library sort order confirm idx=" + chosenOrd.ToStr()
+            end if
+            m.librarySortOverlayFocus = "apply"
+            _refreshLibrarySortOverlayUi()
+          else if m.librarySortOverlayFocus = "cancel" then
+            _hideLibrarySortOverlay()
+          else
+            _applyLibrarySortDraft()
+          end if
+          return true
+        end if
+
+        if kl = "options" then return true
+        return true
+      end if
+
       if kl = "left" then
         if m.browseFocus = "library_items" then
           idxLib = _browseListFocusedIndex(m.libraryItemsList)
           if idxLib > 0 then return false
+          m.browseFocus = "library_search"
+          m.libraryTopFocus = "search"
+          applyFocus()
+          return true
+        else if m.browseFocus = "library_search" then
+          m.libraryTopFocus = _libraryTopFocusStep(-1)
+          applyFocus()
+          return true
         end if
         return true
       end if
 
       if kl = "right" then
         if m.browseFocus = "library_items" then return false
+        if m.browseFocus = "library_search" then
+          m.libraryTopFocus = _libraryTopFocusStep(1)
+          applyFocus()
+          return true
+        end if
         return true
       end if
 
@@ -9092,7 +10285,9 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
           idxLib2 = _browseListFocusedIndex(m.libraryItemsList)
           if idxLib2 >= _browseLibraryCols() then return false
           m.browseFocus = "library_search"
+          if m.libraryTopFocus = invalid or m.libraryTopFocus = "" then m.libraryTopFocus = "search"
           applyFocus()
+          return true
         end if
         return true
       end if
@@ -9110,7 +10305,27 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
 
       if kl = "ok" then
         if m.browseFocus = "library_search" then
-          _promptBrowseLibrarySearch()
+          act = m.libraryTopFocus
+          if act = invalid then act = ""
+          act = LCase(act.ToStr().Trim())
+          if act = "" then act = "search"
+          if act = "search" then
+            guardUntil = Int(m.libraryOpenGuardUntilMs)
+            nowMs = _nowMs()
+            if guardUntil > 0 and nowMs < guardUntil then
+              print "library search guard ignore ok deltaMs=" + (guardUntil - nowMs).ToStr()
+              return true
+            end if
+          end if
+          if act = "back" then
+            _closeBrowseLibrary()
+          else if act = "sort" then
+            _showLibrarySortOverlay()
+          else if act = "chip_clear" then
+            _clearBrowseLibrarySearch()
+          else
+            _promptBrowseLibrarySearch()
+          end if
           return true
         else if m.browseFocus = "library_items" then
           onLibraryItemSelected()
@@ -9119,7 +10334,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
       end if
 
       if kl = "options" then
-        _promptBrowseLibrarySearch()
+        _showLibrarySortOverlay()
         return true
       end if
 
@@ -9608,17 +10823,21 @@ sub applyFocus()
       _refreshBrowseLibraryHeader()
       if m.browseLogoutBg <> invalid then m.browseLogoutBg.uri = "pkg:/images/field_normal.png"
       if m.browseLogoutText <> invalid then m.browseLogoutText.color = "0xD0D6E0"
-      searchFocused = (m.browseFocus = "library_search")
-      if m.librarySearchBg <> invalid then
-        if searchFocused then
-          m.librarySearchBg.uri = "pkg:/images/field_focus.png"
-        else
-          m.librarySearchBg.uri = "pkg:/images/field_normal.png"
-        end if
+      _refreshLibraryTopBarUi()
+      allowGridFocus = (m.browseFocus = "library_items" and m.librarySortOverlayOpen <> true)
+      if m.libraryItemsList <> invalid and m.libraryItemsList.hasField("focusable") then
+        m.libraryItemsList.focusable = allowGridFocus
+      end if
+      if m.sortOverlay <> invalid then m.sortOverlay.visible = (m.librarySortOverlayOpen = true)
+      if m.librarySortOverlayOpen = true then
+        _refreshLibrarySortOverlayUi()
+        if m.top <> invalid then m.top.setFocus(true)
+        return
       end if
       if m.browseFocus = "library_items" then
         if m.libraryItemsList <> invalid then m.libraryItemsList.setFocus(true)
       else
+        if m.libraryItemsList <> invalid then m.libraryItemsList.setFocus(false)
         if m.top <> invalid then m.top.setFocus(true)
       end if
       return
@@ -10003,10 +11222,9 @@ sub onKeyboardDone()
   if idx <> 0 then
     setStatus(_t("cancelled"))
     if promptKind = "librarySearch" then
-      m.browseLibraryAutoFocusPending = true
-      if _browseListCount(m.libraryItemsList) > 0 then
-        m.browseFocus = "library_items"
-      end if
+      m.browseLibraryAutoFocusPending = false
+      m.browseFocus = "library_search"
+      if m.libraryTopFocus = invalid or m.libraryTopFocus = "" then m.libraryTopFocus = "search"
     end if
     m.pendingPrompt = ""
     applyFocus()
@@ -10025,13 +11243,14 @@ sub onKeyboardDone()
   else if promptKind = "librarySearch" then
     m.browseLibrarySearch = txt.Trim()
     m.browseLibraryAutoFocusPending = true
-    _refreshBrowseLibraryHeader()
-    _renderBrowseLibraryItems()
-    if _browseListCount(m.libraryItemsList) > 0 then
-      m.browseFocus = "library_items"
+    if m.browseLibrarySearch <> "" then
+      m.libraryTopFocus = "chip_clear"
     else
-      m.browseFocus = "library_search"
+      m.libraryTopFocus = "search"
     end if
+    _refreshBrowseLibraryHeader()
+    _reloadBrowseLibraryItems(true)
+    m.browseFocus = "library_search"
   end if
 
   m.pendingPrompt = ""
@@ -10136,6 +11355,28 @@ sub enterBrowse()
   m.browseLibraryTitle = ""
   m.browseLibrarySearch = ""
   m.browseLibraryRawItems = []
+  m.libraryTopFocus = "search"
+  m.libraryOpenGuardUntilMs = 0
+  m.librarySortOverlayOpen = false
+  m.librarySortOverlayFocus = "by"
+  m.librarySortByIndex = 0
+  m.librarySortOrderIndex = 0
+  m.librarySortDraftByIndex = 0
+  m.librarySortDraftOrderIndex = 0
+  m.librarySortByApi = "Name"
+  m.librarySortOrderApi = "Ascending"
+  m.librarySortLabel = "A-Z"
+  m.supportedSorts = ["Name", "DateAdded", "PremiereDate", "OfficialRating", "CriticRating"]
+  m.libraryLoadedCount = 0
+  m.libraryStartIndex = 0
+  m.libraryHasMore = true
+  m.libraryIsLoading = false
+  m.libraryTotalCount = -1
+  m.librarySeenIds = {}
+  m.pendingLibraryStartIndex = 0
+  m.pendingLibraryReset = false
+  m.pendingLibrarySortKey = "Name"
+  m.pendingLibrarySortBy = "Name"
   m.pendingLibraryViewId = ""
   m.pendingLibraryLoad = false
   m.pendingSeriesDetailQueued = false
@@ -11075,7 +12316,9 @@ sub _refreshVisibleResumeState()
   end if
 
   if m.browseLibraryOpen = true then
-    _renderBrowseLibraryItems()
+    if m.libraryItemsList <> invalid and m.libraryItemsList.content <> invalid then
+      _applyResumeStateToRoot(m.libraryItemsList.content)
+    end if
   end if
 end sub
 
@@ -11358,6 +12601,201 @@ function _browseLibraryItemMatches(name as String, queryLower as String) as Bool
   return (Instr(1, n, q) > 0)
 end function
 
+function _libraryItemIdFromRaw(it as Object) as String
+  if type(it) <> "roAssociativeArray" then return ""
+  id = ""
+  if it.id <> invalid then
+    id = it.id
+  else if it.Id <> invalid then
+    id = it.Id
+  end if
+  if id = invalid then id = ""
+  return id.ToStr().Trim()
+end function
+
+function _libraryBuildNodeFromRaw(it as Object, posterBase as String, posterToken as String) as Object
+  if type(it) <> "roAssociativeArray" then return invalid
+
+  name0 = ""
+  typ0 = ""
+  path0 = ""
+
+  if it.name <> invalid then
+    name0 = it.name
+  else if it.Name <> invalid then
+    name0 = it.Name
+  end if
+  if it.type <> invalid then
+    typ0 = it.type
+  else if it.Type <> invalid then
+    typ0 = it.Type
+  end if
+  if it.path <> invalid then
+    path0 = it.path
+  else if it.Path <> invalid then
+    path0 = it.Path
+  end if
+  if name0 = invalid then name0 = ""
+  if typ0 = invalid then typ0 = ""
+  if path0 = invalid then path0 = ""
+
+  coll = m.browseLibraryCollection
+  if coll = invalid then coll = ""
+  coll = LCase(coll.ToStr().Trim())
+  typeL = LCase(typ0.ToStr().Trim())
+  if coll = "tvshows" and typeL <> "series" then return invalid
+  if coll = "movies" then
+    if typeL = "series" or typeL = "season" or typeL = "episode" then return invalid
+  end if
+
+  c = CreateObject("roSGNode", "ContentNode")
+  c.addField("itemType", "string", false)
+  c.addField("path", "string", false)
+  c.addField("resumePositionMs", "integer", false)
+  c.addField("resumeDurationMs", "integer", false)
+  c.addField("resumePercent", "integer", false)
+  c.addField("played", "boolean", false)
+  c.addField("rank", "integer", false)
+  c.addField("posterMode", "string", false)
+  c.addField("hdPosterUrl", "string", false)
+  c.addField("sdPosterUrl", "string", false)
+  c.addField("posterUrl", "string", false)
+  c.addField("seriesId", "string", false)
+  c.addField("seasonNumber", "integer", false)
+  c.addField("episodeNumber", "integer", false)
+
+  itemId = _libraryItemIdFromRaw(it)
+  if itemId <> "" then c.id = itemId
+  c.title = name0
+  c.itemType = typ0
+  c.path = path0
+  posterUri = _browsePosterUri(itemId, posterBase, posterToken)
+  if posterUri = "" then posterUri = _browseChannelPosterUri(itemId, posterBase, posterToken)
+  c.hdPosterUrl = posterUri
+  c.sdPosterUrl = posterUri
+  c.posterUrl = posterUri
+  c.posterMode = "zoomToFill"
+  c.seriesId = ""
+  c.seasonNumber = -1
+  c.episodeNumber = -1
+  if it.seriesId <> invalid then c.seriesId = it.seriesId.ToStr().Trim()
+  if c.seriesId = "" and it.SeriesId <> invalid then c.seriesId = it.SeriesId.ToStr().Trim()
+  if it.seasonNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.seasonNumber, -1)
+  if c.seasonNumber <= 0 and it.parentIndexNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.parentIndexNumber, -1)
+  if c.seasonNumber <= 0 and it.ParentIndexNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.ParentIndexNumber, -1)
+  if it.episodeNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.episodeNumber, -1)
+  if c.episodeNumber <= 0 and it.indexNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.indexNumber, -1)
+  if c.episodeNumber <= 0 and it.IndexNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.IndexNumber, -1)
+
+  resumeRaw = _resumeStateFromRawItem(it)
+  if _resumeStateHasSignal(resumeRaw) then _rememberResumeState(c.id, resumeRaw)
+  resume = _mergeResumeState(resumeRaw, _resumeStateForItem(c.id))
+  c.resumePositionMs = Int(resume.positionMs)
+  c.resumeDurationMs = Int(resume.durationMs)
+  c.resumePercent = Int(resume.percent)
+  c.played = (resume.played = true)
+  c.rank = 0
+
+  return c
+end function
+
+sub _updateBrowseLibraryEmptyState(isLoading as Boolean)
+  if m.libraryEmptyLabel = invalid then return
+
+  loading = (isLoading = true)
+  if loading then
+    m.libraryEmptyLabel.text = _t("loading")
+    m.libraryEmptyLabel.visible = true
+    return
+  end if
+
+  if m.libraryLoadedCount > 0 then
+    m.libraryEmptyLabel.visible = false
+    return
+  end if
+
+  query = m.browseLibrarySearch
+  if query = invalid then query = ""
+  query = query.ToStr().Trim()
+  if query <> "" then
+    m.libraryEmptyLabel.text = _t("library_no_results")
+  else
+    m.libraryEmptyLabel.text = _t("no_items")
+  end if
+  m.libraryEmptyLabel.visible = true
+end sub
+
+sub _resetBrowseLibraryPaginationState()
+  m.librarySeenIds = {}
+  m.libraryLoadedCount = 0
+  m.libraryStartIndex = 0
+  m.libraryHasMore = true
+  m.libraryTotalCount = -1
+  m.browseLibraryRawItems = []
+  if m.libraryItemsList <> invalid then
+    m.libraryItemsList.content = CreateObject("roSGNode", "ContentNode")
+  end if
+end sub
+
+sub _appendBrowseLibraryItems(pageItems as Object, totalRecordCount as Integer)
+  if m.libraryItemsList = invalid then return
+  if type(pageItems) <> "roArray" then pageItems = []
+
+  root = m.libraryItemsList.content
+  if root = invalid then
+    root = CreateObject("roSGNode", "ContentNode")
+    m.libraryItemsList.content = root
+  end if
+
+  cfg = loadConfig()
+  posterBase = cfg.apiBase
+  posterToken = cfg.jellyfinToken
+
+  appended = 0
+  for each it in pageItems
+    itemId = _libraryItemIdFromRaw(it)
+    if itemId <> "" and type(m.librarySeenIds) = "roAssociativeArray" then
+      key = LCase(itemId)
+      if m.librarySeenIds[key] = true then continue for
+    end if
+
+    node = _libraryBuildNodeFromRaw(it, posterBase, posterToken)
+    if node = invalid then continue for
+    root.appendChild(node)
+    m.browseLibraryRawItems.Push(it)
+
+    if itemId <> "" then
+      if type(m.librarySeenIds) <> "roAssociativeArray" then m.librarySeenIds = {}
+      m.librarySeenIds[LCase(itemId)] = true
+    end if
+    appended = appended + 1
+  end for
+
+  m.libraryLoadedCount = root.getChildCount()
+  m.libraryStartIndex = m.libraryLoadedCount
+
+  total = Int(totalRecordCount)
+  if total >= 0 then
+    m.libraryTotalCount = total
+    m.libraryHasMore = (m.libraryLoadedCount < total)
+  else
+    m.libraryHasMore = (appended >= Int(m.libraryPageSize))
+  end if
+
+  _updateBrowseLibraryEmptyState(false)
+
+  if m.libraryLoadedCount > 0 and m.browseLibraryAutoFocusPending = true and m.pendingDialog = invalid then
+    m.browseLibraryAutoFocusPending = false
+    m.browseFocus = "library_items"
+    applyFocus()
+  end if
+
+  if m.libraryLoadedCount <= 0 and m.browseFocus = "library_items" then
+    m.browseFocus = "library_search"
+    applyFocus()
+  end if
+end sub
+
 sub _renderBrowseLibraryItems()
   if m.libraryItemsList = invalid then
     bindUiNodes()
@@ -11370,148 +12808,17 @@ sub _renderBrowseLibraryItems()
   end if
 
   src = m.browseLibraryRawItems
+  total = m.libraryTotalCount
   if type(src) <> "roArray" then src = []
-
-  cfg = loadConfig()
-  posterBase = cfg.apiBase
-  posterToken = cfg.jellyfinToken
-
-  coll = m.browseLibraryCollection
-  if coll = invalid then coll = ""
-  coll = LCase(coll.ToStr().Trim())
-
-  query = m.browseLibrarySearch
-  if query = invalid then query = ""
-  query = query.ToStr().Trim()
-  queryLower = LCase(query)
-
-  root = CreateObject("roSGNode", "ContentNode")
-
-  for each it in src
-    name0 = ""
-    typ0 = ""
-    path0 = ""
-    if it <> invalid then
-      if it.name <> invalid then
-        name0 = it.name
-      else if it.Name <> invalid then
-        name0 = it.Name
-      end if
-      if it.type <> invalid then
-        typ0 = it.type
-      else if it.Type <> invalid then
-        typ0 = it.Type
-      end if
-      if it.path <> invalid then
-        path0 = it.path
-      else if it.Path <> invalid then
-        path0 = it.Path
-      end if
-    end if
-    if name0 = invalid then name0 = ""
-    if typ0 = invalid then typ0 = ""
-    if path0 = invalid then path0 = ""
-
-    typeL = LCase(typ0.ToStr().Trim())
-    if coll = "tvshows" and typeL <> "series" then continue for
-    if coll = "movies" then
-      if typeL = "series" or typeL = "season" or typeL = "episode" then continue for
-    end if
-
-    if _browseLibraryItemMatches(name0, queryLower) <> true then continue for
-
-    c = CreateObject("roSGNode", "ContentNode")
-    c.addField("itemType", "string", false)
-    c.addField("path", "string", false)
-    c.addField("resumePositionMs", "integer", false)
-    c.addField("resumeDurationMs", "integer", false)
-    c.addField("resumePercent", "integer", false)
-    c.addField("played", "boolean", false)
-    c.addField("rank", "integer", false)
-    c.addField("posterMode", "string", false)
-    c.addField("hdPosterUrl", "string", false)
-    c.addField("posterUrl", "string", false)
-    c.addField("seriesId", "string", false)
-    c.addField("seasonNumber", "integer", false)
-    c.addField("episodeNumber", "integer", false)
-    if it <> invalid then
-      if it.id <> invalid then
-        c.id = it.id
-      else if it.Id <> invalid then
-        c.id = it.Id
-      end if
-      c.title = name0
-      c.itemType = typ0
-      c.path = path0
-      posterUri = _browsePosterUri(c.id, posterBase, posterToken)
-      if posterUri = "" then posterUri = _browseChannelPosterUri(c.id, posterBase, posterToken)
-      c.hdPosterUrl = posterUri
-      c.sdPosterUrl = posterUri
-      c.posterUrl = posterUri
-      c.posterMode = "zoomToFill"
-      c.seriesId = ""
-      c.seasonNumber = -1
-      c.episodeNumber = -1
-      if it.seriesId <> invalid then c.seriesId = it.seriesId.ToStr().Trim()
-      if c.seriesId = "" and it.SeriesId <> invalid then c.seriesId = it.SeriesId.ToStr().Trim()
-      if it.seasonNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.seasonNumber, -1)
-      if c.seasonNumber <= 0 and it.parentIndexNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.parentIndexNumber, -1)
-      if c.seasonNumber <= 0 and it.ParentIndexNumber <> invalid then c.seasonNumber = _upNextIntFromAny(it.ParentIndexNumber, -1)
-      if it.episodeNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.episodeNumber, -1)
-      if c.episodeNumber <= 0 and it.indexNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.indexNumber, -1)
-      if c.episodeNumber <= 0 and it.IndexNumber <> invalid then c.episodeNumber = _upNextIntFromAny(it.IndexNumber, -1)
-
-      resumeRaw = _resumeStateFromRawItem(it)
-      if _resumeStateHasSignal(resumeRaw) then _rememberResumeState(c.id, resumeRaw)
-      resume = _mergeResumeState(resumeRaw, _resumeStateForItem(c.id))
-      c.resumePositionMs = Int(resume.positionMs)
-      c.resumeDurationMs = Int(resume.durationMs)
-      c.resumePercent = Int(resume.percent)
-      c.played = (resume.played = true)
-      c.rank = 0
-    else
-      c.title = ""
-      c.itemType = ""
-      c.path = ""
-      c.resumePositionMs = 0
-      c.resumeDurationMs = 0
-      c.resumePercent = 0
-      c.played = false
-      c.rank = 0
-      c.posterMode = "zoomToFill"
-      c.hdPosterUrl = ""
-      c.sdPosterUrl = ""
-      c.posterUrl = ""
-      c.seriesId = ""
-      c.seasonNumber = -1
-      c.episodeNumber = -1
-    end if
-    root.appendChild(c)
-  end for
-
-  m.libraryItemsList.content = root
-
-  if m.libraryEmptyLabel <> invalid then
-    if queryLower <> "" then
-      m.libraryEmptyLabel.text = _t("library_no_results")
-    else
-      m.libraryEmptyLabel.text = _t("no_items")
-    end if
-    m.libraryEmptyLabel.visible = (root.getChildCount() = 0)
-  end if
-
-  if root.getChildCount() > 0 and m.browseLibraryAutoFocusPending = true and m.pendingDialog = invalid then
-    m.browseLibraryAutoFocusPending = false
-    m.browseFocus = "library_items"
-    applyFocus()
-  end if
-
-  if root.getChildCount() <= 0 and m.browseFocus = "library_items" then
-    m.browseFocus = "library_search"
-  end if
+  _resetBrowseLibraryPaginationState()
+  _appendBrowseLibraryItems(src, total)
 end sub
 
 sub _loadBrowseLibraryItems()
+  _reloadBrowseLibraryItems(true)
+end sub
+
+sub _reloadBrowseLibraryItems(reset as Boolean)
   if m.browseLibraryOpen <> true then return
   if m.gatewayTask = invalid then return
 
@@ -11523,6 +12830,7 @@ sub _loadBrowseLibraryItems()
   if m.pendingJob <> "" then
     if m.pendingJob = "home_shelf" then m.homeShelfQueue = []
     m.pendingLibraryLoad = true
+    m.pendingLibraryReset = (reset = true)
     _scheduleDeferredBrowseActions()
     setStatus(_t("please_wait"))
     return
@@ -11537,31 +12845,85 @@ sub _loadBrowseLibraryItems()
     return
   end if
 
-  if m.libraryEmptyLabel <> invalid then
-    m.libraryEmptyLabel.text = _t("loading")
-    m.libraryEmptyLabel.visible = true
+  doReset = (reset = true)
+  if doReset then _resetBrowseLibraryPaginationState()
+  if doReset then _updateBrowseLibraryEmptyState(true)
+  if doReset <> true and m.libraryHasMore <> true then return
+
+  start = m.libraryStartIndex
+  if doReset then start = 0
+  _fetchBrowseLibraryPage(start, doReset)
+end sub
+
+sub _fetchBrowseLibraryPage(startIndex as Integer, reset as Boolean)
+  if m.browseLibraryOpen <> true then return
+  if m.gatewayTask = invalid then return
+  if m.libraryIsLoading = true then return
+  if reset <> true and m.libraryHasMore <> true then return
+
+  id = m.browseLibraryViewId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return
+
+  start = Int(startIndex)
+  if start < 0 then start = 0
+
+  cfg = loadConfig()
+  if cfg.apiBase = "" or cfg.appToken = "" or cfg.jellyfinToken = "" or cfg.userId = "" then
+    m.libraryIsLoading = false
+    if m.libraryEmptyLabel <> invalid then
+      m.libraryEmptyLabel.text = _t("missing_config")
+      m.libraryEmptyLabel.visible = true
+    end if
+    return
   end if
 
+  q = m.browseLibrarySearch
+  if q = invalid then q = ""
+  q = q.ToStr().Trim()
   coll = m.browseLibraryCollection
   if coll = invalid then coll = ""
   coll = LCase(coll.ToStr().Trim())
 
-  print "library request viewId=" + id + " coll=" + coll
+  m.libraryIsLoading = true
   m.pendingLibraryLoad = false
-  setStatus(_t("loading_items"))
+  m.pendingLibraryReset = (reset = true)
+  m.pendingLibraryStartIndex = start
   m.pendingLibraryViewId = id
-  m.pendingJob = "library_shelf"
-  if coll = "tvshows" then
-    m.gatewayTask.kind = "shelf_series"
-  else
-    m.gatewayTask.kind = "shelf"
+  m.pendingJob = "library_page"
+  reqSortKey = _librarySortByApiFromIndex(m.librarySortByIndex)
+  reqSort = _libraryResolveSortRequest(reqSortKey)
+  useSortKey = "Name"
+  useSortBy = "Name"
+  if type(reqSort) = "roAssociativeArray" then
+    if reqSort.sortKey <> invalid then useSortKey = reqSort.sortKey.ToStr().Trim()
+    if reqSort.sortBy <> invalid then useSortBy = reqSort.sortBy.ToStr().Trim()
+    if reqSort.fallback = true then
+      _applyLibrarySortFallback(reqSortKey)
+      useSortKey = "Name"
+      useSortBy = "Name"
+    end if
   end if
+  if useSortKey = "" then useSortKey = "Name"
+  if useSortBy = "" then useSortBy = "Name"
+  m.pendingLibrarySortKey = useSortKey
+  m.pendingLibrarySortBy = useSortBy
+  setStatus(_t("loading_items"))
+  print "library page request viewId=" + id + " start=" + start.ToStr() + " limit=" + m.libraryPageSize.ToStr() + " sortKey=" + useSortKey + " sortBy=" + useSortBy + " sortOrder=" + _librarySortOrderApiFromIndex(m.librarySortOrderIndex) + " query=" + q
+
+  m.gatewayTask.kind = "library_page"
   m.gatewayTask.apiBase = cfg.apiBase
   m.gatewayTask.appToken = cfg.appToken
   m.gatewayTask.jellyfinToken = cfg.jellyfinToken
   m.gatewayTask.userId = cfg.userId
+  m.gatewayTask.collectionType = coll
   m.gatewayTask.parentId = id
-  m.gatewayTask.limit = 240
+  m.gatewayTask.startIndex = start
+  m.gatewayTask.limit = Int(m.libraryPageSize)
+  m.gatewayTask.sortBy = useSortBy
+  m.gatewayTask.sortOrder = _librarySortOrderApiFromIndex(m.librarySortOrderIndex)
+  m.gatewayTask.searchTerm = q
   m.gatewayTask.control = "run"
 end sub
 
@@ -11607,21 +12969,39 @@ sub _openBrowseLibrary(viewId as String, collectionType as String, title as Stri
   m.browseLibraryTitle = ttl
   m.browseLibrarySearch = ""
   m.browseLibraryRawItems = []
-  m.browseLibraryAutoFocusPending = false
+  m.browseLibraryAutoFocusPending = true
+  m.libraryTopFocus = "search"
+  m.libraryOpenGuardUntilMs = _nowMs() + 500
+  m.librarySortOverlayOpen = false
+  m.librarySortOverlayFocus = "by"
+  m.librarySortByIndex = 0
+  m.librarySortOrderIndex = 0
+  m.librarySortDraftByIndex = 0
+  m.librarySortDraftOrderIndex = 0
+  m.librarySortByApi = _librarySortByApiFromIndex(0)
+  m.librarySortOrderApi = _librarySortOrderApiFromIndex(0)
+  m.librarySortLabel = _librarySortButtonLabel()
+  m.supportedSorts = ["Name", "DateAdded", "PremiereDate", "OfficialRating", "CriticRating"]
+  m.librarySeenIds = {}
+  m.libraryLoadedCount = 0
+  m.libraryStartIndex = 0
+  m.libraryHasMore = true
+  m.libraryIsLoading = false
+  m.libraryTotalCount = -1
+  m.pendingLibraryStartIndex = 0
+  m.pendingLibraryReset = true
+  m.pendingLibrarySortKey = "Name"
+  m.pendingLibrarySortBy = "Name"
   m.pendingLibraryViewId = ""
   if m.libraryItemsList <> invalid then m.libraryItemsList.content = CreateObject("roSGNode", "ContentNode")
-  if m.libraryEmptyLabel <> invalid then
-    m.libraryEmptyLabel.text = _t("loading")
-    m.libraryEmptyLabel.visible = true
-  end if
 
   _setBrowseLibraryVisible(true)
   _refreshBrowseLibraryHeader()
-  m.browseFocus = "library_items"
+  m.browseFocus = "library_search"
   applyFocus()
 
   if m.pendingJob = "home_shelf" then m.homeShelfQueue = []
-  _loadBrowseLibraryItems()
+  _reloadBrowseLibraryItems(true)
 end sub
 
 sub _closeBrowseLibrary()
@@ -11633,6 +13013,26 @@ sub _closeBrowseLibrary()
   m.browseLibraryTitle = ""
   m.browseLibrarySearch = ""
   m.browseLibraryRawItems = []
+  m.libraryTopFocus = "search"
+  m.librarySortOverlayOpen = false
+  m.librarySortOverlayFocus = "by"
+  m.librarySortByIndex = 0
+  m.librarySortOrderIndex = 0
+  m.librarySortDraftByIndex = 0
+  m.librarySortDraftOrderIndex = 0
+  m.librarySortByApi = "Name"
+  m.librarySortOrderApi = "Ascending"
+  m.librarySortLabel = "A-Z"
+  m.librarySeenIds = {}
+  m.libraryLoadedCount = 0
+  m.libraryStartIndex = 0
+  m.libraryHasMore = true
+  m.libraryIsLoading = false
+  m.libraryTotalCount = -1
+  m.pendingLibraryStartIndex = 0
+  m.pendingLibraryReset = false
+  m.pendingLibrarySortKey = "Name"
+  m.pendingLibrarySortBy = "Name"
   m.browseLibraryAutoFocusPending = false
   m.pendingLibraryViewId = ""
   m.pendingLibraryLoad = false
@@ -11646,6 +13046,8 @@ sub _closeBrowseLibrary()
 
   if m.libraryItemsList <> invalid then m.libraryItemsList.content = CreateObject("roSGNode", "ContentNode")
   if m.libraryEmptyLabel <> invalid then m.libraryEmptyLabel.visible = false
+  if m.sortOverlay <> invalid then m.sortOverlay.visible = false
+  if m.searchChip <> invalid then m.searchChip.visible = false
 
   _setBrowseLibraryVisible(false)
   m.browseFocus = "views"
@@ -12419,6 +13821,7 @@ sub _renderSeriesDetail(payload as Object)
   ageText = ""
   if series.officialRating <> invalid then ageText = series.officialRating.ToStr().Trim()
   if ageText = "" and series.OfficialRating <> invalid then ageText = series.OfficialRating.ToStr().Trim()
+  ageText = _compactOfficialRating(ageText)
 
   _setDetailChip(m.seriesDetailChipYear, m.seriesDetailChipYearBg, m.seriesDetailChipYearText, yrText)
   _setDetailChip(m.seriesDetailChipAge, m.seriesDetailChipAgeBg, m.seriesDetailChipAgeText, ageText)
@@ -12567,6 +13970,7 @@ sub _renderEpisodeDetail(ep as Object)
   if ageText = "" and e.OfficialRating <> invalid then ageText = e.OfficialRating.ToStr().Trim()
   if ageText = "" and series.officialRating <> invalid then ageText = series.officialRating.ToStr().Trim()
   if ageText = "" and series.OfficialRating <> invalid then ageText = series.OfficialRating.ToStr().Trim()
+  ageText = _compactOfficialRating(ageText)
 
   _setDetailChip(m.seriesDetailChipYear, m.seriesDetailChipYearBg, m.seriesDetailChipYearText, yrText)
   _setDetailChip(m.seriesDetailChipAge, m.seriesDetailChipAgeBg, m.seriesDetailChipAgeText, ageText)
@@ -13001,6 +14405,10 @@ sub _onBrowseListItemSelected(lst as Object, requiredFocus as String, label as S
   end if
 
   if m.mode <> "browse" then return
+  if requiredFocus = "library_items" and m.librarySortOverlayOpen = true then
+    print "[guard] ignore " + label + " while sort overlay open"
+    return
+  end if
   if requiredFocus = "library_items" and m.browseLibraryOpen = true and m.browseFocus = "library_search" then
     print "[guard] ignore " + label + " while library search focused"
     return
@@ -13040,7 +14448,60 @@ sub onRecentSeriesItemSelected()
   _onBrowseListItemSelected(m.recentSeriesList, "series", "onRecentSeriesItemSelected")
 end sub
 
+sub onLibraryItemFocused()
+  if m.browseLibraryOpen <> true then return
+  if m.librarySortOverlayOpen = true then return
+  if m.libraryItemsList = invalid then return
+  if m.libraryHasMore <> true then return
+  if m.libraryIsLoading = true then return
+
+  idx = m.libraryItemsList.itemFocused
+  if idx = invalid then return
+  idx = Int(idx)
+  if idx < 0 then return
+
+  threshold = Int(m.libraryPrefetchThreshold)
+  if threshold < 1 then threshold = 20
+  triggerAt = Int(m.libraryLoadedCount) - threshold
+  if triggerAt < 0 then triggerAt = 0
+  if idx >= triggerAt then
+    _reloadBrowseLibraryItems(false)
+  end if
+end sub
+
+sub onLibrarySortBySelected()
+  if m.librarySortUiBusy = true then return
+  if m.sortByList = invalid then return
+  idx = m.sortByList.itemSelected
+  if idx = invalid then return
+  i = Int(idx)
+  if i < 0 then return
+  opts = _librarySortByOptions()
+  if i >= opts.Count() then return
+  m.librarySortDraftByIndex = i
+  print "library sort by selected idx=" + i.ToStr()
+  if m.librarySortOverlayOpen = true then _refreshLibrarySortOverlayUi()
+end sub
+
+sub onLibrarySortOrderSelected()
+  if m.librarySortUiBusy = true then return
+  if m.sortOrderList = invalid then return
+  idx = m.sortOrderList.itemSelected
+  if idx = invalid then return
+  i = Int(idx)
+  if i < 0 then return
+  opts = _librarySortOrderOptions()
+  if i >= opts.Count() then return
+  m.librarySortDraftOrderIndex = i
+  print "library sort order selected idx=" + i.ToStr()
+  if m.librarySortOverlayOpen = true then _refreshLibrarySortOverlayUi()
+end sub
+
 sub onLibraryItemSelected()
+  if m.librarySortOverlayOpen = true then
+    print "[guard] ignore onLibraryItemSelected while sort overlay open"
+    return
+  end if
   _onBrowseListItemSelected(m.libraryItemsList, "library_items", "onLibraryItemSelected")
 end sub
 
