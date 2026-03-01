@@ -1,4 +1,11 @@
 sub init()
+  if m.top <> invalid then
+    if m.top.hasField("width") then m.top.width = 170
+    if m.top.hasField("height") then m.top.height = 252
+    if m.top.hasField("clipChildren") then m.top.clipChildren = false
+    if m.top.hasField("clippingRect") then m.top.clippingRect = [0, 0, 170, 252]
+    if m.top.hasField("clipRect") then m.top.clipRect = [0, 0, 170, 252]
+  end if
   m.cardBg = m.top.findNode("cardBg")
   m.focusRing = m.top.findNode("focusRing")
   m.cover = m.top.findNode("cover")
@@ -15,10 +22,21 @@ sub init()
   m.rankValue = 0
   m.completeBadgeBg = m.top.findNode("completeBadgeBg")
   m.completeBadgeText = m.top.findNode("completeBadgeText")
+  m.contentNode = invalid
 end sub
 
 sub onItemContentChanged()
+  _clearContentObservers()
   c = m.top.itemContent
+  _observeContent(c)
+  _renderContent(c)
+end sub
+
+sub onContentFieldChanged()
+  _renderContent(m.top.itemContent)
+end sub
+
+sub _renderContent(c as Object)
   if c = invalid then
     if m.cover <> invalid then
       if m.cover.hasField("loadDisplayMode") then m.cover.loadDisplayMode = "zoomToFill"
@@ -109,6 +127,33 @@ sub onItemContentChanged()
   if m.completeBadgeText <> invalid then m.completeBadgeText.visible = played
 
   applyStyle()
+end sub
+
+sub _clearContentObservers()
+  c = m.contentNode
+  if c = invalid then return
+  if c.hasField("title") then c.unobserveField("title")
+  if c.hasField("hdPosterUrl") then c.unobserveField("hdPosterUrl")
+  if c.hasField("sdPosterUrl") then c.unobserveField("sdPosterUrl")
+  if c.hasField("posterUrl") then c.unobserveField("posterUrl")
+  if c.hasField("meta") then c.unobserveField("meta")
+  if c.hasField("resumePercent") then c.unobserveField("resumePercent")
+  if c.hasField("played") then c.unobserveField("played")
+  if c.hasField("rank") then c.unobserveField("rank")
+  m.contentNode = invalid
+end sub
+
+sub _observeContent(c as Object)
+  if c = invalid then return
+  m.contentNode = c
+  if c.hasField("title") then c.observeField("title", "onContentFieldChanged")
+  if c.hasField("hdPosterUrl") then c.observeField("hdPosterUrl", "onContentFieldChanged")
+  if c.hasField("sdPosterUrl") then c.observeField("sdPosterUrl", "onContentFieldChanged")
+  if c.hasField("posterUrl") then c.observeField("posterUrl", "onContentFieldChanged")
+  if c.hasField("meta") then c.observeField("meta", "onContentFieldChanged")
+  if c.hasField("resumePercent") then c.observeField("resumePercent", "onContentFieldChanged")
+  if c.hasField("played") then c.observeField("played", "onContentFieldChanged")
+  if c.hasField("rank") then c.observeField("rank", "onContentFieldChanged")
 end sub
 
 sub onItemHasFocusChanged()

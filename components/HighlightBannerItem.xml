@@ -101,6 +101,29 @@
           visible="false"
         />
 
+        <Label
+          id="title"
+          translation="[16, 246]"
+          width="528"
+          height="40"
+          font="font:MediumSystemFont"
+          color="0xE6EBF3"
+          wrap="true"
+          numLines="2"
+          text=""
+        />
+
+        <Label
+          id="meta"
+          translation="[16, 290]"
+          width="528"
+          height="18"
+          font="font:SmallSystemFont"
+          color="0x9FB0C5"
+          text=""
+          visible="true"
+        />
+
         <Rectangle
           id="progressBg"
           translation="[0, 314]"
@@ -121,28 +144,6 @@
 
       </children>
     </Group>
-
-    <Label
-      id="title"
-      translation="[34, 228]"
-      width="528"
-      height="46"
-      font="font:MediumSystemFont"
-      color="0xE6EBF3"
-      wrap="true"
-      numLines="2"
-      text=""
-    />
-
-    <Label
-      id="meta"
-      translation="[34, 278]"
-      width="528"
-      height="22"
-      font="font:SmallSystemFont"
-      color="0x9FB0C5"
-      text=""
-    />
 
     <Poster
       id="focusRing"

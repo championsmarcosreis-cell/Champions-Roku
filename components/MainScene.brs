@@ -94,7 +94,7 @@ sub init()
   m.lastPlayerState = ""
   m.devAutoplay = ""
   m.devAutoplayDone = false
-  m.browseFocus = "views" ' views | items | continue | movies | series | library_search | library_items | hero_logout | hero_continue
+  m.browseFocus = "views" ' views | items | continue | movies | series | movies_more | series_more | library_search | library_items | hero_logout | hero_continue
   m.viewsGridCols = 3
   m.itemsGridCols = 3
   m.itemsGridRows = 2
@@ -193,6 +193,11 @@ sub init()
   m.vodPrefs = loadVodPlayerPrefs()
   m.uiLang = resolveUiLang()
   m.metaLang = resolveMetadataLang(m.uiLang)
+  m.metaQueue = []
+  m.metaQueueSet = {}
+  m.metaCache = {}
+  m.metaInFlight = false
+  m.metaActiveId = ""
   m.playAttemptId = ""
   m.playAttemptSignStarted = false
   m.pendingPlayAttemptId = ""
@@ -209,6 +214,7 @@ sub init()
   m.lastHandledPlaybackState = ""
   m.appStartMs = _nowMs()
   m.liveLayout = _buildLiveLayoutMetrics()
+  m.didConfigReset = maybeClearConfigForVersion("2026-02-26-clearcache1")
   ' Player UX state machine.
   m.uiState = "IDLE" ' IDLE | PLAYING | OSD | SETTINGS
   m.osdFocus = "TIMELINE" ' TIMELINE | GEAR | NOWBACK
@@ -315,11 +321,19 @@ sub init()
   m.gatewayTask = CreateObject("roSGNode", "GatewayTask")
   if m.gatewayTask <> invalid then
     m.gatewayTask.observeField("state", "onGatewayTaskStateChanged")
+    m.gatewayTask.metaLang = m.metaLang
     m.top.appendChild(m.gatewayTask)
+  end if
+  m.metaTask = CreateObject("roSGNode", "GatewayTask")
+  if m.metaTask <> invalid then
+    m.metaTask.observeField("state", "onMetaTaskStateChanged")
+    m.metaTask.metaLang = m.metaLang
+    m.top.appendChild(m.metaTask)
   end if
   m.upNextTask = CreateObject("roSGNode", "GatewayTask")
   if m.upNextTask <> invalid then
     m.upNextTask.observeField("state", "onUpNextTaskStateChanged")
+    m.upNextTask.metaLang = m.metaLang
     m.top.appendChild(m.upNextTask)
   end if
 
@@ -794,6 +808,27 @@ sub bindUiNodes()
   m.recentSeriesTitle = m.top.findNode("recentSeriesTitle")
   m.recentMoviesMore = m.top.findNode("recentMoviesMore")
   m.recentSeriesMore = m.top.findNode("recentSeriesMore")
+
+  if m.itemsList <> invalid and m.itemsList.hasField("itemSize") then
+    m.itemsList.itemSize = [600, 380]
+  end if
+  if m.continueList <> invalid and m.continueList.hasField("itemSize") then
+    m.continueList.itemSize = [268, 252]
+    if m.continueList.hasField("itemComponentName") then m.continueList.itemComponentName = "ContinueWatchingItem"
+  end if
+  if m.recentMoviesList <> invalid and m.recentMoviesList.hasField("itemSize") then
+    m.recentMoviesList.itemSize = [160, 240]
+    if m.recentMoviesList.hasField("itemComponentName") then m.recentMoviesList.itemComponentName = "RecentPosterItem"
+    if m.recentMoviesList.hasField("itemSpacing") then m.recentMoviesList.itemSpacing = [32, 0]
+    if m.recentMoviesList.hasField("drawFocusFeedback") then m.recentMoviesList.drawFocusFeedback = false
+  end if
+  if m.recentSeriesList <> invalid and m.recentSeriesList.hasField("itemSize") then
+    m.recentSeriesList.itemSize = [160, 240]
+    if m.recentSeriesList.hasField("itemComponentName") then m.recentSeriesList.itemComponentName = "RecentPosterItem"
+    if m.recentSeriesList.hasField("itemSpacing") then m.recentSeriesList.itemSpacing = [32, 0]
+    if m.recentSeriesList.hasField("drawFocusFeedback") then m.recentSeriesList.drawFocusFeedback = false
+  end if
+
   m.browseHeaderTitle = m.top.findNode("browseHeaderTitle")
   m.browseLogoutBg = m.top.findNode("browseLogoutBg")
   m.browseLogoutIcon = m.top.findNode("browseLogoutIcon")
@@ -1237,9 +1272,9 @@ sub layoutCards()
 end sub
 
 sub renderForm()
-  if m.usernameText <> invalid then m.usernameText.text = fieldDisplay("Usuario", m.form.username, false)
-  if m.passwordText <> invalid then m.passwordText.text = fieldDisplay("Senha", m.form.password, true)
-  if m.loginText <> invalid then m.loginText.text = "Entrar"
+  if m.usernameText <> invalid then m.usernameText.text = fieldDisplay(_t("login_user"), m.form.username, false)
+  if m.passwordText <> invalid then m.passwordText.text = fieldDisplay(_t("login_pass"), m.form.password, true)
+  if m.loginText <> invalid then m.loginText.text = _t("login_button")
 end sub
 
 function fieldDisplay(placeholder as String, value as String, secret as Boolean) as String
@@ -1315,15 +1350,15 @@ sub doLogin()
     return
   end if
   if m.form.username = "" then
-    setStatus("faltou usuario")
+    setStatus(_t("login_missing_user"))
     return
   end if
   if m.form.password = "" then
-    setStatus("faltou senha")
+    setStatus(_t("login_missing_pass"))
     return
   end if
 
-  setStatus("login...")
+  setStatus(_t("login_status"))
   m.pendingJob = "login"
   m.gatewayTask.kind = "login"
   m.gatewayTask.apiBase = m.apiBase
@@ -2039,6 +2074,8 @@ sub _upNextRememberMeta(itemId as String, seriesId as String, seasonNumber as In
   if id = invalid then id = ""
   id = id.ToStr().Trim()
   if id = "" then return
+
+  _queueMetadata(id, "episode", title)
 
   if type(m.upNextItemMetaById) <> "roAssociativeArray" then m.upNextItemMetaById = {}
 
@@ -3025,13 +3062,35 @@ end function
 function resolveUiLang() as String
   di = CreateObject("roDeviceInfo")
   loc = ""
+  prefSub = ""
+  prefAudio = ""
   if di <> invalid then
     l0 = di.GetCurrentLocale()
     if l0 <> invalid then loc = l0.ToStr()
+
+    ' Preferred language APIs are not available on all firmware.
+    di2 = GetInterface(di, "ifDeviceInfo2")
+    if di2 <> invalid then
+      s0 = di2.GetPreferredSubtitleLanguage()
+      if s0 <> invalid then prefSub = s0.ToStr()
+      a0 = di2.GetPreferredAudioLanguage()
+      if a0 <> invalid then prefAudio = a0.ToStr()
+    end if
   end if
 
   l = normalizeLang(loc)
-  if l = "pt" or l = "es" or l = "it" or l = "en" then return l
+  ps = normalizeLang(prefSub)
+  pa = normalizeLang(prefAudio)
+
+  if l = "pt" or l = "es" or l = "it" or l = "en" then
+    ' If the UI locale is PT/EN but the user prefers ES/IT for media, honor it.
+    if (l = "pt" or l = "en") and (ps = "es" or ps = "it") then return ps
+    if (l = "pt" or l = "en") and (pa = "es" or pa = "it") then return pa
+    return l
+  end if
+
+  if ps = "pt" or ps = "es" or ps = "it" or ps = "en" then return ps
+  if pa = "pt" or pa = "es" or pa = "it" or pa = "en" then return pa
   return "en"
 end function
 
@@ -3096,6 +3155,12 @@ function _t(key as String) as String
         missing_config: "Missing config (APP_TOKEN/login)"
         missing_app_token: "Missing APP_TOKEN (press *)"
         hint_app_token: "Press * to configure APP_TOKEN"
+        login_user: "Username"
+        login_pass: "Password"
+        login_button: "Sign in"
+        login_missing_user: "Missing username"
+        login_missing_pass: "Missing password"
+        login_status: "signing in..."
         vod_checking: "vod: checking availability..."
         vod_processing: "vod: processing"
         vod_processing_msg: "We are processing this content. It will be available soon."
@@ -3176,6 +3241,12 @@ function _t(key as String) as String
         missing_config: "Faltou config (APP_TOKEN/login)"
         missing_app_token: "faltou APP_TOKEN (pressione *)"
         hint_app_token: "Pressione * para configurar APP_TOKEN"
+        login_user: "Usuario"
+        login_pass: "Senha"
+        login_button: "Entrar"
+        login_missing_user: "faltou usuario"
+        login_missing_pass: "faltou senha"
+        login_status: "login..."
         vod_checking: "vod: verificando disponibilidade..."
         vod_processing: "vod: processando"
         vod_processing_msg: "Estamos processando este conteudo. Em breve estara disponivel."
@@ -3256,6 +3327,12 @@ function _t(key as String) as String
         missing_config: "Falta config (APP_TOKEN/login)"
         missing_app_token: "falta APP_TOKEN (pulsa *)"
         hint_app_token: "Pulsa * para configurar APP_TOKEN"
+        login_user: "Usuario"
+        login_pass: "Contrasena"
+        login_button: "Entrar"
+        login_missing_user: "falta usuario"
+        login_missing_pass: "falta contrasena"
+        login_status: "iniciando..."
         vod_checking: "vod: comprobando disponibilidad..."
         vod_processing: "vod: procesando"
         vod_processing_msg: "Estamos procesando este contenido. Estara disponible pronto."
@@ -3336,6 +3413,12 @@ function _t(key as String) as String
         missing_config: "Config mancante (APP_TOKEN/login)"
         missing_app_token: "manca APP_TOKEN (premi *)"
         hint_app_token: "Premi * per configurare APP_TOKEN"
+        login_user: "Utente"
+        login_pass: "Password"
+        login_button: "Accedi"
+        login_missing_user: "manca utente"
+        login_missing_pass: "manca password"
+        login_status: "accesso..."
         vod_checking: "vod: verifica disponibilita..."
         vod_processing: "vod: in elaborazione"
         vod_processing_msg: "Stiamo elaborando questo contenuto. Sara disponibile a breve."
@@ -3423,6 +3506,7 @@ sub applyLocalization()
   _syncHeroAvatarVisual()
   if m.hintLabel <> invalid then m.hintLabel.text = _t("hint_app_token")
   _refreshUpNextUiStrings()
+  if m.mode = "login" then renderForm()
 end sub
 
 function _browseListFocusedIndex(lst as Object) as Integer
@@ -3492,6 +3576,47 @@ function _browseSectionHasItems(section as String) as Boolean
   if s = "series" then return (_browseListCount(m.recentSeriesList) > 0)
   return false
 end function
+
+function _browseMoreIsVisible(section as String) as Boolean
+  s = section
+  if s = invalid then s = ""
+  s = LCase(s.ToStr().Trim())
+  if s = "movies" then
+    return (m.recentMoviesMore <> invalid and m.recentMoviesMore.visible = true)
+  end if
+  if s = "series" then
+    return (m.recentSeriesMore <> invalid and m.recentSeriesMore.visible = true)
+  end if
+  return false
+end function
+
+sub _openBrowseLibraryForShelf(section as String)
+  sec = section
+  if sec = invalid then sec = ""
+  sec = LCase(sec.ToStr().Trim())
+
+  viewId = ""
+  coll = ""
+  ttl = ""
+  if sec = "movies" then
+    if m.browseMoviesViewId <> invalid then viewId = m.browseMoviesViewId.ToStr().Trim()
+    coll = "movies"
+    ttl = _t("library_movies")
+  else if sec = "series" then
+    if m.browseSeriesViewId <> invalid then viewId = m.browseSeriesViewId.ToStr().Trim()
+    coll = "tvshows"
+    ttl = _t("library_series")
+  else
+    return
+  end if
+
+  if viewId = "" then
+    print "browse more ignored section=" + sec + " reason=missing_view_id"
+    return
+  end if
+  _setBrowseTabsSelection(coll)
+  _openBrowseLibrary(viewId, coll, ttl)
+end sub
 
 function _devBrowseFocusTarget() as String
   mode = m.devAutoplay
@@ -4577,6 +4702,10 @@ sub _applyBrowseShelfScroll()
   targetNode = m.itemsList
   if focusKey = "continue" and _browseSectionHasItems("continue") then
     targetNode = m.continueList
+  else if focusKey = "movies_more" and _browseSectionHasItems("movies") then
+    targetNode = m.recentMoviesList
+  else if focusKey = "series_more" and _browseSectionHasItems("series") then
+    targetNode = m.recentSeriesList
   else if focusKey = "movies" and _browseSectionHasItems("movies") then
     targetNode = m.recentMoviesList
   else if focusKey = "series" and _browseSectionHasItems("series") then
@@ -4752,6 +4881,110 @@ function _browseShelfBackdropUri(itemId as String, apiBase as String, jellyfinTo
     q["X-Jellyfin-Token"] = tok
   end if
   return appendQuery(u, q)
+end function
+
+function _tmdbImageUrl(path as Dynamic, size as String) as String
+  p = ""
+  if path <> invalid then p = path.ToStr().Trim()
+  if p = "" then return ""
+  if Left(p, 7) = "http://" or Left(p, 8) = "https://" then return p
+  if Left(p, 1) <> "/" then p = "/" + p
+  sz = size
+  if sz = invalid then sz = ""
+  sz = sz.ToStr().Trim()
+  if sz = "" then sz = "w342"
+  return "https://image.tmdb.org/t/p/" + sz + p
+end function
+
+function _metaStr(meta as Object, key as String) as String
+  if type(meta) <> "roAssociativeArray" then return ""
+  if key = invalid then return ""
+  k = key.ToStr().Trim()
+  if k = "" then return ""
+  v = _aaGetCi(meta, k)
+  if v <> invalid then return v.ToStr().Trim()
+  if k = "title" then
+    v = _aaGetCi(meta, "name")
+    if v <> invalid then return v.ToStr().Trim()
+  end if
+  if k = "posterPath" then
+    v = _aaGetCi(meta, "poster_path")
+    if v <> invalid then return v.ToStr().Trim()
+  end if
+  if k = "backdropPath" then
+    v = _aaGetCi(meta, "backdrop_path")
+    if v <> invalid then return v.ToStr().Trim()
+  end if
+  if k = "stillPath" then
+    v = _aaGetCi(meta, "still_path")
+    if v <> invalid then return v.ToStr().Trim()
+  end if
+  if k = "posterUrl" then
+    v = _aaGetCi(meta, "poster_url")
+    if v <> invalid then return v.ToStr().Trim()
+  end if
+  if k = "backdropUrl" then
+    v = _aaGetCi(meta, "backdrop_url")
+    if v <> invalid then return v.ToStr().Trim()
+  end if
+  if k = "stillUrl" then
+    v = _aaGetCi(meta, "still_url")
+    if v <> invalid then return v.ToStr().Trim()
+  end if
+  return ""
+end function
+
+function _metaPosterUrl(meta as Object) as String
+  p = _metaStr(meta, "posterPath")
+  if p = "" then p = _metaStr(meta, "poster_path")
+  if p = "" then p = _metaStr(meta, "posterUrl")
+  return _tmdbImageUrl(p, "w342")
+end function
+
+function _metaBackdropUrl(meta as Object) as String
+  p = _metaStr(meta, "backdropPath")
+  if p = "" then p = _metaStr(meta, "backdrop_path")
+  if p = "" then p = _metaStr(meta, "backdropUrl")
+  return _tmdbImageUrl(p, "w780")
+end function
+
+function _metaStillUrl(meta as Object) as String
+  p = _metaStr(meta, "stillPath")
+  if p = "" then p = _metaStr(meta, "still_path")
+  if p = "" then p = _metaStr(meta, "stillUrl")
+  return _tmdbImageUrl(p, "w300")
+end function
+
+function _metaGenresText(meta as Object) as String
+  if type(meta) <> "roAssociativeArray" then return ""
+  raw = meta.genres
+  if type(raw) <> "roArray" then return ""
+  out = ""
+  for each g in raw
+    if g <> invalid then
+      s = g.ToStr().Trim()
+      if s <> "" then
+        if out <> "" then out = out + " • "
+        out = out + s
+      end if
+    end if
+  end for
+  return out
+end function
+
+function _metaCacheKey(itemId as String) as String
+  if itemId = invalid then return ""
+  k = itemId.ToStr().Trim()
+  if k = "" then return ""
+  return LCase(k)
+end function
+
+function _metaCacheGet(itemId as String) as Object
+  if type(m.metaCache) <> "roAssociativeArray" then return invalid
+  key = _metaCacheKey(itemId)
+  if key = "" then return invalid
+  if m.metaCache[key] <> invalid then return m.metaCache[key]
+  return invalid
 end function
 
 function _minutesFromTicks(raw as Dynamic) as Integer
@@ -6451,8 +6684,20 @@ function _ensureBrowseNodes() as Boolean
     if m.heroAvatarPhoto = invalid then m.heroAvatarPhoto = m.browseCard.findNode("heroAvatarPhoto")
     if m.heroAvatarText = invalid then m.heroAvatarText = m.browseCard.findNode("heroAvatarText")
   end if
+  _applyBrowseHomeLocalization()
   return (m.browseCard <> invalid and m.viewsList <> invalid)
 end function
+
+sub _applyBrowseHomeLocalization()
+  if m.itemsTitle <> invalid then m.itemsTitle.text = _t("top10")
+  if m.continueTitle <> invalid then m.continueTitle.text = _t("resume_title")
+  if m.recentMoviesTitle <> invalid then m.recentMoviesTitle.text = _t("recent_movies")
+  if m.recentSeriesTitle <> invalid then m.recentSeriesTitle.text = _t("recent_series")
+  if m.recentMoviesMore <> invalid then m.recentMoviesMore.text = _t("view_all")
+  if m.recentSeriesMore <> invalid then m.recentSeriesMore.text = _t("view_all")
+  if m.heroPromptText <> invalid then m.heroPromptText.text = _t("hero_continue_text")
+  if m.heroPromptBtnText <> invalid then m.heroPromptBtnText.text = _t("hero_continue_cta")
+end sub
 
 function _ensureLiveNodes() as Boolean
   if m.liveCard = invalid then m.liveCard = m.top.findNode("liveCard")
@@ -8044,6 +8289,43 @@ sub onUpNextTaskStateChanged()
   end if
 end sub
 
+sub onMetaTaskStateChanged()
+  if m.metaTask = invalid then return
+  st = m.metaTask.state
+  if st <> "done" and st <> "stop" then return
+
+  itemId = m.metaActiveId
+  if itemId = invalid then itemId = ""
+  itemId = itemId.ToStr().Trim()
+  key = _metaCacheKey(itemId)
+
+  m.metaActiveId = ""
+  m.metaInFlight = false
+  if type(m.metaQueueSet) = "roAssociativeArray" and key <> "" then
+    m.metaQueueSet.Delete(key)
+  end if
+
+  if itemId <> "" and m.metaTask.ok = true then
+    meta = ParseJson(m.metaTask.resultJson)
+    if type(meta) <> "roAssociativeArray" then meta = {}
+    if type(m.metaCache) <> "roAssociativeArray" then m.metaCache = {}
+    if key <> "" then m.metaCache[key] = meta
+    t0 = _metaStr(meta, "title")
+    p0 = _metaPosterUrl(meta)
+    print "meta ok id=" + itemId + " title=" + t0 + " poster=" + p0
+    _applyMetadataToUi(itemId, meta)
+  else if m.metaTask.ok <> true then
+    err = m.metaTask.error
+    if err = invalid then err = ""
+    err = err.ToStr().Trim()
+    if itemId <> "" and err <> "" then
+      print "metadata failed id=" + itemId + " err=" + err
+    end if
+  end if
+
+  _kickMetadataFetch()
+end sub
+
 sub onGatewayTaskStateChanged()
   if m.gatewayTask = invalid then return
   st = m.gatewayTask.state
@@ -9297,6 +9579,11 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
     return
   end if
 
+  ' Defensive player reset: some firmwares keep an internal instance alive
+  ' after quick stop/start transitions and reject the next play request.
+  if m.player.hasField("control") then m.player.control = "stop"
+  m.player.content = invalid
+
   _setUiVisibleForPlayback(true)
 
   resumeMs = Int(m.nextStartResumeMs)
@@ -9466,6 +9753,7 @@ sub startVideo(url as String, title as String, streamFormat as String, isLive as
   _prepareUpNextForPlayback(itemId, m.upNextCurrentContent)
   _setPlayerNowTitle(title)
 
+  if m.player.hasField("control") then m.player.control = "none"
   m.player.content = c
   m.player.visible = true
   m.player.control = "play"
@@ -10345,7 +10633,15 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
 
     if kl = "left" then
-      if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
+      if m.browseFocus = "movies_more" then
+        m.browseFocus = "movies"
+        applyFocus()
+        return true
+      else if m.browseFocus = "series_more" then
+        m.browseFocus = "series"
+        applyFocus()
+        return true
+      else if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
         lst = _browseListNodeForFocus(m.browseFocus)
         idx = _browseListFocusedIndex(lst)
         if idx > 0 then return false
@@ -10398,8 +10694,24 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
       else if m.browseFocus = "hero_continue" then
         return true
+      else if m.browseFocus = "movies_more" or m.browseFocus = "series_more" then
+        return true
       else if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
-        return false
+        lst = _browseListNodeForFocus(m.browseFocus)
+        idx = _browseListFocusedIndex(lst)
+        cnt = _browseListCount(lst)
+        if idx >= 0 and (idx + 1) < cnt then return false
+        if m.browseFocus = "movies" and _browseMoreIsVisible("movies") then
+          m.browseFocus = "movies_more"
+          applyFocus()
+          return true
+        end if
+        if m.browseFocus = "series" and _browseMoreIsVisible("series") then
+          m.browseFocus = "series_more"
+          applyFocus()
+          return true
+        end if
+        return true
       end if
     end if
 
@@ -10411,7 +10723,39 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
           applyFocus()
           return true
         end if
+      else if m.browseFocus = "movies_more" then
+        prevShelf = _browsePrevShelfSection("movies")
+        if prevShelf <> "" then
+          m.browseFocus = prevShelf
+        else
+          m.browseFocus = "views"
+        end if
+        applyFocus()
+        return true
+      else if m.browseFocus = "series_more" then
+        if _browseMoreIsVisible("movies") then
+          m.browseFocus = "movies_more"
+        else
+          prevShelf = _browsePrevShelfSection("series")
+          if prevShelf <> "" then
+            m.browseFocus = prevShelf
+          else
+            m.browseFocus = "views"
+          end if
+        end if
+        applyFocus()
+        return true
       else if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
+        if m.browseFocus = "movies" and _browseMoreIsVisible("movies") then
+          m.browseFocus = "movies_more"
+          applyFocus()
+          return true
+        end if
+        if m.browseFocus = "series" and _browseMoreIsVisible("series") then
+          m.browseFocus = "series_more"
+          applyFocus()
+          return true
+        end if
         prevShelf = _browsePrevShelfSection(m.browseFocus)
         if prevShelf <> "" then
           m.browseFocus = prevShelf
@@ -10436,6 +10780,14 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
       else if m.browseFocus = "hero_continue" then
         m.browseFocus = "views"
+        applyFocus()
+        return true
+      else if m.browseFocus = "movies_more" then
+        m.browseFocus = "movies"
+        applyFocus()
+        return true
+      else if m.browseFocus = "series_more" then
+        m.browseFocus = "series"
         applyFocus()
         return true
       else if m.browseFocus = "views" then
@@ -10465,6 +10817,16 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
           applyFocus()
           return true
         end if
+        if m.browseFocus = "movies" and _browseMoreIsVisible("movies") then
+          m.browseFocus = "movies_more"
+          applyFocus()
+          return true
+        end if
+        if m.browseFocus = "series" and _browseMoreIsVisible("series") then
+          m.browseFocus = "series_more"
+          applyFocus()
+          return true
+        end if
       end if
     end if
 
@@ -10475,11 +10837,25 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
       else if m.browseFocus = "hero_logout" then
         doLogout()
         return true
+      else if m.browseFocus = "movies_more" then
+        _openBrowseLibraryForShelf("movies")
+        return true
+      else if m.browseFocus = "series_more" then
+        _openBrowseLibraryForShelf("series")
+        return true
       end if
     end if
 
     if kl = "back" then
-      if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
+      if m.browseFocus = "movies_more" then
+        m.browseFocus = "movies"
+        applyFocus()
+        return true
+      else if m.browseFocus = "series_more" then
+        m.browseFocus = "series"
+        applyFocus()
+        return true
+      else if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
         m.browseFocus = "views"
         applyFocus()
         return true
@@ -10534,9 +10910,9 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     if m.mode = "live" or m.mode = "browse" then return false
     if m.mode = "login" then
       if m.focusIndex = 0 then
-        promptKeyboard("username", "Usuario", m.form.username, false)
+        promptKeyboard("username", _t("login_user"), m.form.username, false)
       else if m.focusIndex = 1 then
-        promptKeyboard("password", "Senha", m.form.password, true)
+        promptKeyboard("password", _t("login_pass"), m.form.password, true)
       else
         doLogin()
       end if
@@ -10559,7 +10935,15 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
 
     if m.mode = "browse" then
-      if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
+      if m.browseFocus = "movies_more" then
+        m.browseFocus = "movies"
+        applyFocus()
+        return true
+      else if m.browseFocus = "series_more" then
+        m.browseFocus = "series"
+        applyFocus()
+        return true
+      else if m.browseFocus = "items" or m.browseFocus = "continue" or m.browseFocus = "movies" or m.browseFocus = "series" then
         m.browseFocus = "views"
         applyFocus()
         return true
@@ -10846,14 +11230,22 @@ sub applyFocus()
     _setBrowseLibraryVisible(false)
     profileFocused = (m.browseFocus = "hero_logout")
     continueFocused = (m.browseFocus = "hero_continue")
+    moviesMoreFocused = (m.browseFocus = "movies_more")
+    seriesMoreFocused = (m.browseFocus = "series_more")
     heroFocused = (profileFocused or continueFocused)
+    listsEnabled = (heroFocused <> true and moviesMoreFocused <> true and seriesMoreFocused <> true)
+    viewsFocused = (m.browseFocus = "views")
+    itemsFocused = (m.browseFocus = "items")
+    continueShelfFocused = (m.browseFocus = "continue")
+    moviesFocused = (m.browseFocus = "movies")
+    seriesFocused = (m.browseFocus = "series")
     _syncHeroAvatarVisual()
 
-    if m.viewsList <> invalid and m.viewsList.hasField("focusable") then m.viewsList.focusable = (heroFocused <> true)
-    if m.itemsList <> invalid and m.itemsList.hasField("focusable") then m.itemsList.focusable = (heroFocused <> true)
-    if m.continueList <> invalid and m.continueList.hasField("focusable") then m.continueList.focusable = (heroFocused <> true)
-    if m.recentMoviesList <> invalid and m.recentMoviesList.hasField("focusable") then m.recentMoviesList.focusable = (heroFocused <> true)
-    if m.recentSeriesList <> invalid and m.recentSeriesList.hasField("focusable") then m.recentSeriesList.focusable = (heroFocused <> true)
+    if m.viewsList <> invalid and m.viewsList.hasField("focusable") then m.viewsList.focusable = (listsEnabled and viewsFocused)
+    if m.itemsList <> invalid and m.itemsList.hasField("focusable") then m.itemsList.focusable = (listsEnabled and itemsFocused)
+    if m.continueList <> invalid and m.continueList.hasField("focusable") then m.continueList.focusable = (listsEnabled and continueShelfFocused)
+    if m.recentMoviesList <> invalid and m.recentMoviesList.hasField("focusable") then m.recentMoviesList.focusable = (listsEnabled and moviesFocused)
+    if m.recentSeriesList <> invalid and m.recentSeriesList.hasField("focusable") then m.recentSeriesList.focusable = (listsEnabled and seriesFocused)
 
     if m.heroPromptBg <> invalid then
       m.heroPromptBg.uri = "pkg:/images/field_normal.png"
@@ -10892,20 +11284,40 @@ sub applyFocus()
         m.heroPromptBtnText.color = "0xD0D6E0"
       end if
     end if
+    if m.recentMoviesMore <> invalid then
+      if moviesMoreFocused then
+        m.recentMoviesMore.color = "0xD8B765"
+      else
+        m.recentMoviesMore.color = "0x4D5B87"
+      end if
+    end if
+    if m.recentSeriesMore <> invalid then
+      if seriesMoreFocused then
+        m.recentSeriesMore.color = "0xD8B765"
+      else
+        m.recentSeriesMore.color = "0x4D5B87"
+      end if
+    end if
 
     _applyBrowseShelfScroll()
 
-    if profileFocused or continueFocused then
+    if m.viewsList <> invalid then m.viewsList.setFocus(false)
+    if m.itemsList <> invalid then m.itemsList.setFocus(false)
+    if m.continueList <> invalid then m.continueList.setFocus(false)
+    if m.recentMoviesList <> invalid then m.recentMoviesList.setFocus(false)
+    if m.recentSeriesList <> invalid then m.recentSeriesList.setFocus(false)
+
+    if profileFocused or continueFocused or moviesMoreFocused or seriesMoreFocused then
       if m.top <> invalid then m.top.setFocus(true)
-    else if m.browseFocus = "items" then
+    else if itemsFocused then
       if m.itemsList <> invalid then
         m.itemsList.setFocus(true)
       end if
-    else if m.browseFocus = "continue" then
+    else if continueShelfFocused then
       if m.continueList <> invalid then m.continueList.setFocus(true)
-    else if m.browseFocus = "movies" then
+    else if moviesFocused then
       if m.recentMoviesList <> invalid then m.recentMoviesList.setFocus(true)
-    else if m.browseFocus = "series" then
+    else if seriesFocused then
       if m.recentSeriesList <> invalid then m.recentSeriesList.setFocus(true)
     else
       if m.viewsList <> invalid then m.viewsList.setFocus(true)
@@ -12337,14 +12749,23 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
 
   root = CreateObject("roSGNode", "ContentNode")
   rank = 0
+  idx = 0
   for each it in items
     name0 = ""
     typ0 = ""
     path0 = ""
     if it <> invalid then
       if it.name <> invalid then name0 = it.name else name0 = ""
+      if name0 = "" and it.Name <> invalid then name0 = it.Name
+      if name0 = "" and it.title <> invalid then name0 = it.title
+      if name0 = "" and it.Title <> invalid then name0 = it.Title
+      if name0 = "" and it.originalTitle <> invalid then name0 = it.originalTitle
+      if name0 = "" and it.OriginalTitle <> invalid then name0 = it.OriginalTitle
       if it.type <> invalid then typ0 = it.type else typ0 = ""
+      if typ0 = "" and it.itemType <> invalid then typ0 = it.itemType
+      if typ0 = "" and it.Type <> invalid then typ0 = it.Type
       if it.path <> invalid then path0 = it.path else path0 = ""
+      if path0 = "" and it.Path <> invalid then path0 = it.Path
     end if
     if name0 = invalid then name0 = ""
     if typ0 = invalid then typ0 = ""
@@ -12459,10 +12880,247 @@ function _buildShelfContent(raw as String, rankEnabled as Boolean, section as St
       c.seasonNumber = -1
       c.episodeNumber = -1
     end if
+    cid = ""
+    if c.id <> invalid then cid = c.id.ToStr().Trim()
+    if cid <> "" then
+      typL = LCase(typ0.ToStr().Trim())
+      if Instr(1, typL, "livetv") = 0 then
+        metaCached = _metaCacheGet(cid)
+        if metaCached <> invalid then
+          _applyMetadataToNode(c, metaCached)
+        else
+          _queueMetadata(cid, typ0, name0)
+        end if
+      end if
+    end if
+    if idx < 3 then
+      print "shelf " + sec + " idx=" + idx.ToStr() + " id=" + cid + " name=" + name0
+    end if
+    idx = idx + 1
     root.appendChild(c)
   end for
   return root
 end function
+
+sub _queueMetadata(itemId as String, itemType = invalid, itemTitle = invalid)
+  if m.metaTask = invalid then return
+  if m.metaLang = invalid then return
+  lang = m.metaLang.ToStr().Trim()
+  if lang = "" then return
+
+  id = itemId
+  if id = invalid then id = ""
+  id = id.ToStr().Trim()
+  if id = "" then return
+
+  typ = itemType
+  if typ = invalid then typ = ""
+  typ = typ.ToStr().Trim()
+
+  title = itemTitle
+  if title = invalid then title = ""
+  title = title.ToStr().Trim()
+
+  key = _metaCacheKey(id)
+  if key = "" then return
+
+  if type(m.metaCache) = "roAssociativeArray" and m.metaCache[key] <> invalid then return
+  if type(m.metaQueueSet) <> "roAssociativeArray" then m.metaQueueSet = {}
+  if m.metaQueueSet[key] = true then return
+  if type(m.metaQueue) <> "roArray" then m.metaQueue = []
+
+  if typ <> "" or title <> "" then
+    m.metaQueue.Push({ id: id, type: typ, title: title })
+  else
+    m.metaQueue.Push(id)
+  end if
+  m.metaQueueSet[key] = true
+  print "meta queued id=" + id + " lang=" + lang
+  _kickMetadataFetch()
+end sub
+
+sub _kickMetadataFetch()
+  if m.metaTask = invalid then return
+  if m.metaInFlight = true then return
+  if type(m.metaQueue) <> "roArray" then return
+  if m.metaQueue.Count() <= 0 then return
+
+  cfg = loadConfig()
+  if cfg.apiBase = "" or cfg.appToken = "" then return
+
+  entry = m.metaQueue[0]
+  m.metaQueue.Delete(0)
+  id = invalid
+  typ = ""
+  title = ""
+  if type(entry) = "roAssociativeArray" then
+    if entry.id <> invalid then id = entry.id
+    if entry.type <> invalid then typ = entry.type.ToStr().Trim()
+    if entry.title <> invalid then title = entry.title.ToStr().Trim()
+  else
+    id = entry
+  end if
+  if id = invalid then
+    _kickMetadataFetch()
+    return
+  end if
+  id = id.ToStr().Trim()
+  if id = "" then
+    _kickMetadataFetch()
+    return
+  end if
+
+  m.metaInFlight = true
+  m.metaActiveId = id
+  print "meta fetch id=" + id + " lang=" + m.metaLang.ToStr()
+  m.metaTask.kind = "metadata"
+  m.metaTask.apiBase = cfg.apiBase
+  m.metaTask.appToken = cfg.appToken
+  m.metaTask.jellyfinToken = cfg.jellyfinToken
+  m.metaTask.itemId = id
+  m.metaTask.itemType = typ
+  m.metaTask.itemTitle = title
+  m.metaTask.metaLang = m.metaLang
+  m.metaTask.control = "run"
+end sub
+
+sub _applyMetadataToUi(itemId as String, meta as Object)
+  if itemId = invalid then return
+  id = itemId.ToStr().Trim()
+  if id = "" then return
+  _applyMetadataToList(m.itemsList, id, meta)
+  _applyMetadataToList(m.continueList, id, meta)
+  _applyMetadataToList(m.recentMoviesList, id, meta)
+  _applyMetadataToList(m.recentSeriesList, id, meta)
+  _applyMetadataToList(m.libraryItemsList, id, meta)
+  _applyMetadataToList(m.seriesDetailEpisodesList, id, meta)
+  _applyMetadataToDetailIfMatch(id, meta)
+end sub
+
+sub _applyMetadataToList(lst as Object, itemId as String, meta as Object)
+  if lst = invalid then return
+  root = lst.content
+  if root = invalid then return
+  _applyMetadataToRoot(root, itemId, meta)
+end sub
+
+sub _applyMetadataToRoot(root as Object, itemId as String, meta as Object)
+  if root = invalid then return
+  cnt = root.getChildCount()
+  if cnt = invalid or cnt <= 0 then return
+  key = _metaCacheKey(itemId)
+  if key = "" then return
+  i = 0
+  while i < cnt
+    n = root.getChild(i)
+    if n <> invalid then
+      nid = ""
+      if n.id <> invalid then nid = n.id.ToStr().Trim()
+      if nid <> "" and _metaCacheKey(nid) = key then
+        _applyMetadataToNode(n, meta)
+      end if
+    end if
+    i = i + 1
+  end while
+end sub
+
+sub _applyMetadataToNode(n as Object, meta as Object)
+  if n = invalid then return
+  if type(meta) <> "roAssociativeArray" then return
+
+  title = _metaStr(meta, "title")
+  if title <> "" then
+    n.title = title
+    if n.hasField("displayTitle") then n.displayTitle = title
+  end if
+
+  posterUrl = _metaPosterUrl(meta)
+  if posterUrl <> "" then
+    if n.hasField("hdPosterUrl") then n.hdPosterUrl = posterUrl
+    if n.hasField("sdPosterUrl") then n.sdPosterUrl = posterUrl
+    if n.hasField("posterUrl") then n.posterUrl = posterUrl
+  end if
+
+  wideUrl = _metaBackdropUrl(meta)
+  if wideUrl <> "" then
+    if n.hasField("wideUrl") then n.wideUrl = wideUrl
+  end if
+
+  if n.hasField("meta") then
+    ov = _metaStr(meta, "overview")
+    if ov <> "" then n.meta = _compactDialogText(ov, 140)
+  end if
+end sub
+
+sub _applyMetadataToDetailIfMatch(itemId as String, meta as Object)
+  if type(meta) <> "roAssociativeArray" then return
+
+  curId = ""
+  isEpisode = false
+  if m.seriesDetailMode <> invalid and LCase(m.seriesDetailMode.ToStr().Trim()) = "episode" then
+    isEpisode = true
+    if type(m.seriesDetailEpisode) = "roAssociativeArray" then
+      if m.seriesDetailEpisode.id <> invalid then curId = m.seriesDetailEpisode.id.ToStr().Trim()
+      if curId = "" and m.seriesDetailEpisode.Id <> invalid then curId = m.seriesDetailEpisode.Id.ToStr().Trim()
+    end if
+  else if type(m.seriesDetailData) = "roAssociativeArray" then
+    s0 = m.seriesDetailData.series
+    if type(s0) = "roAssociativeArray" then
+      if s0.id <> invalid then curId = s0.id.ToStr().Trim()
+      if curId = "" and s0.Id <> invalid then curId = s0.Id.ToStr().Trim()
+    end if
+  end if
+
+  if _metaCacheKey(curId) <> _metaCacheKey(itemId) then return
+
+  title = _metaStr(meta, "title")
+  if title <> "" then
+    if m.seriesDetailTitle <> invalid then m.seriesDetailTitle.text = title
+    if isEpisode = true then
+      if type(m.seriesDetailEpisode) = "roAssociativeArray" then m.seriesDetailEpisode.name = title
+    else if type(m.seriesDetailData) = "roAssociativeArray" then
+      s0 = m.seriesDetailData.series
+      if type(s0) = "roAssociativeArray" then s0.name = title
+    end if
+  end if
+
+  overview = _metaStr(meta, "overview")
+  if overview <> "" then
+    if m.seriesDetailOverview <> invalid then
+      m.seriesDetailOverview.text = _compactDialogText(overview, 700)
+    end if
+    if isEpisode = true then
+      if type(m.seriesDetailEpisode) = "roAssociativeArray" then m.seriesDetailEpisode.overview = overview
+    else if type(m.seriesDetailData) = "roAssociativeArray" then
+      s1 = m.seriesDetailData.series
+      if type(s1) = "roAssociativeArray" then s1.overview = overview
+    end if
+  end if
+
+  genresText = _metaGenresText(meta)
+  if genresText <> "" then
+    if m.seriesDetailGenres <> invalid then
+      m.seriesDetailGenres.text = genresText
+      m.seriesDetailGenres.visible = true
+    end if
+    if isEpisode <> true and type(m.seriesDetailData) = "roAssociativeArray" then
+      s2 = m.seriesDetailData.series
+      if type(s2) = "roAssociativeArray" then s2.genres = genresText.Split(" • ")
+    end if
+  end if
+
+  posterUrl = _metaPosterUrl(meta)
+  if posterUrl <> "" and m.seriesDetailPoster <> invalid then
+    m.seriesDetailPoster.uri = posterUrl
+  end if
+
+  heroUrl = _metaBackdropUrl(meta)
+  if heroUrl = "" then heroUrl = posterUrl
+  if heroUrl <> "" and m.seriesDetailHero <> invalid then
+    m.seriesDetailHero.uri = heroUrl
+    m.seriesDetailHeroUri = heroUrl
+  end if
+end sub
 
 function _browseAnyShelfItems() as Boolean
   if _browseSectionHasItems("items") then return true
@@ -12613,6 +13271,11 @@ function _libraryItemIdFromRaw(it as Object) as String
   return id.ToStr().Trim()
 end function
 
+function _rawStr(v as Dynamic) as String
+  if v = invalid then return ""
+  return v.ToStr().Trim()
+end function
+
 function _libraryBuildNodeFromRaw(it as Object, posterBase as String, posterToken as String) as Object
   if type(it) <> "roAssociativeArray" then return invalid
 
@@ -12621,19 +13284,30 @@ function _libraryBuildNodeFromRaw(it as Object, posterBase as String, posterToke
   path0 = ""
 
   if it.name <> invalid then
-    name0 = it.name
+    name0 = _rawStr(it.name)
   else if it.Name <> invalid then
-    name0 = it.Name
+    name0 = _rawStr(it.Name)
   end if
+  if name0 = "" and it.title <> invalid then name0 = _rawStr(it.title)
+  if name0 = "" and it.Title <> invalid then name0 = _rawStr(it.Title)
+  if name0 = "" and it.originalTitle <> invalid then name0 = _rawStr(it.originalTitle)
+  if name0 = "" and it.OriginalTitle <> invalid then name0 = _rawStr(it.OriginalTitle)
+  if name0 = "" and it.shortDescriptionLine1 <> invalid then name0 = _rawStr(it.shortDescriptionLine1)
+  if name0 = "" and it.SortName <> invalid then name0 = _rawStr(it.SortName)
+  if name0 = "" and it.sortName <> invalid then name0 = _rawStr(it.sortName)
+  if name0 = "" and it.SeriesName <> invalid then name0 = _rawStr(it.SeriesName)
+  if name0 = "" and it.seriesName <> invalid then name0 = _rawStr(it.seriesName)
+  if name0 = "" and it.ProgramTitle <> invalid then name0 = _rawStr(it.ProgramTitle)
+  if name0 = "" and it.programTitle <> invalid then name0 = _rawStr(it.programTitle)
   if it.type <> invalid then
-    typ0 = it.type
+    typ0 = _rawStr(it.type)
   else if it.Type <> invalid then
-    typ0 = it.Type
+    typ0 = _rawStr(it.Type)
   end if
   if it.path <> invalid then
-    path0 = it.path
+    path0 = _rawStr(it.path)
   else if it.Path <> invalid then
-    path0 = it.Path
+    path0 = _rawStr(it.Path)
   end if
   if name0 = invalid then name0 = ""
   if typ0 = invalid then typ0 = ""
@@ -12650,6 +13324,7 @@ function _libraryBuildNodeFromRaw(it as Object, posterBase as String, posterToke
 
   c = CreateObject("roSGNode", "ContentNode")
   c.addField("itemType", "string", false)
+  c.addField("displayTitle", "string", false)
   c.addField("path", "string", false)
   c.addField("resumePositionMs", "integer", false)
   c.addField("resumeDurationMs", "integer", false)
@@ -12665,8 +13340,11 @@ function _libraryBuildNodeFromRaw(it as Object, posterBase as String, posterToke
   c.addField("episodeNumber", "integer", false)
 
   itemId = _libraryItemIdFromRaw(it)
+  if name0 = "" and itemId <> "" then name0 = itemId
+  if name0 = "" then name0 = "(Sem titulo)"
   if itemId <> "" then c.id = itemId
   c.title = name0
+  c.displayTitle = name0
   c.itemType = typ0
   c.path = path0
   posterUri = _browsePosterUri(itemId, posterBase, posterToken)
@@ -12761,6 +13439,17 @@ sub _appendBrowseLibraryItems(pageItems as Object, totalRecordCount as Integer)
 
     node = _libraryBuildNodeFromRaw(it, posterBase, posterToken)
     if node = invalid then continue for
+    if itemId <> "" then
+      metaCached = _metaCacheGet(itemId)
+      if metaCached <> invalid then
+        _applyMetadataToNode(node, metaCached)
+      else
+        typ0 = ""
+        if it <> invalid and it.Type <> invalid then typ0 = it.Type.ToStr().Trim()
+        if typ0 = "" and node <> invalid and node.itemType <> invalid then typ0 = node.itemType.ToStr().Trim()
+        _queueMetadata(itemId, typ0, node.title)
+      end if
+    end if
     root.appendChild(node)
     m.browseLibraryRawItems.Push(it)
 
@@ -13171,6 +13860,19 @@ sub renderShelfItems(raw as String)
       c.seriesId = ""
       c.seasonNumber = -1
       c.episodeNumber = -1
+    end if
+    cid = ""
+    if c.id <> invalid then cid = c.id.ToStr().Trim()
+    if cid <> "" then
+      typL = LCase(typ0.ToStr().Trim())
+      if Instr(1, typL, "livetv") = 0 then
+        metaCached = _metaCacheGet(cid)
+        if metaCached <> invalid then
+          _applyMetadataToNode(c, metaCached)
+        else
+          _queueMetadata(cid, typ0, name0)
+        end if
+      end if
     end if
     root.appendChild(c)
   end for
@@ -13876,6 +14578,14 @@ sub _renderSeriesDetail(payload as Object)
   if type(people) <> "roArray" then people = []
   m.seriesDetailCast = people
   _renderSeriesDetailCast(people)
+  ' If metadata was already fetched from TMDB, apply it now (detail open won't refetch).
+  seriesId = ""
+  if series.id <> invalid then seriesId = series.id.ToStr().Trim()
+  if seriesId = "" and series.Id <> invalid then seriesId = series.Id.ToStr().Trim()
+  if seriesId <> "" then
+    metaCached = _metaCacheGet(seriesId)
+    if metaCached <> invalid then _applyMetadataToDetailIfMatch(seriesId, metaCached)
+  end if
   if m.seriesDetailCastCount > 0 then
     if m.seriesDetailIsSeries = true then
       m.seriesDetailContentHeight = 1880
@@ -14096,6 +14806,17 @@ sub _showSeriesDetailScreen(payload as Object)
   m.seriesDetailMode = "series"
   m.seriesDetailEpisode = {}
   _renderSeriesDetail(payload)
+  if payload <> invalid then
+    series0 = payload.series
+    if type(series0) <> "roAssociativeArray" then series0 = {}
+    sid = ""
+    if series0.id <> invalid then sid = series0.id.ToStr().Trim()
+    if sid = "" and series0.Id <> invalid then sid = series0.Id.ToStr().Trim()
+    if sid <> "" then
+      metaCached = _metaCacheGet(sid)
+      if metaCached <> invalid then _applyMetadataToDetailIfMatch(sid, metaCached)
+    end if
+  end if
   _applySeriesDetailModeLayout()
   statusId = ""
   if payload <> invalid then
@@ -14150,6 +14871,14 @@ sub _showEpisodeDetailScreen(it as Object)
   m.seriesDetailMode = "episode"
   m.seriesDetailEpisode = ep
   _renderEpisodeDetail(ep)
+  if eid <> "" then
+    metaCached = _metaCacheGet(eid)
+    if metaCached <> invalid then
+      _applyMetadataToDetailIfMatch(eid, metaCached)
+    else
+      _queueMetadata(eid, "episode", ep.name)
+    end if
+  end if
   _applySeriesDetailModeLayout()
   m.seriesDetailStatusItemId = eid
   m.seriesDetailActionFocus = 0

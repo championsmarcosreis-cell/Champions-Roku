@@ -71,6 +71,9 @@ sub doWork()
   m.top.signedUrl = ""
   m.top.exp = 0
   m.top.resultJson = ""
+  metaLang = m.top.metaLang
+  if metaLang = invalid then metaLang = ""
+  metaLang = metaLang.ToStr().Trim()
 
   if kind = "login" then
     resp = gatewayJellyfinAuth(m.top.apiBase, m.top.appToken, m.top.username, m.top.password)
@@ -85,10 +88,21 @@ sub doWork()
   end if
 
   if kind = "views" then
-    resp = gatewayJellyfinViews(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId)
+    resp = gatewayJellyfinViews(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, metaLang)
     if resp.ok = true then
       m.top.ok = true
       m.top.resultJson = FormatJson(resp.items)
+    else
+      m.top.error = resp.error
+    end if
+    return
+  end if
+
+  if kind = "metadata" then
+    resp = gatewayMetadata(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.itemId, m.top.itemType, m.top.itemTitle, metaLang)
+    if resp.ok = true then
+      m.top.ok = true
+      m.top.resultJson = FormatJson(resp.meta)
     else
       m.top.error = resp.error
     end if
@@ -99,7 +113,7 @@ sub doWork()
     lim = m.top.limit
     if lim = invalid then lim = 0
     if lim <= 0 then lim = 12
-    resp = gatewayJellyfinShelfItems(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.parentId, lim)
+    resp = gatewayJellyfinShelfItems(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.parentId, lim, metaLang)
     if resp.ok = true then
       m.top.ok = true
       m.top.resultJson = FormatJson(resp.items)
@@ -113,7 +127,7 @@ sub doWork()
     lim = m.top.limit
     if lim = invalid then lim = 0
     if lim <= 0 then lim = 12
-    resp = gatewayJellyfinSeriesShelfItems(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.parentId, lim)
+    resp = gatewayJellyfinSeriesShelfItems(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.parentId, lim, metaLang)
     if resp.ok = true then
       m.top.ok = true
       m.top.resultJson = FormatJson(resp.items)
@@ -141,7 +155,7 @@ sub doWork()
     collectionType = m.top.collectionType
     if collectionType = invalid then collectionType = ""
 
-    resp = gatewayJellyfinLibraryPageItems(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.parentId, collectionType, start, lim, sortBy, sortOrder, searchTerm)
+    resp = gatewayJellyfinLibraryPageItems(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.parentId, collectionType, start, lim, sortBy, sortOrder, searchTerm, metaLang)
     if resp.ok = true then
       m.top.ok = true
       m.top.resultJson = FormatJson({
@@ -158,7 +172,7 @@ sub doWork()
     lim = m.top.limit
     if lim = invalid then lim = 0
     if lim <= 0 then lim = 12
-    resp = gatewayContinueWatchingShelf(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, lim)
+    resp = gatewayContinueWatchingShelf(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, lim, metaLang)
     if resp.ok = true then
       m.top.ok = true
       m.top.resultJson = FormatJson(resp.items)
@@ -216,7 +230,7 @@ sub doWork()
     lim = m.top.limit
     if lim = invalid then lim = 0
     if lim <= 0 then lim = 10
-    resp = gatewayMostWatchedShelf(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, 7, lim)
+    resp = gatewayMostWatchedShelf(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, 7, lim, metaLang)
     if resp.ok = true then
       m.top.ok = true
       m.top.resultJson = FormatJson(resp.items)
@@ -227,7 +241,7 @@ sub doWork()
   end if
 
   if kind = "channels" then
-    resp = gatewayJellyfinLiveChannels(m.top.apiBase, m.top.appToken, m.top.jellyfinToken)
+    resp = gatewayJellyfinLiveChannels(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, metaLang)
     if resp.ok = true then
       m.top.ok = true
       m.top.resultJson = FormatJson(resp.items)
@@ -240,7 +254,7 @@ sub doWork()
   if kind = "programs" then
     chanIds = m.top.channelIds
     if chanIds = invalid then chanIds = ""
-    resp = gatewayJellyfinLivePrograms(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, chanIds, m.top.startDate, m.top.endDate)
+    resp = gatewayJellyfinLivePrograms(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, chanIds, m.top.startDate, m.top.endDate, metaLang)
     if resp.ok = true then
       m.top.ok = true
       m.top.resultJson = FormatJson(resp.items)
@@ -254,7 +268,7 @@ sub doWork()
     lim = m.top.limit
     if lim = invalid then lim = 0
     if lim <= 0 then lim = 24
-    resp = gatewayJellyfinSeriesDetails(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.itemId, lim)
+    resp = gatewayJellyfinSeriesDetails(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.itemId, lim, metaLang)
     if resp.ok = true then
       m.top.ok = true
       m.top.resultJson = FormatJson({
@@ -273,7 +287,7 @@ sub doWork()
   if kind = "playback" then
     prefer = (m.top.preferDirectStream = true)
     allow = (m.top.allowTranscoding = true)
-    resp = gatewayJellyfinPlaybackSource(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.itemId, prefer, allow)
+    resp = gatewayJellyfinPlaybackSource(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.itemId, prefer, allow, metaLang)
     if resp.ok = true then
       m.top.ok = true
       m.top.resultJson = FormatJson({
@@ -291,7 +305,7 @@ sub doWork()
   end if
 
   if kind = "subtitle_sources" then
-    resp = gatewayJellyfinExternalSubtitleSources(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.itemId)
+    resp = gatewayJellyfinExternalSubtitleSources(m.top.apiBase, m.top.appToken, m.top.jellyfinToken, m.top.userId, m.top.itemId, metaLang)
     if resp.ok = true then
       m.top.ok = true
       m.top.resultJson = FormatJson({

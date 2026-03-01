@@ -2,14 +2,15 @@ sub init()
   if m.top <> invalid then
     if m.top.hasField("width") then m.top.width = 160
     if m.top.hasField("height") then m.top.height = 240
-    if m.top.hasField("clippingRect") then m.top.clippingRect = [0, 0, 160, 240]
-    if m.top.hasField("clipRect") then m.top.clipRect = [0, 0, 160, 240]
-    if m.top.hasField("clipChildren") then m.top.clipChildren = true
   end if
-  m.posterBg = m.top.findNode("posterBg")
-  m.poster = m.top.findNode("p")
+
+  m.cover = m.top.findNode("cover")
   m.progressBg = m.top.findNode("progressBg")
   m.progressFill = m.top.findNode("progressFill")
+  m.titleLabel = m.top.findNode("titleLabel")
+  if m.titleLabel = invalid then m.titleLabel = _findFallbackLabel()
+  m.footerBg = m.top.findNode("footerBg")
+  m.posterBg = m.top.findNode("posterBg")
   m.focusBorder = m.top.findNode("borderGroup")
   m.borderTop = m.top.findNode("borderTop")
   m.borderBottom = m.top.findNode("borderBottom")
@@ -17,25 +18,6 @@ sub init()
   m.borderRight = m.top.findNode("borderRight")
   _ensureBorderNodes()
   m.ownerGrid = invalid
-  m.title = m.top.findNode("t")
-  if m.title = invalid then m.title = _findFallbackTitleLabel()
-  if m.title = invalid and m.top <> invalid then
-    t = CreateObject("roSGNode", "Label")
-    if t <> invalid then
-      t.id = "t"
-      t.translation = [6, 212]
-      t.width = 148
-      t.height = 24
-      t.font = "font:SmallSystemFont"
-      t.horizAlign = "center"
-      t.color = "0xE6EBF3FF"
-      t.wrap = false
-      t.numLines = 1
-      t.text = ""
-      m.top.appendChild(t)
-      m.title = t
-    end if
-  end if
   m.contentNode = invalid
 end sub
 
@@ -51,15 +33,28 @@ sub onContentFieldChanged()
   _renderContent(m.top.itemContent)
 end sub
 
+sub onItemHasFocusChanged()
+  _ensureOwnerGridObserver()
+  _applyStyle()
+end sub
+
+sub onItemSelectedChanged()
+  _ensureOwnerGridObserver()
+  _applyStyle()
+end sub
+
 sub _renderContent(c as Object)
   if c = invalid then
-    if m.poster <> invalid then m.poster.uri = ""
+    if m.cover <> invalid then m.cover.uri = ""
     if m.progressBg <> invalid then m.progressBg.visible = false
     if m.progressFill <> invalid then
       m.progressFill.visible = false
       m.progressFill.width = 0
     end if
-    if m.title <> invalid then m.title.text = ""
+    if m.titleLabel <> invalid then
+      m.titleLabel.text = ""
+      m.titleLabel.visible = true
+    end if
     if m.focusBorder <> invalid then m.focusBorder.visible = false
     if m.borderTop <> invalid then m.borderTop.visible = false
     if m.borderBottom <> invalid then m.borderBottom.visible = false
@@ -68,23 +63,31 @@ sub _renderContent(c as Object)
     return
   end if
 
-  posterUri = _posterUriFromContent(c)
-  if m.poster <> invalid then m.poster.uri = posterUri
+  p = ""
+  if c.hdPosterUrl <> invalid then p = c.hdPosterUrl.ToStr().Trim()
+  if p = "" and c.HDPosterUrl <> invalid then p = c.HDPosterUrl.ToStr().Trim()
+  if p = "" and c.sdPosterUrl <> invalid then p = c.sdPosterUrl.ToStr().Trim()
+  if p = "" and c.SDPosterUrl <> invalid then p = c.SDPosterUrl.ToStr().Trim()
+  if p = "" and c.posterUrl <> invalid then p = c.posterUrl.ToStr().Trim()
+  if p = "" then p = "pkg:/images/logo.png"
+  if m.cover <> invalid then m.cover.uri = p
 
   titleText = _contentTitle(c)
-  if titleText = "" then titleText = _fallbackPosterTitle(c)
-  if m.title <> invalid then
-    m.title.text = _fitPosterTitle(titleText)
-    m.title.visible = true
+  if titleText = "" then titleText = _fallbackRecentTitle(c)
+  shortTitle = _fitTitle(titleText)
+  if m.titleLabel <> invalid then
+    m.titleLabel.text = shortTitle.ToStr()
+    m.titleLabel.visible = true
   end if
 
-  pct = _resumePercentFromContent(c)
+  pct = 0
+  if c.resumePercent <> invalid then pct = Int(Val(c.resumePercent.ToStr()))
+  if pct < 0 then pct = 0
+  if pct > 100 then pct = 100
+
   played = false
   if c.played <> invalid then played = (c.played = true)
-  if pct >= 98 then played = true
-
-  hasProgressSignal = _hasResumeSignal(c)
-  showProgress = ((pct > 0 or hasProgressSignal) and played <> true)
+  showProgress = (pct > 0 and played <> true)
   if m.progressBg <> invalid then m.progressBg.visible = showProgress
   if m.progressFill <> invalid then
     m.progressFill.visible = showProgress
@@ -98,7 +101,7 @@ sub _renderContent(c as Object)
     end if
   end if
 
-  applyStyle()
+  _applyStyle()
 end sub
 
 sub _clearContentObservers()
@@ -123,17 +126,8 @@ sub _observeContent(c as Object)
   if c.hasField("resumePercent") then c.observeField("resumePercent", "onContentFieldChanged")
   if c.hasField("played") then c.observeField("played", "onContentFieldChanged")
 end sub
-sub onItemHasFocusChanged()
-  _ensureOwnerGridObserver()
-  applyStyle()
-end sub
 
-sub onItemSelectedChanged()
-  _ensureOwnerGridObserver()
-  applyStyle()
-end sub
-
-sub applyStyle()
+sub _applyStyle()
   _hideLegacyBorders()
   focused = _isFocusedTile()
   if m.focusBorder <> invalid then m.focusBorder.visible = focused
@@ -141,32 +135,24 @@ sub applyStyle()
   if m.borderBottom <> invalid then m.borderBottom.visible = focused
   if m.borderLeft <> invalid then m.borderLeft.visible = focused
   if m.borderRight <> invalid then m.borderRight.visible = focused
-  if m.title <> invalid then
+  if m.titleLabel <> invalid then
     if focused then
-      m.title.color = "0xFFFFFFFF"
+      m.titleLabel.color = "0xFFFFFFFF"
     else
-      m.title.color = "0xE6EBF3FF"
+      m.titleLabel.color = "0xE6EBF3FF"
     end if
   end if
-  tbg = m.top.findNode("titleBg")
-  if tbg <> invalid then
+  if m.footerBg <> invalid then
     if focused then
-      tbg.color = "0x111C2DEE"
+      m.footerBg.color = "0x111C2DFF"
     else
-      tbg.color = "0x0A111DCC"
-    end if
-  end if
-  if m.posterBg <> invalid then
-    if focused then
-      m.posterBg.color = "0x111C2DFF"
-    else
-      m.posterBg.color = "0x0A111DFF"
+      m.footerBg.color = "0x0A111DFF"
     end if
   end if
 end sub
 
 sub onOwnerGridItemFocusedChanged()
-  applyStyle()
+  _applyStyle()
 end sub
 
 function _isFocusedTile() as Boolean
@@ -229,20 +215,7 @@ function _isSameContentItem(a as Object, b as Object) as Boolean
   return false
 end function
 
-function _posterUriFromContent(c as Object) as String
-  if c = invalid then return "pkg:/images/logo.png"
-
-  p = ""
-  if c.hdPosterUrl <> invalid then p = c.hdPosterUrl.ToStr().Trim()
-  if p = "" and c.HDPosterUrl <> invalid then p = c.HDPosterUrl.ToStr().Trim()
-  if p = "" and c.sdPosterUrl <> invalid then p = c.sdPosterUrl.ToStr().Trim()
-  if p = "" and c.SDPosterUrl <> invalid then p = c.SDPosterUrl.ToStr().Trim()
-  if p = "" and c.posterUrl <> invalid then p = c.posterUrl.ToStr().Trim()
-  if p = "" then p = "pkg:/images/logo.png"
-  return p
-end function
-
-function _fitPosterTitle(raw as Dynamic) as String
+function _fitTitle(raw as Dynamic) as String
   t = ""
   if raw <> invalid then t = raw.ToStr()
   t = t.Trim()
@@ -250,7 +223,6 @@ function _fitPosterTitle(raw as Dynamic) as String
 
   maxChars = 22
   if Len(t) <= maxChars then return t
-
   keep = maxChars - 3
   if keep < 1 then keep = 1
   return Left(t, keep).Trim() + "..."
@@ -260,8 +232,7 @@ function _contentTitle(c as Object) as String
   if c = invalid then return ""
 
   t = ""
-  if c.displayTitle <> invalid then t = c.displayTitle.ToStr().Trim()
-  if t = "" and c.title <> invalid then t = c.title.ToStr().Trim()
+  if c.title <> invalid then t = c.title.ToStr().Trim()
   if t = "" and c.name <> invalid then t = c.name.ToStr().Trim()
   if t = "" and c.Name <> invalid then t = c.Name.ToStr().Trim()
   if t = "" and c.Title <> invalid then t = c.Title.ToStr().Trim()
@@ -274,7 +245,7 @@ function _contentTitle(c as Object) as String
   return t
 end function
 
-function _fallbackPosterTitle(c as Object) as String
+function _fallbackRecentTitle(c as Object) as String
   if c = invalid then return "(Sem titulo)"
 
   t = ""
@@ -284,7 +255,7 @@ function _fallbackPosterTitle(c as Object) as String
   return t
 end function
 
-function _findFallbackTitleLabel() as Object
+function _findFallbackLabel() as Object
   if m.top = invalid then return invalid
   cnt = m.top.getChildCount()
   if cnt = invalid or cnt <= 0 then return invalid
@@ -299,47 +270,12 @@ function _findFallbackTitleLabel() as Object
   return invalid
 end function
 
-function _resumePercentFromContent(c as Object) as Integer
-  if c = invalid then return 0
-
-  pct = 0
-  if c.resumePercent <> invalid then
-    pct = Int(Val(c.resumePercent.ToStr()))
-  else if c.percent <> invalid then
-    pct = Int(Val(c.percent.ToStr()))
-  else
-    posMs = 0
-    durMs = 0
-    if c.resumePositionMs <> invalid then posMs = Int(Val(c.resumePositionMs.ToStr()))
-    if c.resumeDurationMs <> invalid then durMs = Int(Val(c.resumeDurationMs.ToStr()))
-    if durMs > 0 and posMs > 0 then pct = Int((100.0 * posMs) / durMs)
-  end if
-
-  if pct < 0 then pct = 0
-  if pct > 100 then pct = 100
-  return pct
-end function
-
-function _hasResumeSignal(c as Object) as Boolean
-  if c = invalid then return false
-
-  posMs = 0
-  if c.resumePositionMs <> invalid then posMs = Int(Val(c.resumePositionMs.ToStr()))
-  if posMs <= 0 and c.positionMs <> invalid then posMs = Int(Val(c.positionMs.ToStr()))
-  if posMs > 0 then return true
-
-  pct = 0
-  if c.resumePercent <> invalid then pct = Int(Val(c.resumePercent.ToStr()))
-  if pct <= 0 and c.percent <> invalid then pct = Int(Val(c.percent.ToStr()))
-  return (pct > 0)
-end function
-
 sub _ensureBorderNodes()
   if m.top = invalid then return
-  if m.borderTop = invalid then m.borderTop = _createBorderRect("posterBorderTop", [0, 0], 160, 3)
-  if m.borderBottom = invalid then m.borderBottom = _createBorderRect("posterBorderBottom", [0, 203], 160, 3)
-  if m.borderLeft = invalid then m.borderLeft = _createBorderRect("posterBorderLeft", [0, 0], 3, 206)
-  if m.borderRight = invalid then m.borderRight = _createBorderRect("posterBorderRight", [157, 0], 3, 206)
+  if m.borderTop = invalid then m.borderTop = _createBorderRect("recentBorderTop", [0, 0], 160, 3)
+  if m.borderBottom = invalid then m.borderBottom = _createBorderRect("recentBorderBottom", [0, 237], 160, 3)
+  if m.borderLeft = invalid then m.borderLeft = _createBorderRect("recentBorderLeft", [0, 0], 3, 240)
+  if m.borderRight = invalid then m.borderRight = _createBorderRect("recentBorderRight", [157, 0], 3, 240)
 end sub
 
 sub _ensureOwnerGridObserver()
@@ -375,7 +311,7 @@ function _isLegacyBorderRect(n as Object) as Boolean
 
   nid = ""
   if n.id <> invalid then nid = n.id.ToStr().Trim()
-  if nid = "posterBorderTop" or nid = "posterBorderBottom" or nid = "posterBorderLeft" or nid = "posterBorderRight" then return false
+  if nid = "recentBorderTop" or nid = "recentBorderBottom" or nid = "recentBorderLeft" or nid = "recentBorderRight" then return false
 
   tr = n.translation
   if tr = invalid then return false
@@ -386,8 +322,8 @@ function _isLegacyBorderRect(n as Object) as Boolean
   x = Int(tr[0])
   y = Int(tr[1])
 
-  if w = 160 and h = 3 and x = 0 and (y = 0 or y = 203) then return true
-  if w = 3 and h = 206 and y = 0 and (x = 0 or x = 157) then return true
+  if w = 160 and h = 3 and x = 0 and (y = 0 or y = 191) then return true
+  if w = 3 and h = 194 and y = 0 and (x = 0 or x = 157) then return true
   return false
 end function
 
@@ -399,7 +335,7 @@ function _createBorderRect(id as String, tr as Object, w as Integer, h as Intege
   r.translation = tr
   r.width = w
   r.height = h
-  r.color = "0xD8B765"
+  r.color = "0xD8B765FF"
   r.visible = false
   m.top.appendChild(r)
   return r

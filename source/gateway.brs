@@ -12,6 +12,50 @@ function _jellyfinClientHeader() as String
   return "MediaBrowser Client=ChampionsRoku, Device=Roku, DeviceId=champions-roku, Version=1.0.0"
 end function
 
+function _jellyfinClientHeaderWithLang(metaLang as Dynamic) as String
+  base = _jellyfinClientHeader()
+  lang = ""
+  if metaLang <> invalid then lang = metaLang.ToStr().Trim()
+  if lang <> "" then return base + ", Language=" + lang
+  return base
+end function
+
+function _acceptLanguageHeader(metaLang as Dynamic) as String
+  lang = ""
+  if metaLang <> invalid then lang = metaLang.ToStr().Trim()
+  if lang = "" then return ""
+
+  short = lang
+  dash = Instr(1, short, "-")
+  if dash > 0 then short = Left(short, dash - 1)
+  if short <> "" and short <> lang then
+    return lang + "," + short + ";q=0.9"
+  end if
+  return lang
+end function
+
+function _jellyfinHeaders(jellyfinToken as String, appToken as String, metaLang as Dynamic) as Object
+  headers = {
+    "X-Emby-Authorization": _jellyfinClientHeaderWithLang(metaLang)
+  }
+  tok = jellyfinToken
+  if tok = invalid then tok = ""
+  tok = tok.ToStr().Trim()
+  if tok <> "" then headers["X-Emby-Token"] = tok
+
+  app = appToken
+  if app = invalid then app = ""
+  app = app.ToStr().Trim()
+  if app <> "" then headers["X-App-Token"] = app
+
+  lang = ""
+  if metaLang <> invalid then lang = metaLang.ToStr().Trim()
+  langHdr = _acceptLanguageHeader(lang)
+  if langHdr <> "" then headers["Accept-Language"] = langHdr
+  if lang <> "" then headers["X-Emby-Language"] = lang
+  return headers
+end function
+
 function _jellyfinExtractPath(item as Object) as String
   if item = invalid then return ""
 
@@ -128,7 +172,158 @@ function gatewayJellyfinAuth(apiBase as String, appToken as String, username as 
   return { ok: true, accessToken: tok, userId: userId }
 end function
 
-function gatewayJellyfinViews(apiBase as String, appToken as String, jellyfinToken as String, userId as String) as Object
+function gatewayMetadata(apiBase as String, appToken as String, jellyfinToken as String, itemId as String, itemType as String, itemTitle as String, lang as String) as Object
+  base = _trimSlash(apiBase)
+
+  iid = itemId
+  if iid = invalid then iid = ""
+  iid = iid.Trim()
+  if iid = "" then return { ok: false, error: "missing_item_id" }
+
+  typ = itemType
+  if typ = invalid then typ = ""
+  typ = typ.ToStr().Trim()
+
+  title = itemTitle
+  if title = invalid then title = ""
+  title = title.ToStr().Trim()
+  nameHint = title
+
+  l = lang
+  if l = invalid then l = ""
+  l = l.Trim()
+  if l <> "" then
+    if typ <> "" then
+      print "metadata request itemId=" + iid + " type=" + typ + " lang=" + l
+    else
+      print "metadata request itemId=" + iid + " lang=" + l
+    end if
+  else
+    if typ <> "" then
+      print "metadata request itemId=" + iid + " type=" + typ + " lang=(empty)"
+    else
+      print "metadata request itemId=" + iid + " lang=(empty)"
+    end if
+  end if
+
+  url = base + "/metadata"
+  qs = { itemId: iid }
+  if typ <> "" then qs.type = typ
+  if title <> "" then qs.name = title
+  if l <> "" then qs.lang = l
+  dt = CreateObject("roDateTime")
+  qs.ts = dt.AsSeconds()
+  url = _urlWithQuery(url, qs)
+
+  headers = _jellyfinHeaders(jellyfinToken, appToken, l)
+
+  resp = httpJson("GET", url, headers)
+  if resp.ok <> true then
+    return { ok: false, error: resp.error }
+  end if
+
+  data = resp.data
+  meta = invalid
+  if type(data) = "roAssociativeArray" then
+    if data.data <> invalid then meta = data.data
+    if meta = invalid and data.Data <> invalid then meta = data.Data
+  end if
+  if type(meta) <> "roAssociativeArray" then meta = {}
+
+  title = ""
+  overview = ""
+  posterPath = ""
+  backdropPath = ""
+  stillPath = ""
+  originalLanguage = ""
+  genres = []
+
+  if meta.title <> invalid then title = meta.title.ToStr()
+  if title = "" and meta.name <> invalid then title = meta.name.ToStr()
+  if meta.overview <> invalid then overview = meta.overview.ToStr()
+  if meta.poster_path <> invalid then posterPath = meta.poster_path.ToStr()
+  if posterPath = "" and meta.posterPath <> invalid then posterPath = meta.posterPath.ToStr()
+  if posterPath = "" and meta.poster_url <> invalid then posterPath = meta.poster_url.ToStr()
+  if posterPath = "" and meta.posterUrl <> invalid then posterPath = meta.posterUrl.ToStr()
+  if meta.backdrop_path <> invalid then backdropPath = meta.backdrop_path.ToStr()
+  if backdropPath = "" and meta.backdropPath <> invalid then backdropPath = meta.backdropPath.ToStr()
+  if backdropPath = "" and meta.backdrop_url <> invalid then backdropPath = meta.backdrop_url.ToStr()
+  if backdropPath = "" and meta.backdropUrl <> invalid then backdropPath = meta.backdropUrl.ToStr()
+  if meta.still_path <> invalid then stillPath = meta.still_path.ToStr()
+  if stillPath = "" and meta.stillPath <> invalid then stillPath = meta.stillPath.ToStr()
+  if stillPath = "" and meta.still_url <> invalid then stillPath = meta.still_url.ToStr()
+  if stillPath = "" and meta.stillUrl <> invalid then stillPath = meta.stillUrl.ToStr()
+  if meta.original_language <> invalid then originalLanguage = meta.original_language.ToStr()
+  if originalLanguage = "" and meta.originalLanguage <> invalid then originalLanguage = meta.originalLanguage.ToStr()
+
+  genresRaw = invalid
+  if meta.genres <> invalid then genresRaw = meta.genres
+  if type(genresRaw) = "roArray" then
+    for each g in genresRaw
+      if g <> invalid then
+        gname = ""
+        if type(g) = "roAssociativeArray" then
+          if g.name <> invalid then gname = g.name.ToStr()
+        else
+          gname = g.ToStr()
+        end if
+        gname = gname.Trim()
+        if gname <> "" then genres.Push(gname)
+      end if
+    end for
+  end if
+
+  ' Fallback: if poster is missing, try a name-based metadata lookup (no itemId).
+  if posterPath = "" and typ <> "" then
+    fallbackTitle = title
+    if fallbackTitle = "" and nameHint <> "" then fallbackTitle = nameHint
+    if fallbackTitle <> "" then
+    url2 = base + "/metadata"
+    qs2 = { name: fallbackTitle, type: typ }
+    if l <> "" then qs2.lang = l
+    dt2 = CreateObject("roDateTime")
+    qs2.ts = dt2.AsSeconds()
+    url2 = _urlWithQuery(url2, qs2)
+
+    resp2 = httpJson("GET", url2, headers)
+    if resp2.ok = true then
+      data2 = resp2.data
+      meta2 = invalid
+      if type(data2) = "roAssociativeArray" then
+        if data2.data <> invalid then meta2 = data2.data
+        if meta2 = invalid and data2.Data <> invalid then meta2 = data2.Data
+      end if
+      if type(meta2) = "roAssociativeArray" then
+        if meta2.poster_path <> invalid then posterPath = meta2.poster_path.ToStr()
+        if posterPath = "" and meta2.posterPath <> invalid then posterPath = meta2.posterPath.ToStr()
+        if posterPath = "" and meta2.poster_url <> invalid then posterPath = meta2.poster_url.ToStr()
+        if posterPath = "" and meta2.posterUrl <> invalid then posterPath = meta2.posterUrl.ToStr()
+        if backdropPath = "" then
+          if meta2.backdrop_path <> invalid then backdropPath = meta2.backdrop_path.ToStr()
+          if backdropPath = "" and meta2.backdropPath <> invalid then backdropPath = meta2.backdropPath.ToStr()
+          if backdropPath = "" and meta2.backdrop_url <> invalid then backdropPath = meta2.backdrop_url.ToStr()
+          if backdropPath = "" and meta2.backdropUrl <> invalid then backdropPath = meta2.backdropUrl.ToStr()
+        end if
+      end if
+    end if
+    end if
+  end if
+
+  return {
+    ok: true
+    meta: {
+      title: title
+      overview: overview
+      posterPath: posterPath
+      backdropPath: backdropPath
+      stillPath: stillPath
+      originalLanguage: originalLanguage
+      genres: genres
+    }
+  }
+end function
+
+function gatewayJellyfinViews(apiBase as String, appToken as String, jellyfinToken as String, userId as String, metaLang as Dynamic) as Object
   base = _trimSlash(apiBase)
 
   uid = userId
@@ -140,11 +335,7 @@ function gatewayJellyfinViews(apiBase as String, appToken as String, jellyfinTok
 
   url = base + "/jellyfin/Users/" + uid + "/Views"
 
-  headers = {
-    "X-Emby-Authorization": _jellyfinClientHeader()
-    "X-Emby-Token": jellyfinToken
-  }
-  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+  headers = _jellyfinHeaders(jellyfinToken, appToken, metaLang)
 
   resp = httpJson("GET", url, headers)
   if resp.ok <> true then
@@ -174,7 +365,7 @@ function gatewayJellyfinViews(apiBase as String, appToken as String, jellyfinTok
   return { ok: true, items: out }
 end function
 
-function gatewayJellyfinShelfItems(apiBase as String, appToken as String, jellyfinToken as String, userId as String, parentId as String, limit as Integer) as Object
+function gatewayJellyfinShelfItems(apiBase as String, appToken as String, jellyfinToken as String, userId as String, parentId as String, limit as Integer, metaLang as Dynamic) as Object
   base = _trimSlash(apiBase)
 
   uid = userId
@@ -206,11 +397,7 @@ function gatewayJellyfinShelfItems(apiBase as String, appToken as String, jellyf
     Fields: "RunTimeTicks,Path,MediaSources,BackdropImageTags,ParentBackdropImageTags,ImageTags"
   })
 
-  headers = {
-    "X-Emby-Authorization": _jellyfinClientHeader()
-    "X-Emby-Token": jellyfinToken
-  }
-  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+  headers = _jellyfinHeaders(jellyfinToken, appToken, metaLang)
 
   resp = httpJson("GET", url, headers)
   if resp.ok <> true then
@@ -256,7 +443,7 @@ function gatewayJellyfinShelfItems(apiBase as String, appToken as String, jellyf
   return { ok: true, items: out }
 end function
 
-function gatewayJellyfinSeriesShelfItems(apiBase as String, appToken as String, jellyfinToken as String, userId as String, parentId as String, limit as Integer) as Object
+function gatewayJellyfinSeriesShelfItems(apiBase as String, appToken as String, jellyfinToken as String, userId as String, parentId as String, limit as Integer, metaLang as Dynamic) as Object
   base = _trimSlash(apiBase)
 
   uid = userId
@@ -289,11 +476,7 @@ function gatewayJellyfinSeriesShelfItems(apiBase as String, appToken as String, 
     Fields: "Path,MediaSources,BackdropImageTags,ParentBackdropImageTags,ImageTags"
   })
 
-  headers = {
-    "X-Emby-Authorization": _jellyfinClientHeader()
-    "X-Emby-Token": jellyfinToken
-  }
-  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+  headers = _jellyfinHeaders(jellyfinToken, appToken, metaLang)
 
   resp = httpJson("GET", url, headers)
   if resp.ok <> true then
@@ -339,7 +522,7 @@ function gatewayJellyfinSeriesShelfItems(apiBase as String, appToken as String, 
   return { ok: true, items: out }
 end function
 
-function gatewayJellyfinLibraryPageItems(apiBase as String, appToken as String, jellyfinToken as String, userId as String, parentId as String, collectionType as String, startIndex as Integer, limit as Integer, sortBy as String, sortOrder as String, searchTerm as String) as Object
+function gatewayJellyfinLibraryPageItems(apiBase as String, appToken as String, jellyfinToken as String, userId as String, parentId as String, collectionType as String, startIndex as Integer, limit as Integer, sortBy as String, sortOrder as String, searchTerm as String, metaLang as Dynamic) as Object
   base = _trimSlash(apiBase)
 
   uid = userId
@@ -406,11 +589,7 @@ function gatewayJellyfinLibraryPageItems(apiBase as String, appToken as String, 
   url = base + "/jellyfin/Users/" + uid + "/Items"
   url = _urlWithQuery(url, params)
 
-  headers = {
-    "X-Emby-Authorization": _jellyfinClientHeader()
-    "X-Emby-Token": jellyfinToken
-  }
-  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+  headers = _jellyfinHeaders(jellyfinToken, appToken, metaLang)
 
   resp = httpJson("GET", url, headers)
   if resp.ok <> true then
@@ -479,7 +658,7 @@ function gatewayJellyfinLibraryPageItems(apiBase as String, appToken as String, 
   }
 end function
 
-function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jellyfinToken as String, userId as String, seriesId as String, episodeLimit as Integer) as Object
+function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jellyfinToken as String, userId as String, seriesId as String, episodeLimit as Integer, metaLang as Dynamic) as Object
   base = _trimSlash(apiBase)
 
   uid = userId
@@ -499,11 +678,7 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
   lim = episodeLimit
   if lim <= 0 then lim = 24
 
-  headers = {
-    "X-Emby-Authorization": _jellyfinClientHeader()
-    "X-Emby-Token": jellyfinToken
-  }
-  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+  headers = _jellyfinHeaders(jellyfinToken, appToken, metaLang)
 
   seriesUrl = base + "/jellyfin/Users/" + uid + "/Items/" + sid
   seriesUrl = _urlWithQuery(seriesUrl, {
@@ -694,15 +869,11 @@ function gatewayJellyfinSeriesDetails(apiBase as String, appToken as String, jel
   }
 end function
 
-function gatewayJellyfinLiveChannels(apiBase as String, appToken as String, jellyfinToken as String) as Object
+function gatewayJellyfinLiveChannels(apiBase as String, appToken as String, jellyfinToken as String, metaLang as Dynamic) as Object
   base = _trimSlash(apiBase)
   url = base + "/jellyfin/LiveTv/Channels"
 
-  headers = {
-    "X-Emby-Authorization": _jellyfinClientHeader()
-    "X-Emby-Token": jellyfinToken
-  }
-  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+  headers = _jellyfinHeaders(jellyfinToken, appToken, metaLang)
 
   resp = httpJson("GET", url, headers)
   if resp.ok <> true then
@@ -782,7 +953,7 @@ function gatewayJellyfinLiveChannels(apiBase as String, appToken as String, jell
   return { ok: true, items: out }
 end function
 
-function gatewayJellyfinLivePrograms(apiBase as String, appToken as String, jellyfinToken as String, userId as String, channelIds as String, startDate as String, endDate as String) as Object
+function gatewayJellyfinLivePrograms(apiBase as String, appToken as String, jellyfinToken as String, userId as String, channelIds as String, startDate as String, endDate as String, metaLang as Dynamic) as Object
   base = _trimSlash(apiBase)
   url = base + "/jellyfin/LiveTv/Programs"
 
@@ -795,11 +966,7 @@ function gatewayJellyfinLivePrograms(apiBase as String, appToken as String, jell
   qs.SortOrder = "Ascending"
   url = _urlWithQuery(url, qs)
 
-  headers = {
-    "X-Emby-Authorization": _jellyfinClientHeader()
-    "X-Emby-Token": jellyfinToken
-  }
-  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+  headers = _jellyfinHeaders(jellyfinToken, appToken, metaLang)
 
   resp = httpJson("GET", url, headers)
   if resp.ok <> true then
@@ -1141,7 +1308,7 @@ function _extractExternalSubtitleSources(itemId as String, source as Object) as 
   return out
 end function
 
-function gatewayJellyfinExternalSubtitleSources(apiBase as String, appToken as String, jellyfinToken as String, userId as String, itemId as String) as Object
+function gatewayJellyfinExternalSubtitleSources(apiBase as String, appToken as String, jellyfinToken as String, userId as String, itemId as String, metaLang as Dynamic) as Object
   base = _trimSlash(apiBase)
 
   uid = userId
@@ -1163,12 +1330,8 @@ function gatewayJellyfinExternalSubtitleSources(apiBase as String, appToken as S
   }
   body = FormatJson(payload)
 
-  headers = {
-    "Content-Type": "application/json"
-    "X-Emby-Authorization": _jellyfinClientHeader()
-    "X-Emby-Token": jellyfinToken
-  }
-  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+  headers = _jellyfinHeaders(jellyfinToken, appToken, metaLang)
+  headers["Content-Type"] = "application/json"
 
   resp = httpJson("POST", url, headers, body)
   if resp.ok <> true then return { ok: false, error: resp.error }
@@ -1488,7 +1651,7 @@ function _extractIntroWindowFromPlayback(playbackData as Object, source as Objec
   return out
 end function
 
-function gatewayJellyfinPlaybackSource(apiBase as String, appToken as String, jellyfinToken as String, userId as String, itemId as String, preferDirectStream as Boolean, allowTranscoding as Boolean) as Object
+function gatewayJellyfinPlaybackSource(apiBase as String, appToken as String, jellyfinToken as String, userId as String, itemId as String, preferDirectStream as Boolean, allowTranscoding as Boolean, metaLang as Dynamic) as Object
   base = _trimSlash(apiBase)
   print "PlaybackInfo start preferDirectStream=" + preferDirectStream.ToStr() + " allowTranscoding=" + allowTranscoding.ToStr()
 
@@ -1525,12 +1688,8 @@ function gatewayJellyfinPlaybackSource(apiBase as String, appToken as String, je
   }
   body = FormatJson(payload)
 
-  headers = {
-    "Content-Type": "application/json"
-    "X-Emby-Authorization": _jellyfinClientHeader()
-    "X-Emby-Token": jellyfinToken
-  }
-  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+  headers = _jellyfinHeaders(jellyfinToken, appToken, metaLang)
+  headers["Content-Type"] = "application/json"
 
   resp = httpJson("POST", url, headers, body)
   if resp.ok <> true then
@@ -2104,7 +2263,7 @@ function gatewayStatsMostWatched(apiBase as String, appToken as String, days as 
   return { ok: true, rows: rows }
 end function
 
-function gatewayJellyfinItemsByIds(apiBase as String, appToken as String, jellyfinToken as String, userId as String, ids as Object) as Object
+function gatewayJellyfinItemsByIds(apiBase as String, appToken as String, jellyfinToken as String, userId as String, ids as Object, metaLang as Dynamic) as Object
   base = _trimSlash(apiBase)
   uid = userId
   if uid = invalid then uid = ""
@@ -2148,11 +2307,7 @@ function gatewayJellyfinItemsByIds(apiBase as String, appToken as String, jellyf
     Fields: "RunTimeTicks,Path,MediaSources,SeriesId,CollectionType,BackdropImageTags,ParentBackdropImageTags,ImageTags"
   })
 
-  headers = {
-    "X-Emby-Authorization": _jellyfinClientHeader()
-    "X-Emby-Token": jellyfinToken
-  }
-  if appToken <> invalid and appToken <> "" then headers["X-App-Token"] = appToken
+  headers = _jellyfinHeaders(jellyfinToken, appToken, metaLang)
 
   resp = httpJson("GET", url, headers)
   if resp.ok <> true then
@@ -2202,7 +2357,7 @@ function gatewayJellyfinItemsByIds(apiBase as String, appToken as String, jellyf
   return { ok: true, items: out }
 end function
 
-function gatewayContinueWatchingShelf(apiBase as String, appToken as String, jellyfinToken as String, userId as String, limit as Integer) as Object
+function gatewayContinueWatchingShelf(apiBase as String, appToken as String, jellyfinToken as String, userId as String, limit as Integer, metaLang as Dynamic) as Object
   lim = limit
   if lim <= 0 then lim = 12
 
@@ -2280,7 +2435,7 @@ function gatewayContinueWatchingShelf(apiBase as String, appToken as String, jel
     end if
   end for
 
-  itemsResp = gatewayJellyfinItemsByIds(apiBase, appToken, jellyfinToken, userId, ids)
+  itemsResp = gatewayJellyfinItemsByIds(apiBase, appToken, jellyfinToken, userId, ids, metaLang)
   if itemsResp.ok <> true then return itemsResp
 
   byId = {}
@@ -2325,7 +2480,7 @@ function gatewayContinueWatchingShelf(apiBase as String, appToken as String, jel
   return { ok: true, items: out }
 end function
 
-function gatewayMostWatchedShelf(apiBase as String, appToken as String, jellyfinToken as String, userId as String, days as Integer, limit as Integer) as Object
+function gatewayMostWatchedShelf(apiBase as String, appToken as String, jellyfinToken as String, userId as String, days as Integer, limit as Integer, metaLang as Dynamic) as Object
   baseDays = days
   if baseDays <= 0 then baseDays = 7
 
@@ -2391,7 +2546,7 @@ function gatewayMostWatchedShelf(apiBase as String, appToken as String, jellyfin
     end for
     if sourceIds.Count() <= 0 then continue for
 
-    sourceItemsResp = gatewayJellyfinItemsByIds(apiBase, appToken, jellyfinToken, userId, sourceIds)
+    sourceItemsResp = gatewayJellyfinItemsByIds(apiBase, appToken, jellyfinToken, userId, sourceIds, metaLang)
     if sourceItemsResp.ok <> true then
       if sourceItemsResp.error <> invalid then
         e2 = sourceItemsResp.error.ToStr().Trim()
@@ -2517,7 +2672,7 @@ function gatewayMostWatchedShelf(apiBase as String, appToken as String, jellyfin
     end while
     if ids.Count() <= 0 then continue for
 
-    itemsResp = gatewayJellyfinItemsByIds(apiBase, appToken, jellyfinToken, userId, ids)
+    itemsResp = gatewayJellyfinItemsByIds(apiBase, appToken, jellyfinToken, userId, ids, metaLang)
     if itemsResp.ok <> true then
       if itemsResp.error <> invalid then
         e3 = itemsResp.error.ToStr().Trim()

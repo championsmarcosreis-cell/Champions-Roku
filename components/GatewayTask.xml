@@ -20,6 +20,9 @@
     <field id="searchTerm" type="string" />
     <field id="collectionType" type="string" />
     <field id="itemId" type="string" />
+    <field id="itemType" type="string" />
+    <field id="itemTitle" type="string" />
+    <field id="metaLang" type="string" />
     <field id="preferDirectStream" type="boolean" />
     <field id="allowTranscoding" type="boolean" />
     <field id="probeUrl" type="string" />

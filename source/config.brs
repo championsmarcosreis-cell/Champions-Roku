@@ -4,10 +4,35 @@ function _cfgSection() as Object
   return CreateObject("roRegistrySection", "champions")
 end function
 
+function _forceVmApiBase(apiBase as String) as String
+  b = apiBase
+  if b = invalid then b = ""
+  b = b.Trim()
+  if b = "" then return b
+  if Instr(1, b, "api.champions.place") > 0 then
+    if Left(b, 8) = "https://" then return "https://api-vm.champions.place"
+    if Left(b, 7) = "http://" then return "http://api-vm.champions.place"
+    return "https://api-vm.champions.place"
+  end if
+  return b
+end function
+
 function _readOrEmpty(sec as Object, key as String) as String
   v = sec.Read(key)
   if v = invalid then return ""
   return v
+end function
+
+function maybeClearConfigForVersion(version as String) as Boolean
+  sec = _cfgSection()
+  if version = invalid or version = "" then return false
+  cur = _readOrEmpty(sec, "cfg_version")
+  if cur = version then return false
+  print "config reset: version " + cur + " -> " + version
+  clearConfig()
+  sec.Write("cfg_version", version)
+  sec.Flush()
+  return true
 end function
 
 sub saveConfig(apiBase as String, appToken as String, jellyfinToken as String, userId as String)
@@ -37,6 +62,12 @@ function loadConfig() as Object
   else if apiBase = "" then
     apiBase = bundledBase
     if apiBase = "" then apiBase = "https://api.champions.place"
+  end if
+  forcedBase = _forceVmApiBase(apiBase)
+  if forcedBase <> "" and forcedBase <> apiBase then
+    apiBase = forcedBase
+    sec.Write("apiBase", apiBase)
+    sec.Flush()
   end if
 
   appToken = _readOrEmpty(sec, "appToken")

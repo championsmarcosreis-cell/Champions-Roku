@@ -18,19 +18,34 @@ sub init()
   m.coverFallbackPoster = ""
   m.coverTargetW = 560
   m.coverTargetH = 318
+  m.contentNode = invalid
+  m.ownerGrid = invalid
+  m.overlayFocused = false
   if m.cover <> invalid and m.cover.hasField("loadStatus") then
     m.cover.observeField("loadStatus", "onCoverLoadStatusChanged")
   end if
 end sub
 
 sub onItemContentChanged()
+  _clearContentObservers()
+  _ensureOwnerGridObserver()
   c = m.top.itemContent
+  _observeContent(c)
+  _renderContent(c)
+end sub
+
+sub onContentFieldChanged()
+  _renderContent(m.top.itemContent)
+end sub
+
+sub _renderContent(c as Object)
   if c = invalid then
     m.coverFallbackPoster = ""
     _resetCoverLayout()
     _applyCover("", "zoomToFill")
     if m.focusRing <> invalid then m.focusRing.visible = false
     if m.focusOverlay <> invalid then m.focusOverlay.visible = false
+    if m.overlayFade <> invalid then m.overlayFade.opacity = 1.0
     if m.title <> invalid then m.title.text = ""
     if m.meta <> invalid then m.meta.text = ""
     if m.progressBg <> invalid then m.progressBg.visible = false
@@ -123,6 +138,38 @@ sub onItemContentChanged()
   applyStyle()
 end sub
 
+sub _clearContentObservers()
+  c = m.contentNode
+  if c = invalid then return
+  if c.hasField("title") then c.unobserveField("title")
+  if c.hasField("wideUrl") then c.unobserveField("wideUrl")
+  if c.hasField("bannerUrl") then c.unobserveField("bannerUrl")
+  if c.hasField("backdropUrl") then c.unobserveField("backdropUrl")
+  if c.hasField("thumbWideUrl") then c.unobserveField("thumbWideUrl")
+  if c.hasField("hdPosterUrl") then c.unobserveField("hdPosterUrl")
+  if c.hasField("posterUrl") then c.unobserveField("posterUrl")
+  if c.hasField("posterMode") then c.unobserveField("posterMode")
+  if c.hasField("resumePercent") then c.unobserveField("resumePercent")
+  if c.hasField("played") then c.unobserveField("played")
+  if c.hasField("rank") then c.unobserveField("rank")
+  m.contentNode = invalid
+end sub
+
+sub _observeContent(c as Object)
+  if c = invalid then return
+  m.contentNode = c
+  if c.hasField("title") then c.observeField("title", "onContentFieldChanged")
+  if c.hasField("wideUrl") then c.observeField("wideUrl", "onContentFieldChanged")
+  if c.hasField("bannerUrl") then c.observeField("bannerUrl", "onContentFieldChanged")
+  if c.hasField("backdropUrl") then c.observeField("backdropUrl", "onContentFieldChanged")
+  if c.hasField("thumbWideUrl") then c.observeField("thumbWideUrl", "onContentFieldChanged")
+  if c.hasField("hdPosterUrl") then c.observeField("hdPosterUrl", "onContentFieldChanged")
+  if c.hasField("posterUrl") then c.observeField("posterUrl", "onContentFieldChanged")
+  if c.hasField("posterMode") then c.observeField("posterMode", "onContentFieldChanged")
+  if c.hasField("resumePercent") then c.observeField("resumePercent", "onContentFieldChanged")
+  if c.hasField("played") then c.observeField("played", "onContentFieldChanged")
+  if c.hasField("rank") then c.observeField("rank", "onContentFieldChanged")
+end sub
 sub onCoverLoadStatusChanged()
   if m.cover = invalid then return
   st = m.cover.loadStatus
@@ -136,6 +183,7 @@ sub onCoverLoadStatusChanged()
 end sub
 
 sub onItemHasFocusChanged()
+  _ensureOwnerGridObserver()
   applyStyle()
 end sub
 
@@ -183,7 +231,7 @@ function _normalizePosterMode(raw as String) as String
 end function
 
 sub applyStyle()
-  focused = (m.top.itemHasFocus = true)
+  focused = _isFocusedTile()
   if m.cardBg <> invalid then
     m.cardBg.uri = "pkg:/images/card.png"
     m.cardBg.visible = false
@@ -193,9 +241,9 @@ sub applyStyle()
 
   if m.overlayFade <> invalid then
     if focused then
-      m.overlayFade.uri = "pkg:/images/overlay_fade_banner_focus_560x318.png"
+      m.overlayFade.opacity = 0.82
     else
-      m.overlayFade.uri = "pkg:/images/overlay_fade_banner_560x318.png"
+      m.overlayFade.opacity = 1.0
     end if
   end if
 
@@ -225,7 +273,7 @@ sub applyStyle()
       borderUri = "pkg:/images/rank_badge_border_bronze_92x28.png"
     end if
     if focused then borderUri = "pkg:/images/rank_badge_border_focus_92x28.png"
-    m.rankBadgeBorder.uri = borderUri
+    _setPosterUriIfChanged(m.rankBadgeBorder, borderUri)
   end if
 
   if m.rankBadgeBg <> invalid and m.rankBadgeBg.visible = true then
@@ -238,7 +286,7 @@ sub applyStyle()
     else if rank = 3 then
       badgeUri = "pkg:/images/rank_badge_bg_bronze_90x26.png"
     end if
-    m.rankBadgeBg.uri = badgeUri
+    _setPosterUriIfChanged(m.rankBadgeBg, badgeUri)
   end if
 
   if m.rankBadgeText <> invalid and m.rankBadgeText.visible = true then
@@ -249,6 +297,90 @@ sub applyStyle()
       m.rankBadgeText.color = "0xFFFFFF"
     end if
   end if
+end sub
+
+sub onOwnerGridItemFocusedChanged()
+  applyStyle()
+end sub
+
+function _isFocusedTile() as Boolean
+  if m.top = invalid then return false
+  grid = _resolveOwnerGrid()
+  if grid = invalid then return false
+  if grid.hasFocus() <> true then return false
+  return _isGridFocusedContentItem(grid)
+end function
+
+function _resolveOwnerGrid() as Object
+  if m.top = invalid then return invalid
+  cur = m.top
+  depth = 0
+  while cur <> invalid and depth < 10
+    if cur.hasField("itemFocused") and cur.hasField("content") and cur.hasField("itemComponentName") then
+      return cur
+    end if
+    cur = cur.getParent()
+    depth = depth + 1
+  end while
+  return invalid
+end function
+
+function _isGridFocusedContentItem(grid as Object) as Boolean
+  if grid = invalid then return false
+  idx = grid.itemFocused
+  if idx = invalid then return false
+  i = Int(idx)
+  if i < 0 then return false
+  root = grid.content
+  if root = invalid then return false
+  total = root.getChildCount()
+  if total = invalid or i >= total then return false
+  focusedNode = root.getChild(i)
+  if focusedNode = invalid then return false
+  if m.top = invalid or m.top.itemContent = invalid then return false
+  if _sameItemId(focusedNode, m.top.itemContent) then return true
+  if _sameItemPath(focusedNode, m.top.itemContent) then return true
+  return false
+end function
+
+function _sameItemId(a as Object, b as Object) as Boolean
+  if a = invalid or b = invalid then return false
+  aid = ""
+  bid = ""
+  if a.id <> invalid then aid = a.id.ToStr().Trim()
+  if b.id <> invalid then bid = b.id.ToStr().Trim()
+  if aid = "" or bid = "" then return false
+  return (LCase(aid) = LCase(bid))
+end function
+
+function _sameItemPath(a as Object, b as Object) as Boolean
+  if a = invalid or b = invalid then return false
+  ap = ""
+  bp = ""
+  if a.path <> invalid then ap = a.path.ToStr().Trim()
+  if b.path <> invalid then bp = b.path.ToStr().Trim()
+  if ap = "" or bp = "" then return false
+  return (LCase(ap) = LCase(bp))
+end function
+
+sub _ensureOwnerGridObserver()
+  if m.ownerGrid <> invalid then return
+  g = _resolveOwnerGrid()
+  if g = invalid then return
+  m.ownerGrid = g
+  if m.ownerGrid.hasField("itemFocused") then
+    m.ownerGrid.observeField("itemFocused", "onOwnerGridItemFocusedChanged")
+  end if
+end sub
+
+sub _setPosterUriIfChanged(n as Object, uri as String)
+  if n = invalid then return
+  if uri = invalid then uri = ""
+  nextUri = uri.ToStr().Trim()
+  curUri = ""
+  if n.uri <> invalid then curUri = n.uri.ToStr().Trim()
+  if curUri = nextUri then return
+  n.uri = nextUri
 end sub
 
 function friendlyType(raw as String) as String

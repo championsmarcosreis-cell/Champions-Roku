@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<component name="PosterTile" extends="Group">
+<component name="RecentPosterItem" extends="Group">
   <interface>
     <field id="itemContent" type="node" onChange="onItemContentChanged" />
     <field id="itemHasFocus" type="boolean" onChange="onItemHasFocusChanged" />
@@ -11,91 +11,102 @@
       id="posterBg"
       translation="[0, 0]"
       width="160"
-      height="206"
-      color="0x0A111D"
+      height="194"
+      color="0x0A111DFF"
     />
 
     <Poster
-      id="p"
+      id="cover"
       translation="[0, 0]"
       width="160"
-      height="206"
+      height="194"
       loadDisplayMode="scaleToFill"
       uri=""
     />
 
     <Rectangle
       id="progressBg"
-      translation="[0, 202]"
+      translation="[0, 190]"
       width="160"
       height="4"
-      color="0x253247"
+      color="0x253247FF"
       visible="false"
     />
 
     <Rectangle
       id="progressFill"
-      translation="[0, 202]"
+      translation="[0, 190]"
       width="0"
       height="4"
-      color="0x3FD97C"
+      color="0x3FD97CFF"
       visible="false"
     />
 
-    <Rectangle
-      id="titleBg"
-      translation="[0, 206]"
-      width="160"
-      height="34"
-      color="0x0A111DCC"
-    />
+    <Group
+      id="titleWrap"
+      translation="[0, 194]"
+      clippingRect="[0,0,160,46]"
+    >
+      <children>
+        <Rectangle
+          id="footerBg"
+          translation="[0, 0]"
+          width="160"
+          height="46"
+          color="0x0A111DFF"
+        />
+
+        <Label
+          id="titleLabel"
+          translation="[0, 6]"
+          width="160"
+          height="30"
+          font="font:SmallSystemFont"
+          horizAlign="center"
+          vertAlign="center"
+          color="0xFFFFFFFF"
+          wrap="false"
+          numLines="1"
+          opacity="1"
+          visible="true"
+          text=""
+        />
+      </children>
+    </Group>
 
     <Rectangle
       id="borderTop"
       translation="[0, 0]"
       width="160"
       height="3"
-      color="0xD8B765"
+      color="0xD8B765FF"
       visible="false"
     />
     <Rectangle
       id="borderBottom"
-      translation="[0, 203]"
+      translation="[0, 237]"
       width="160"
       height="3"
-      color="0xD8B765"
+      color="0xD8B765FF"
       visible="false"
     />
     <Rectangle
       id="borderLeft"
       translation="[0, 0]"
       width="3"
-      height="206"
-      color="0xD8B765"
+      height="240"
+      color="0xD8B765FF"
       visible="false"
     />
     <Rectangle
       id="borderRight"
       translation="[157, 0]"
       width="3"
-      height="206"
-      color="0xD8B765"
+      height="240"
+      color="0xD8B765FF"
       visible="false"
-    />
-
-    <Label
-      id="t"
-      translation="[6, 212]"
-      width="148"
-      height="24"
-      font="font:SmallSystemFont"
-      horizAlign="center"
-      color="0xE6EBF3FF"
-      wrap="false"
-      numLines="1"
-      text=""
     />
   </children>
 
-  <script type="text/brightscript" uri="pkg:/components/PosterTile.brs" />
+  <script type="text/brightscript" uri="pkg:/components/RecentPosterItem.brs" />
 </component>

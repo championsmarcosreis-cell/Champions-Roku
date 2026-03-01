@@ -137,7 +137,7 @@
                 <MarkupGrid
                   id="itemsList"
                   translation="[0, 38]"
-                  itemSize="[600, 340]"
+                  itemSize="[600, 380]"
                   numColumns="2"
                   numRows="1"
                   drawFocusFeedback="false"
@@ -146,7 +146,7 @@
 
                 <Label
                   id="continueTitle"
-                  translation="[0, 390]"
+                  translation="[0, 430]"
                   width="620"
                   height="34"
                   font="font:MediumSystemFont"
@@ -156,7 +156,7 @@
 
                 <MarkupGrid
                   id="continueList"
-                  translation="[0, 426]"
+                  translation="[0, 466]"
                   itemSize="[268, 252]"
                   numColumns="3"
                   numRows="1"
@@ -166,7 +166,7 @@
 
                 <Label
                   id="recentMoviesTitle"
-                  translation="[0, 694]"
+                  translation="[0, 734]"
                   width="620"
                   height="34"
                   font="font:MediumSystemFont"
@@ -176,7 +176,7 @@
 
                 <Label
                   id="recentMoviesMore"
-                  translation="[1020, 698]"
+                  translation="[1020, 738]"
                   width="220"
                   height="24"
                   font="font:SmallSystemFont"
@@ -188,17 +188,18 @@
 
                 <MarkupGrid
                   id="recentMoviesList"
-                  translation="[0, 730]"
-                  itemSize="[170, 252]"
+                  translation="[0, 770]"
+                  itemSize="[160, 240]"
+                  itemSpacing="[32, 0]"
                   numColumns="3"
                   numRows="1"
                   drawFocusFeedback="false"
-                  itemComponentName="BrowseRailItem"
+                  itemComponentName="RecentPosterItem"
                 />
 
                 <Label
                   id="recentSeriesTitle"
-                  translation="[0, 998]"
+                  translation="[0, 1028]"
                   width="620"
                   height="34"
                   font="font:MediumSystemFont"
@@ -208,7 +209,7 @@
 
                 <Label
                   id="recentSeriesMore"
-                  translation="[1020, 1002]"
+                  translation="[1020, 1032]"
                   width="220"
                   height="24"
                   font="font:SmallSystemFont"
@@ -220,12 +221,13 @@
 
                 <MarkupGrid
                   id="recentSeriesList"
-                  translation="[0, 1034]"
-                  itemSize="[170, 252]"
+                  translation="[0, 1062]"
+                  itemSize="[160, 240]"
+                  itemSpacing="[32, 0]"
                   numColumns="3"
                   numRows="1"
                   drawFocusFeedback="false"
-                  itemComponentName="BrowseRailItem"
+                  itemComponentName="RecentPosterItem"
                 />
               </children>
             </Group>

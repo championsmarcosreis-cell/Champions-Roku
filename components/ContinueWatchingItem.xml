@@ -16,7 +16,7 @@
           translation="[0, 0]"
           width="248"
           height="140"
-          color="0x0A111D"
+          color="0x0A111DFF"
         />
 
         <Poster
@@ -45,12 +45,44 @@
           visible="false"
         />
 
+        <Group
+          id="titleWrap"
+          translation="[0, 102]"
+          clippingRect="[0,0,248,38]"
+        >
+          <children>
+            <Rectangle
+              id="footerBg"
+              translation="[0, 0]"
+              width="248"
+              height="38"
+              color="0x0A111DE0"
+            />
+
+            <Label
+              id="titleLabel"
+              translation="[0, 6]"
+              width="248"
+              height="28"
+              font="font:SmallSystemFont"
+              horizAlign="center"
+              vertAlign="center"
+              color="0xFFFFFFFF"
+              opacity="1"
+              visible="true"
+              wrap="false"
+              numLines="1"
+              text=""
+            />
+          </children>
+        </Group>
+
         <Rectangle
           id="progressBg"
           translation="[0, 136]"
           width="248"
           height="4"
-          color="0x2A3448"
+          color="0x2A3448FF"
           visible="false"
         />
 
@@ -59,21 +91,47 @@
           translation="[0, 136]"
           width="0"
           height="4"
-          color="0x3FD97C"
+          color="0x3FD97CFF"
+          visible="false"
+        />
+
+        <Rectangle
+          id="borderTop"
+          translation="[0, 0]"
+          width="248"
+          height="3"
+          color="0xD8B765FF"
+          visible="false"
+        />
+
+        <Rectangle
+          id="borderBottom"
+          translation="[0, 137]"
+          width="248"
+          height="3"
+          color="0xD8B765FF"
+          visible="false"
+        />
+
+        <Rectangle
+          id="borderLeft"
+          translation="[0, 0]"
+          width="3"
+          height="140"
+          color="0xD8B765FF"
+          visible="false"
+        />
+
+        <Rectangle
+          id="borderRight"
+          translation="[245, 0]"
+          width="3"
+          height="140"
+          color="0xD8B765FF"
           visible="false"
         />
       </children>
     </Group>
-
-    <Label
-      id="title"
-      translation="[10, 154]"
-      width="248"
-      height="28"
-      font="font:MediumSystemFont"
-      color="0xE6EBF3"
-      text=""
-    />
 
     <Label
       id="subtitle"
@@ -81,7 +139,7 @@
       width="248"
       height="18"
       font="font:SmallSystemFont"
-      color="0x9FB0C5"
+      color="0x9FB0C5FF"
       text=""
       visible="false"
     />
