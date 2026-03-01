@@ -193,6 +193,21 @@ function Draw-LionOnlyCentered($g, $logoImg, [int]$w, [int]$h, [double]$scale, [
         }
       }
 
+      # Normalize lion color to a flat gold for better perceived sharpness on TV.
+      $goldR = 216
+      $goldG = 183
+      $goldB = 101
+      for ($y = 0; $y -lt $dh; $y++) {
+        $row = $y * $stride
+        for ($x = 0; $x -lt $dw; $x++) {
+          $i = $row + ($x * 4)
+          if ($buf[$i + 3] -eq 0) { continue }
+          $buf[$i + 0] = [byte]$goldB
+          $buf[$i + 1] = [byte]$goldG
+          $buf[$i + 2] = [byte]$goldR
+        }
+      }
+
       [System.Runtime.InteropServices.Marshal]::Copy($buf, 0, $data.Scan0, $buf.Length)
     } finally {
       $tmp.UnlockBits($data)
@@ -221,21 +236,43 @@ try {
   With-Graphics $iconHd {
     param($g)
     Fill-Background $g 290 218
-    Draw-LionOnlyCentered $g $logoImg 290 218 0.92 -37
-    Draw-Title $g 290 176 18 'CHAMPIONS'
+    # Final home-tile tuning: lower lion and keep title inside safer bottom margin.
+    Draw-LionOnlyCentered $g $logoImg 290 218 0.90 -4
+    Draw-Title $g 290 162 18 'CHAMPIONS'
   }
   $iconHd.Save((Join-Path $imagesDir 'icon_focus_hd.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+  $iconHd.Save((Join-Path $imagesDir 'icon_focus_hd_v13.png'), [System.Drawing.Imaging.ImageFormat]::Png)
   $iconHd.Dispose()
 
   $iconSd = New-Bitmap 214 144
   With-Graphics $iconSd {
     param($g)
     Fill-Background $g 214 144
-    Draw-LionOnlyCentered $g $logoImg 214 144 0.92 -32
-    Draw-Title $g 214 112 14 'CHAMPIONS'
+    Draw-LionOnlyCentered $g $logoImg 214 144 0.90 -2
+    Draw-Title $g 214 100 14 'CHAMPIONS'
   }
   $iconSd.Save((Join-Path $imagesDir 'icon_focus_sd.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+  $iconSd.Save((Join-Path $imagesDir 'icon_focus_sd_v13.png'), [System.Drawing.Imaging.ImageFormat]::Png)
   $iconSd.Dispose()
+
+  # Side icons used by some Roku home layouts.
+  $sideHd = New-Bitmap 108 69
+  With-Graphics $sideHd {
+    param($g)
+    Fill-Background $g 108 69
+    Draw-LionOnlyCentered $g $logoImg 108 69 0.80 1
+  }
+  $sideHd.Save((Join-Path $imagesDir 'icon_side_hd_v13.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+  $sideHd.Dispose()
+
+  $sideSd = New-Bitmap 81 54
+  With-Graphics $sideSd {
+    param($g)
+    Fill-Background $g 81 54
+    Draw-LionOnlyCentered $g $logoImg 81 54 0.80 1
+  }
+  $sideSd.Save((Join-Path $imagesDir 'icon_side_sd_v13.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+  $sideSd.Dispose()
 
   # Splash screens
   $splashHd = New-Bitmap 1280 720
